@@ -955,6 +955,21 @@ export const useArchiveConversationToHubMutation = (
   );
 };
 
+/**
+ * Uploads an exported conversation file (ChatGPT, Claude.ai, or Gemini/Google
+ * Takeout) so the server can archive it into the context hub. The provider is
+ * auto-detected server-side from the file's shape — the caller only picks a file.
+ */
+export const useImportHubExportMutation = (
+  options?: t.MutationOptions<t.TImportHubExportResponse, FormData>,
+): UseMutationResult<t.TImportHubExportResponse, unknown, FormData, unknown> => {
+  return useMutation(
+    [MutationKeys.importHubExport],
+    (formData: FormData) => dataService.importHubExport(formData),
+    options,
+  );
+};
+
 export type SubmitHubOAuthConsentOptions = t.MutationOptions<
   t.THubOAuthConsentResponse,
   t.THubOAuthConsentRequest

@@ -969,6 +969,10 @@ export function archiveConversationToHub(
   return request.post(endpoints.archiveConversationToHub(conversationId));
 }
 
+export function importHubExport(data: FormData): Promise<t.TImportHubExportResponse> {
+  return request.postMultiPart(endpoints.importHubExport(), data);
+}
+
 export function submitHubOAuthConsent(
   payload: t.THubOAuthConsentRequest,
 ): Promise<t.THubOAuthConsentResponse> {

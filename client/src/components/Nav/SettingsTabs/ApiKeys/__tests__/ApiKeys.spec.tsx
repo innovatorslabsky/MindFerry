@@ -117,4 +117,19 @@ describe('ApiKeys', () => {
       '/api/hub/mcp',
     );
   });
+
+  it('hides the hub export importer when the operator has not enabled it', () => {
+    const { queryByText } = openManageDialog();
+    expect(
+      queryByText('Import a ChatGPT, Claude.ai, or Gemini export into MindFerry'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows the hub export importer once the operator enables the context hub', () => {
+    mockUseGetStartupConfig.mockReturnValue({ data: { contextHubEnabled: true } });
+    const { getByText } = openManageDialog();
+    expect(
+      getByText('Import a ChatGPT, Claude.ai, or Gemini export into MindFerry'),
+    ).toBeInTheDocument();
+  });
 });

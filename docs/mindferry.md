@@ -76,11 +76,25 @@ Every part of this flow — registration, authorize, consent, token exchange, an
 `/.well-known/oauth-*` discovery documents — is gated behind `contextHub.mcp.enabled`, same
 as the MCP endpoint itself: turning that off takes MindFerry's OAuth server down with it.
 
+## Importing a ChatGPT, Claude.ai, or Gemini export
+
+Settings → API Keys → Agent API Keys → Manage shows an importer (next to the MCP endpoint field)
+once `contextHub.enabled` is on. Pick a JSON export from ChatGPT, Claude.ai (Settings → Privacy →
+Export data), or Gemini (Google Takeout) — the provider is auto-detected from the file's shape, so
+there's nothing else to pick. It archives every conversation in the file the same way "Save to
+MindFerry" archives one.
+
+## Two-way sync between Claude.ai and Claude Code
+
+Claude.ai and Claude Code don't share memory with each other — connecting both to the same
+MindFerry hub gives them a common archive and notes store, but something still has to read and
+write it. `docs/skills/mindferry-sync/SKILL.md` is a Claude Skill that does that: installed in
+either client, it reads notes and searches the archive at the start of a session, and writes a
+short summary note at the end (or whenever asked to "sync" or "save this"). Copy it to
+`~/.claude/skills/mindferry-sync/SKILL.md` for Claude Code, or upload it as a custom skill in
+Claude.ai (Settings → Capabilities → Skills, where available).
+
 ## What's not built yet
 
 - **Perplexity**: Perplexity has no bulk conversation export, so there's no file format to
   build an import adapter against. Not planned unless that changes.
-- **Importing an export file from ChatGPT, Claude.ai, or Gemini (Google Takeout)** — the
-  backend endpoint for this exists (`POST /api/hub/import`, adapters for all three formats
-  already written), but there is no UI to upload a file to it yet. Only "Save to MindFerry"
-  on a LibreChat conversation you already have is reachable from the app today.

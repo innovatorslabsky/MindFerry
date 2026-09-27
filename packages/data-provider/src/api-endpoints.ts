@@ -163,6 +163,8 @@ export const duplicateConversation = () => `${conversationsRoot}/duplicate`;
 export const archiveConversationToHub = (conversationId: string) =>
   `${BASE_URL}/api/hub/archive/${encodeURIComponent(conversationId)}`;
 
+export const importHubExport = () => `${BASE_URL}/api/hub/import`;
+
 /** The absolute URL a client pastes into an `.mcp.json` entry or a Claude.ai connector. */
 export const contextHubMcpEndpoint = () => `${window.location.origin}${BASE_URL}/api/hub/mcp`;
 

@@ -547,6 +547,12 @@ export type TArchiveConversationToHubResponse = {
   messageCount: number;
 };
 
+/** Response from importing an exported conversation file (ChatGPT, Claude.ai, Gemini) into the context hub. */
+export type TImportHubExportResponse = {
+  message: string;
+  threadCount: number;
+};
+
 /** The hub's OAuth `/authorize` redirect forwards these as query params to the SPA's consent page. */
 export type THubOAuthConsentParams = {
   client_id: string;

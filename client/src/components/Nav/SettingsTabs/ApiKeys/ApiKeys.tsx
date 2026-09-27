@@ -12,6 +12,7 @@ import {
 } from '@librechat/client';
 import { useGetStartupConfig } from '~/data-provider';
 import ContextHubEndpoint from './ContextHubEndpoint';
+import ImportHubExport from './ImportHubExport';
 import CreateKeyDialog from './CreateKeyDialog';
 import { useLocalize } from '~/hooks';
 import Admin from './Admin';
@@ -43,7 +44,12 @@ export default function ApiKeys() {
               <InfoHoverCard text={localize('com_ui_api_keys_description')} />
             </div>
           </OGDialogHeader>
-          {contextHubEnabled && <ContextHubEndpoint />}
+          {contextHubEnabled && (
+            <>
+              <ContextHubEndpoint />
+              <ImportHubExport />
+            </>
+          )}
           <List onCreate={() => setCreateOpen(true)} />
           <div className="flex items-center gap-2">
             <Admin />
