@@ -12,6 +12,7 @@ import {
 } from '@librechat/client';
 import { useGetStartupConfig } from '~/data-provider';
 import ContextHubEndpoint from './ContextHubEndpoint';
+import BrowseHubDialog from './BrowseHubDialog';
 import ImportHubExport from './ImportHubExport';
 import CreateKeyDialog from './CreateKeyDialog';
 import { useLocalize } from '~/hooks';
@@ -48,6 +49,9 @@ export default function ApiKeys() {
             <>
               <ContextHubEndpoint />
               <ImportHubExport />
+              <div className="flex justify-end">
+                <BrowseHubDialog />
+              </div>
             </>
           )}
           <List onCreate={() => setCreateOpen(true)} />

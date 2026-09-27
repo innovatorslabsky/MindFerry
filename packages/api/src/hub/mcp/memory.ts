@@ -1,8 +1,15 @@
-import type { HubStore, HubNote, HubNoteInput, HubSearchParams, HubThreadSummary } from './store';
+import type {
+  HubStore,
+  HubNote,
+  HubNoteInput,
+  HubSearchParams,
+  HubThreadSummary,
+  HubArchiveThreadInput,
+} from './store';
 import type { HubThread } from '../thread';
+import { buildThreadFromArchiveInput, summarize } from './store';
 import { snippetAround } from './snippet';
 import { threadText } from '../thread';
-import { summarize } from './store';
 
 /**
  * A complete `HubStore` held in memory. It is the reference implementation of
@@ -69,6 +76,13 @@ export function createHubMemoryStore(options: HubMemoryStoreOptions = {}): HubSt
       const stored: HubNote = { ...note, id: newId(), createdAt: now() };
       notes.push(stored);
       return stored;
+    },
+
+    async archiveThread(input: HubArchiveThreadInput): Promise<HubThreadSummary> {
+      const thread = buildThreadFromArchiveInput(input, now());
+      threads.set(thread.id, thread);
+      haystacks.set(thread.id, `${thread.title}\n${threadText(thread)}`);
+      return summarize(thread);
     },
   };
 }

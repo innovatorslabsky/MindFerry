@@ -149,6 +149,49 @@ describe('searchHubThreads', () => {
   });
 });
 
+describe('listHubThreads', () => {
+  it('lists threads most-recently-updated first, without requiring a search term', async () => {
+    await methods.upsertHubThread(
+      userA,
+      thread({
+        id: 'claude:older',
+        sourceId: 'older',
+        updatedAt: new Date('2024-01-01T00:00:00Z'),
+      }),
+    );
+    await methods.upsertHubThread(
+      userA,
+      thread({
+        id: 'claude:newer',
+        sourceId: 'newer',
+        updatedAt: new Date('2024-06-01T00:00:00Z'),
+      }),
+    );
+
+    const results = await methods.listHubThreads(userA, 10);
+
+    expect(results.map((r) => r.id)).toEqual(['claude:newer', 'claude:older']);
+  });
+
+  it("never returns another user's archive", async () => {
+    await methods.upsertHubThread(userA, thread());
+    await methods.upsertHubThread(userB, thread({ id: 'claude:other', sourceId: 'other' }));
+
+    const results = await methods.listHubThreads(userA, 10);
+
+    expect(results.map((r) => r.id)).toEqual(['claude:c1']);
+  });
+
+  it('honors the caller-supplied limit', async () => {
+    await methods.upsertHubThread(userA, thread({ id: 'claude:a', sourceId: 'a' }));
+    await methods.upsertHubThread(userA, thread({ id: 'claude:b', sourceId: 'b' }));
+
+    const results = await methods.listHubThreads(userA, 1);
+
+    expect(results).toHaveLength(1);
+  });
+});
+
 describe('notes', () => {
   it('carries an appended note through to a later read', async () => {
     await methods.appendHubNote(userA, {

@@ -47,6 +47,35 @@ describe('createHubMongoStore', () => {
     expect(methods.appendHubNote).toHaveBeenCalledWith('user-a', { title: 't', text: 'x' });
   });
 
+  it('archives a verbatim thread under the given sourceId, scoped to the user', async () => {
+    const methods = fakeMethods();
+    const store = createHubMongoStore({ methods, userId: 'user-a' });
+
+    const summary = await store.archiveThread({
+      title: 'Deciding on the sync mechanism',
+      sourceId: 'session-1',
+      messages: [
+        { role: 'user', text: 'How should two clients share context?' },
+        { role: 'assistant', text: 'Archive the whole thread.' },
+      ],
+    });
+
+    expect(summary).toMatchObject({ id: 'mindferry:session-1', messageCount: 2 });
+    expect(methods.upsertHubThread).toHaveBeenCalledWith(
+      'user-a',
+      expect.objectContaining({
+        id: 'mindferry:session-1',
+        provider: 'mindferry',
+        sourceId: 'session-1',
+        title: 'Deciding on the sync mechanism',
+        messages: [
+          expect.objectContaining({ role: 'user', parentId: null }),
+          expect.objectContaining({ role: 'assistant', parentId: 'm1' }),
+        ],
+      }),
+    );
+  });
+
   it('maps a persisted record back into a HubThread', async () => {
     const methods = fakeMethods({
       getHubThread: jest.fn().mockResolvedValue({

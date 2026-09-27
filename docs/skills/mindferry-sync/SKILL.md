@@ -7,8 +7,8 @@ description: Two-way context sync between Claude sessions through MindFerry. Use
 
 MindFerry is a context hub: it archives conversations and stores notes, then serves both back
 over MCP. Claude.ai and Claude Code don't share memory with each other directly — this skill is
-the manual bridge, using MindFerry's `search_context`, `get_thread`, `read_notes`, and
-`append_note` tools (named `search_context` etc., typically prefixed `mcp__mindferry__` or
+the manual bridge, using MindFerry's `search_context`, `get_thread`, `read_notes`, `append_note`,
+and `archive_thread` tools (named `search_context` etc., typically prefixed `mcp__mindferry__` or
 `mcp__MindFerry__` depending on the client).
 
 If none of those tools are available in this session, MindFerry isn't connected here — tell the
@@ -41,10 +41,14 @@ this for later":
    re-reading everything here.
 2. Give the note a short, greppable title (a project name, a persona name, a feature name) — the
    read side finds notes by keyword, so an untitled or vaguely-titled note is effectively lost.
-3. If the conversation itself is worth keeping verbatim (not just its summary), tell the user to
-   use "Save to MindFerry" from the conversation's export menu (LibreChat/MindFerry side) — this
-   skill's `append_note` is for the short bridging summary, not a substitute for archiving the
-   full thread.
+3. If the conversation itself is worth keeping verbatim, not just its summary, call
+   `archive_thread` with the title and every turn so far (`{ role, text }`) — this is a second,
+   separate write from the note. Pass a stable `sourceId` (e.g. this session's own conversation
+   id) if you might call it again later in the same conversation, so it updates the existing
+   thread instead of creating a duplicate. `append_note` is still the right tool for the short
+   bridging summary; `archive_thread` is for keeping the transcript itself. If `archive_thread`
+   isn't available (the operator disabled it), tell the user to use "Save to MindFerry" from the
+   conversation's export menu instead — the UI-side equivalent of the same archive.
 4. Confirm to the user what you wrote and its title, so they know what the other session will see.
 
 ## What this does not do

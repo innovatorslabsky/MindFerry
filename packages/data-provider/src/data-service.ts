@@ -973,6 +973,30 @@ export function importHubExport(data: FormData): Promise<t.TImportHubExportRespo
   return request.postMultiPart(endpoints.importHubExport(), data);
 }
 
+export function listHubThreads(params: {
+  q?: string;
+  limit?: number;
+}): Promise<t.TListHubThreadsResponse> {
+  const query = new URLSearchParams();
+  if (params.q) {
+    query.set('q', params.q);
+  }
+  if (params.limit) {
+    query.set('limit', String(params.limit));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return request.get(`${endpoints.hubThreads()}${suffix}`);
+}
+
+export function getHubThread(id: string): Promise<t.TGetHubThreadResponse> {
+  return request.get(endpoints.hubThread(id));
+}
+
+export function listHubNotes(threadId?: string): Promise<t.TListHubNotesResponse> {
+  const suffix = threadId ? `?threadId=${encodeURIComponent(threadId)}` : '';
+  return request.get(`${endpoints.hubNotes()}${suffix}`);
+}
+
 export function submitHubOAuthConsent(
   payload: t.THubOAuthConsentRequest,
 ): Promise<t.THubOAuthConsentResponse> {

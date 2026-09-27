@@ -1,4 +1,6 @@
-import type { HubThread, HubProvider } from '../thread';
+import { randomUUID } from 'node:crypto';
+import type { HubThread, HubMessage, HubProvider } from '../thread';
+import { hubThreadId } from '../thread';
 
 /**
  * The storage surface the hub's MCP server needs, and nothing more. The caller
@@ -44,11 +46,61 @@ export interface HubNote extends HubNoteInput {
   createdAt: Date;
 }
 
+/** One turn of a conversation an MCP client submits verbatim for archiving. */
+export interface HubArchiveMessageInput {
+  role: 'user' | 'assistant';
+  text: string;
+}
+
+export interface HubArchiveThreadInput {
+  title: string;
+  /** Pass the same id again to update this thread instead of creating a new one. */
+  sourceId?: string;
+  messages: HubArchiveMessageInput[];
+}
+
 export interface HubStore {
   searchThreads(params: HubSearchParams): Promise<HubThreadSummary[]>;
   getThread(id: string): Promise<HubThread | undefined>;
   listNotes(threadId?: string): Promise<HubNote[]>;
   appendNote(note: HubNoteInput): Promise<HubNote>;
+  /** Archives a full, verbatim conversation submitted by an MCP client — the
+   *  live-connector counterpart to "Save to MindFerry" and the file importer,
+   *  neither of which an external client can reach. */
+  archiveThread(input: HubArchiveThreadInput): Promise<HubThreadSummary>;
+}
+
+/**
+ * Builds a linear thread from an MCP client's flat turn list — there is no
+ * branching to preserve here, unlike a provider export, so each message's
+ * parent is simply the one before it. Shared by every `HubStore`
+ * implementation's `archiveThread`, rather than each rebuilding this shape.
+ */
+export function buildThreadFromArchiveInput(input: HubArchiveThreadInput, now: Date): HubThread {
+  const sourceId = input.sourceId?.trim() || randomUUID();
+  let parentId: string | null = null;
+  const messages: HubMessage[] = input.messages.map((message, index) => {
+    const id = `m${index + 1}`;
+    const converted: HubMessage = {
+      id,
+      role: message.role,
+      createdAt: now,
+      segments: [{ kind: 'text', text: message.text }],
+      parentId,
+    };
+    parentId = id;
+    return converted;
+  });
+
+  return {
+    id: hubThreadId('mindferry', sourceId),
+    provider: 'mindferry',
+    sourceId,
+    title: input.title.trim() || 'Untitled conversation',
+    createdAt: now,
+    updatedAt: now,
+    messages,
+  };
 }
 
 export function summarize(thread: HubThread, snippet?: string): HubThreadSummary {

@@ -559,6 +559,10 @@ export const contextHubSchema = z
           .default(CONTEXT_HUB_DEFAULT_SNIPPET_LENGTH),
         /** Lets a client write notes back into the hub, not only read from it. */
         allowNotes: z.boolean().default(true),
+        /** Lets a connected client archive a full conversation via `archive_thread`,
+         *  not only a short note — the live-connector counterpart of "Save to
+         *  MindFerry" and the file importer, neither of which it can reach. */
+        allowArchive: z.boolean().default(true),
       })
       .default({}),
     git: contextHubGitTargetSchema.optional(),

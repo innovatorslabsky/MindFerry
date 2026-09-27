@@ -12,6 +12,7 @@ export * from './ingest';
 export * from './importJob';
 export * from './importRoute';
 export * from './archiveRoute';
+export * from './browseRoute';
 export * from './oauth/code';
 export * from './oauth/pkce';
 export * from './oauth/metadata';

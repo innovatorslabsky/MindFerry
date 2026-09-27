@@ -80,6 +80,7 @@ describe('createHubMcpServer', () => {
 
     expect(tools.map((tool) => tool.name).sort()).toEqual([
       'append_note',
+      'archive_thread',
       'get_thread',
       'read_notes',
       'search_context',
@@ -93,6 +94,15 @@ describe('createHubMcpServer', () => {
     const { tools } = await client.listTools();
 
     expect(tools.map((tool) => tool.name)).not.toContain('append_note');
+    await close();
+  });
+
+  it('withholds archive_thread when the operator disables archiving over MCP', async () => {
+    const { client, close } = await connect({ allowArchive: false });
+
+    const { tools } = await client.listTools();
+
+    expect(tools.map((tool) => tool.name)).not.toContain('archive_thread');
     await close();
   });
 
@@ -262,6 +272,81 @@ describe('createHubMcpServer', () => {
 
       expect(text).toContain('## Untagged');
       expect(text).not.toContain('undefined');
+      await close();
+    });
+  });
+
+  describe('archive_thread', () => {
+    it('archives a full conversation verbatim, readable by get_thread and search_context', async () => {
+      const store = createHubMemoryStore();
+      const writer = await connect({ store });
+      const reader = await connect({ store });
+
+      const archived = await call(writer.client, 'archive_thread', {
+        title: 'Deciding on the sync mechanism',
+        sourceId: 'session-1',
+        messages: [
+          { role: 'user', text: 'How should two clients share context?' },
+          { role: 'assistant', text: 'Archive the whole thread, not just a summary.' },
+        ],
+      });
+
+      expect(textOf(archived)).toContain('mindferry:session-1');
+      expect(textOf(archived)).toContain('2 messages');
+
+      const found = textOf(await call(reader.client, 'search_context', { query: 'share context' }));
+      expect(found).toContain('mindferry:session-1');
+
+      const full = textOf(await call(reader.client, 'get_thread', { id: 'mindferry:session-1' }));
+      expect(full).toContain('How should two clients share context?');
+      expect(full).toContain('Archive the whole thread, not just a summary.');
+
+      await writer.close();
+      await reader.close();
+    });
+
+    it('updates the existing thread when called again with the same sourceId', async () => {
+      const { client, close } = await connect();
+
+      await call(client, 'archive_thread', {
+        title: 'Draft title',
+        sourceId: 'session-2',
+        messages: [{ role: 'user', text: 'First turn only.' }],
+      });
+      await call(client, 'archive_thread', {
+        title: 'Final title',
+        sourceId: 'session-2',
+        messages: [
+          { role: 'user', text: 'First turn only.' },
+          { role: 'assistant', text: 'Now with a reply.' },
+        ],
+      });
+
+      const full = textOf(await call(client, 'get_thread', { id: 'mindferry:session-2' }));
+
+      expect(full).toContain('Now with a reply.');
+      const found = textOf(await call(client, 'search_context', { query: 'Final title' }));
+      expect(found.match(/mindferry:session-2/g)).toHaveLength(1);
+      await close();
+    });
+
+    it('creates a new thread each time when no sourceId is given', async () => {
+      const { client, close } = await connect();
+
+      const first = textOf(
+        await call(client, 'archive_thread', {
+          title: 'One-off chat',
+          messages: [{ role: 'user', text: 'Hello there.' }],
+        }),
+      );
+      const second = textOf(
+        await call(client, 'archive_thread', {
+          title: 'Another one-off chat',
+          messages: [{ role: 'user', text: 'Hello again.' }],
+        }),
+      );
+
+      expect(first).not.toEqual(second);
       await close();
     });
   });

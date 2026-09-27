@@ -553,6 +553,60 @@ export type TImportHubExportResponse = {
   threadCount: number;
 };
 
+/** One row of `GET /api/hub/threads` — a thread's metadata, not its full content. */
+export type THubThreadSummary = {
+  id: string;
+  provider: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+  /** Text around the match; present only when the row came from a search. */
+  snippet?: string;
+};
+
+export type THubSegment = {
+  kind: 'text' | 'thinking' | 'code' | 'tool';
+  text: string;
+  language?: string;
+  name?: string;
+};
+
+export type THubMessage = {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  createdAt: string;
+  segments: THubSegment[];
+  parentId: string | null;
+  model?: string;
+};
+
+/** Full content of one archived conversation, from `GET /api/hub/threads/:id`. */
+export type THubThread = {
+  id: string;
+  provider: string;
+  sourceId: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: THubMessage[];
+};
+
+/** One row of `GET /api/hub/notes`. */
+export type THubNote = {
+  id: string;
+  title: string;
+  text: string;
+  threadId?: string;
+  surface?: 'chat' | 'code' | 'agent' | 'other';
+  sessionTag?: string;
+  createdAt: string;
+};
+
+export type TListHubThreadsResponse = { threads: THubThreadSummary[] };
+export type TGetHubThreadResponse = { thread: THubThread };
+export type TListHubNotesResponse = { notes: THubNote[] };
+
 /** The hub's OAuth `/authorize` redirect forwards these as query params to the SPA's consent page. */
 export type THubOAuthConsentParams = {
   client_id: string;

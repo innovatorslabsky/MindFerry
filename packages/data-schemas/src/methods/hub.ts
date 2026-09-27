@@ -22,6 +22,8 @@ export interface HubMethods {
     userId: string,
     params: HubThreadSearchQuery,
   ) => Promise<HubThreadSearchResult[]>;
+  /** Most-recently-updated threads first, for browsing the archive without a search term. */
+  listHubThreads: (userId: string, limit: number) => Promise<HubThreadSearchResult[]>;
   listHubNotes: (userId: string, threadId?: string) => Promise<HubNoteRecord[]>;
   appendHubNote: (userId: string, note: HubNoteInput) => Promise<HubNoteRecord>;
   deleteAllHubData: (userId: string) => Promise<HubDataDeleteResult>;
@@ -175,6 +177,29 @@ export function createHubMethods(mongoose: typeof import('mongoose')): HubMethod
     }
   }
 
+  async function listHubThreads(userId: string, limit: number): Promise<HubThreadSearchResult[]> {
+    try {
+      const HubThread = mongoose.models.HubThread;
+      const docs = (await HubThread.find({ userId: toObjectId(userId) })
+        .sort({ updatedAt: -1 })
+        .limit(limit)
+        .lean()) as unknown as IHubThread[];
+
+      return docs.map((doc) => ({
+        id: doc.id,
+        provider: doc.provider,
+        title: doc.title,
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt,
+        messageCount: doc.messages.length,
+        searchText: doc.searchText,
+      }));
+    } catch (error) {
+      logger.error('[listHubThreads] Error listing threads:', error);
+      throw error;
+    }
+  }
+
   async function listHubNotes(userId: string, threadId?: string): Promise<HubNoteRecord[]> {
     try {
       const HubNote = mongoose.models.HubNote;
@@ -260,6 +285,7 @@ export function createHubMethods(mongoose: typeof import('mongoose')): HubMethod
     upsertHubThread,
     getHubThread,
     searchHubThreads,
+    listHubThreads,
     listHubNotes,
     appendHubNote,
     deleteAllHubData,

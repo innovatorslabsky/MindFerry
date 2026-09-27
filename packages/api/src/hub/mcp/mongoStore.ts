@@ -1,6 +1,14 @@
 import type { HubMethods, HubThreadRecord, HubMessageRecord } from '@librechat/data-schemas';
-import type { HubStore, HubNote, HubNoteInput, HubSearchParams, HubThreadSummary } from './store';
+import type {
+  HubStore,
+  HubNote,
+  HubNoteInput,
+  HubSearchParams,
+  HubThreadSummary,
+  HubArchiveThreadInput,
+} from './store';
 import type { HubThread, HubMessage, HubProvider } from '../thread';
+import { buildThreadFromArchiveInput, summarize } from './store';
 import { snippetAround } from './snippet';
 
 /**
@@ -102,6 +110,12 @@ export function createHubMongoStore(options: HubMongoStoreOptions): HubStore {
 
     async appendNote(note: HubNoteInput): Promise<HubNote> {
       return methods.appendHubNote(userId, note);
+    },
+
+    async archiveThread(input: HubArchiveThreadInput): Promise<HubThreadSummary> {
+      const thread = buildThreadFromArchiveInput(input, new Date());
+      await methods.upsertHubThread(userId, toThreadRecord(thread));
+      return summarize(thread);
     },
   };
 }

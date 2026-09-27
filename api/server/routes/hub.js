@@ -6,9 +6,13 @@ const {
   createContextHubMcpHandler,
   createContextHubImportHandler,
   createContextHubArchiveHandler,
+  createHubListThreadsHandler,
+  createHubGetThreadHandler,
+  createHubListNotesHandler,
   contextHubMcpLimiter,
   contextHubImportLimiter,
   contextHubArchiveLimiter,
+  contextHubBrowseLimiter,
   createRequireApiKeyAuth,
   resolveImportMaxFileSize,
   attachHubOAuthWwwAuthenticate,
@@ -119,6 +123,30 @@ router.post(
   contextHubArchiveLimiter,
   archiveHandler,
 );
+
+/**
+ * Read-only browsing of the archive from MindFerry's own UI — for a person
+ * who wants to look at what's in the hub without going through an AI client.
+ */
+const listThreadsHandler = createHubListThreadsHandler({ methods: db });
+const getThreadHandler = createHubGetThreadHandler({ methods: db });
+const listNotesHandler = createHubListNotesHandler({ methods: db });
+
+router.get(
+  '/threads',
+  requireJwtAuth,
+  configMiddleware,
+  contextHubBrowseLimiter,
+  listThreadsHandler,
+);
+router.get(
+  '/threads/:id',
+  requireJwtAuth,
+  configMiddleware,
+  contextHubBrowseLimiter,
+  getThreadHandler,
+);
+router.get('/notes', requireJwtAuth, configMiddleware, contextHubBrowseLimiter, listNotesHandler);
 
 /**
  * OAuth 2.1 authorization server for the MCP endpoint above — required

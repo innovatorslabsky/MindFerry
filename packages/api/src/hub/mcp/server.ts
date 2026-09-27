@@ -25,6 +25,9 @@ export interface HubMcpServerOptions {
   snippetLength?: number;
   /** When false, the hub is read-only and `append_note` is not registered. */
   allowNotes?: boolean;
+  /** When false, `archive_thread` is not registered — a client can still read
+   *  and write notes, but cannot add a full conversation to the archive. */
+  allowArchive?: boolean;
   name?: string;
   version?: string;
 }
@@ -53,6 +56,7 @@ export function createHubMcpServer(options: HubMcpServerOptions): McpServer {
     searchLimit = CONTEXT_HUB_DEFAULT_SEARCH_LIMIT,
     snippetLength = CONTEXT_HUB_DEFAULT_SNIPPET_LENGTH,
     allowNotes = true,
+    allowArchive = true,
     name = 'mindferry',
     version = '1.0.0',
   } = options;
@@ -164,6 +168,45 @@ export function createHubMcpServer(options: HubMcpServerOptions): McpServer {
       async ({ title, text, threadId, surface, sessionTag }) => {
         const note = await store.appendNote({ title, text, threadId, surface, sessionTag });
         return asText(`Saved note ${note.id}.`);
+      },
+    );
+  }
+
+  if (allowArchive) {
+    server.registerTool(
+      'archive_thread',
+      {
+        title: 'Archive a full conversation',
+        description:
+          'Archive this conversation into the hub verbatim, turn by turn — not a summary. ' +
+          'Use append_note for a short summary instead; use this when the user wants the ' +
+          'conversation itself kept, the way "Save to MindFerry" keeps one from this app\'s own UI. ' +
+          'Pass the same sourceId again later to update this thread instead of creating a new one.',
+        inputSchema: {
+          title: z.string().min(1).describe('A short, descriptive title for the conversation'),
+          sourceId: z
+            .string()
+            .min(1)
+            .max(200)
+            .optional()
+            .describe(
+              "A stable id for this conversation (e.g. the calling client's own conversation id). Reusing it updates the existing thread; omitting it always creates a new one.",
+            ),
+          messages: z
+            .array(
+              z.object({
+                role: z.enum(['user', 'assistant']),
+                text: z.string().min(1).max(200_000),
+              }),
+            )
+            .min(1)
+            .max(2000)
+            .describe('Every turn, in order, verbatim — not a summary or excerpt'),
+        },
+      },
+      async ({ title, sourceId, messages }) => {
+        const summary = await store.archiveThread({ title, sourceId, messages });
+        return asText(`Archived thread ${summary.id} (${summary.messageCount} messages).`);
       },
     );
   }

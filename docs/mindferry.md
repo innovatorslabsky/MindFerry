@@ -17,6 +17,7 @@ contextHub:
     searchLimit: 20 # 1-100, default 20
     snippetLength: 400 # 80-4000 characters, default 400
     allowNotes: true # let a connected client write notes back, not only read
+    allowArchive: true # let a connected client archive a full conversation via archive_thread
   git: # optional: also mirror the archive to a GitHub repo as Markdown
     enabled: true
     owner: your-github-username
@@ -83,6 +84,26 @@ once `contextHub.enabled` is on. Pick a JSON export from ChatGPT, Claude.ai (Set
 Export data), or Gemini (Google Takeout) — the provider is auto-detected from the file's shape, so
 there's nothing else to pick. It archives every conversation in the file the same way "Save to
 MindFerry" archives one.
+
+## Archiving a live conversation from Claude.ai or Claude Code
+
+`append_note` is deliberately for a short summary, not a transcript — an MCP client that wants the
+*whole* conversation kept has `archive_thread` instead, the live-connector counterpart to "Save to
+MindFerry" and the file importer, neither of which it can reach. It takes a title and every turn
+verbatim (`{ role, text }`), and an optional `sourceId`: passing the same one again updates that
+thread instead of creating a duplicate, so a client can re-call it as a conversation grows.
+Archived this way, threads carry `provider: "mindferry"`, same as one saved from this app's own
+UI. Turning `contextHub.mcp.allowArchive` off removes the tool but leaves `append_note` and the
+read tools in place.
+
+## Browsing the archive from MindFerry itself
+
+Settings → API Keys → Agent API Keys → Manage has a **Browse** button (next to the importer) that
+opens the archive directly — searchable threads and their notes — for a person who wants to look
+without going through an AI client. It reads the same data `search_context`, `get_thread`, and
+`read_notes` serve over MCP, through ordinary session-authenticated routes
+(`GET /api/hub/threads`, `GET /api/hub/threads/:id`, `GET /api/hub/notes`) rather than the MCP
+endpoint, so it works whether or not `contextHub.mcp.enabled` is on.
 
 ## Two-way sync between Claude.ai and Claude Code
 

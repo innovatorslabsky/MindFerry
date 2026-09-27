@@ -132,4 +132,15 @@ describe('ApiKeys', () => {
       getByText('Import a ChatGPT, Claude.ai, or Gemini export into MindFerry'),
     ).toBeInTheDocument();
   });
+
+  it('hides the browse-archive button when the operator has not enabled the context hub', () => {
+    const { queryByRole } = openManageDialog();
+    expect(queryByRole('button', { name: 'Browse' })).not.toBeInTheDocument();
+  });
+
+  it('shows the browse-archive button once the operator enables the context hub', () => {
+    mockUseGetStartupConfig.mockReturnValue({ data: { contextHubEnabled: true } });
+    const { getByRole } = openManageDialog();
+    expect(getByRole('button', { name: 'Browse' })).toBeInTheDocument();
+  });
 });
