@@ -90,8 +90,8 @@ export function convertLibreChatConversation(
   }));
 
   return {
-    id: hubThreadId('librechat', conversation.conversationId),
-    provider: 'librechat',
+    id: hubThreadId('mindferry', conversation.conversationId),
+    provider: 'mindferry',
     sourceId: conversation.conversationId,
     title: conversation.title?.trim() || 'Untitled conversation',
     createdAt,

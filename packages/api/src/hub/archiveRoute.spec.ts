@@ -92,11 +92,11 @@ describe('createContextHubArchiveHandler', () => {
 
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ threadId: 'librechat:c1', messageCount: 1 }),
+      expect.objectContaining({ threadId: 'mindferry:c1', messageCount: 1 }),
     );
     expect(upsertHubThread).toHaveBeenCalledWith(
       'user-a',
-      expect.objectContaining({ id: 'librechat:c1' }),
+      expect.objectContaining({ id: 'mindferry:c1' }),
     );
   });
 

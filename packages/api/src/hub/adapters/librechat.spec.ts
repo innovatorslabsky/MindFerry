@@ -33,8 +33,8 @@ describe('convertLibreChatConversation', () => {
 
     const thread = convertLibreChatConversation(conversation, messages);
 
-    expect(thread.id).toBe('librechat:c1');
-    expect(thread.provider).toBe('librechat');
+    expect(thread.id).toBe('mindferry:c1');
+    expect(thread.provider).toBe('mindferry');
     expect(thread.title).toBe('Designing the hub');
     expect(thread.messages).toHaveLength(2);
     expect(thread.messages[0].parentId).toBeNull();

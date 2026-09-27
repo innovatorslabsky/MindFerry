@@ -6,7 +6,7 @@
  * new provider is a new adapter rather than a new branch in shared code.
  */
 
-export const HUB_PROVIDERS = ['chatgpt', 'claude', 'gemini', 'perplexity', 'librechat'] as const;
+export const HUB_PROVIDERS = ['chatgpt', 'claude', 'gemini', 'perplexity', 'mindferry'] as const;
 
 export type HubProvider = (typeof HUB_PROVIDERS)[number];
 
