@@ -128,6 +128,12 @@ Beyond the context hub's own MCP endpoint, MindFerry's Agents can connect to any
 external MCP server for memory, search, databases, and more. See
 [docs/mcp-servers.md](mcp-servers.md) for a curated, self-hosted-first shortlist.
 
+## SearXNG integration
+
+MindFerry's built-in Web Search feature can run against a self-hosted, keyless
+[SearXNG](https://docs.searxng.org) instance instead of a paid third-party search
+API. See [docs/searxng.md](searxng.md) for the Docker Compose setup.
+
 ## What's not built yet
 
 - **Perplexity**: Perplexity has no bulk conversation export, so there's no file format to

@@ -27,11 +27,14 @@ useful when an agent needs a *working* memory during a task, distinct from the h
 ## Web search
 
 MindFerry ships its own [Web Search](https://www.librechat.ai/docs/features/web_search)
-feature independent of MCP, but these are worth knowing about for custom agents:
+feature, with **first-class, native SearXNG support** — see [docs/searxng.md](searxng.md)
+for a working self-hosted, fully keyless setup. Reach for the MCP servers below only for
+custom agents that need to call search as an explicit *tool*, separate from that
+built-in feature:
 
 | Server | Repo | Notes |
 |---|---|---|
-| SearXNG | [ihor-sokoliuk/mcp-searxng](https://github.com/ihor-sokoliuk/mcp-searxng) | 🏠 Points at your own SearXNG instance — fully self-hosted search, no API key at all. Best fit if you want zero external dependency. |
+| SearXNG | [ihor-sokoliuk/mcp-searxng](https://github.com/ihor-sokoliuk/mcp-searxng) | 🏠 Points at your own SearXNG instance. If you've already set up [docs/searxng.md](searxng.md), this can reuse the same instance. |
 | DuckDuckGo | [nickclyde/duckduckgo-mcp-server](https://github.com/nickclyde/duckduckgo-mcp-server) | 🏠 No API key required, hits DuckDuckGo directly. |
 | Brave Search | [brave/brave-search-mcp-server](https://github.com/brave/brave-search-mcp-server) | 💳 Official, generous free tier. |
 | Exa | [exa-labs/exa-mcp-server](https://github.com/exa-labs/exa-mcp-server) | 💳 Neural search tuned for AI agents. |

@@ -33,3 +33,21 @@ endpoints:
       titleConvo: true
       titleModel: 'gemini-2.5-flash'
       modelDisplayLabel: 'FreeLLMAPI'
+
+# SearXNG: a self-hosted, keyless metasearch engine used as MindFerry's Web
+# Search provider — no third-party search API key required. See docs/searxng.md.
+webSearch:
+  searchProvider: searxng
+  searxngInstanceUrl: 'http://searxng:8080'
+  scraperProvider: keenable # keyless page-content fetcher; pairs with searxng for a fully keyless stack
+  rerankerType: none # every reranker requires a key; 'none' skips reranking
+  # Self-hosted destinations are blocked by MindFerry's SSRF guard unless
+  # explicitly allowlisted here, host:port only.
+  allowedAddresses:
+    - 'searxng:8080'
+  searxngSearchOptions:
+    engines:
+      - google
+      - bing
+      - startpage
+      - qwant

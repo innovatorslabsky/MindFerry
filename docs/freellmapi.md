@@ -24,6 +24,10 @@ configure the environment:
 cp docker-compose.freellmapi.yml docker-compose.override.yaml
 ```
 
+> **Also setting up [SearXNG](searxng.md)?** Compose only auto-loads one
+> `docker-compose.override.yaml` — add the `searxng` service block into this same
+> file instead of overwriting it, rather than copying both overlays in sequence.
+
 Generate an encryption key for FreeLLMAPI:
 
 ```bash
