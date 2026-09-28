@@ -58,11 +58,20 @@ export interface MCPServerFormData {
 
 interface UseMCPServerFormProps {
   server?: MCPServerDefinition | null;
+  /** Prefills a blank (create-mode) form, e.g. from a curated server picked
+   *  in `CuratedServerDialog` — merged into the empty defaults, never into
+   *  `server`'s. Ignored when `server` is set: an existing row's own values
+   *  always win, since editing is not the same action as templating a new one.
+   *  Callers must give this a stable identity (e.g. `useMemo` keyed on the
+   *  chosen curated server's id) — `defaultValues` depends on it, and a new
+   *  object every render would reset the form's in-progress edits on every
+   *  render while the dialog is open, not only when it first opens. */
+  template?: Partial<MCPServerFormData>;
   onSuccess?: (serverName: string, isOAuth: boolean) => void;
   onClose?: () => void;
 }
 
-export function useMCPServerForm({ server, onSuccess, onClose }: UseMCPServerFormProps) {
+export function useMCPServerForm({ server, template, onSuccess, onClose }: UseMCPServerFormProps) {
   const localize = useLocalize();
   const { showToast } = useToastContext();
 
@@ -140,8 +149,9 @@ export function useMCPServerForm({ server, onSuccess, onClose }: UseMCPServerFor
         obo_scopes: '',
       },
       trust: false,
+      ...template,
     };
-  }, [server]);
+  }, [server, template]);
 
   // Form instance
   const methods = useForm<MCPServerFormData>({

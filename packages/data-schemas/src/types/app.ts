@@ -16,6 +16,7 @@ import type {
   SkillSyncConfig,
   FiltersConfig,
   ContextHubConfig,
+  ChannelsConfig,
 } from 'librechat-data-provider';
 
 export type JsonSchemaType = {
@@ -75,6 +76,8 @@ export interface AppConfig {
   skillSync?: SkillSyncConfig;
   /** Context hub archive and MCP server configuration */
   contextHub?: ContextHubConfig;
+  /** External channel bridges (e.g. Slack) into LibreChat's agents */
+  channels?: ChannelsConfig;
   /** File storage strategy ('local', 's3', 'firebase', 'azure_blob', 'cloudfront') */
   fileStrategy: FileStorage;
   /** File strategies configuration */

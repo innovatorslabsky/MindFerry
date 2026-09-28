@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
-import { Plus } from 'lucide-react';
 import { useRecoilValue } from 'recoil';
+import { Plus, Compass } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { SystemRoles, PermissionTypes, Permissions } from 'librechat-data-provider';
 import { Button, FilterInput, OGDialogTrigger, TooltipAnchor } from '@librechat/client';
@@ -15,6 +15,7 @@ import MCPConfigDialog from '~/components/MCP/MCPConfigDialog';
 import { PanelFooter, PanelContent } from '~/components/ui';
 import MCPServerCardSkeleton from './MCPServerCardSkeleton';
 import { useMCPRefresh } from '~/hooks/MCP/useMCPRefresh';
+import CuratedServerBrowser from './CuratedServerBrowser';
 import MCPAdminSettings from './MCPAdminSettings';
 import MCPServerDialog from './MCPServerDialog';
 import MCPServerList from './MCPServerList';
@@ -43,6 +44,7 @@ export default function MCPBuilderPanel() {
     permission: Permissions.CREATE,
   });
   const [showDialog, setShowDialog] = useState(false);
+  const [showBrowser, setShowBrowser] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const addButtonRef = useRef<HTMLButtonElement | null>(null);
   const configDialogProps = getConfigDialogProps();
@@ -77,30 +79,47 @@ export default function MCPBuilderPanel() {
             containerClassName="flex-1"
           />
           {hasCreateAccess && (
-            <MCPServerDialog
-              open={showDialog}
-              onOpenChange={setShowDialog}
-              triggerRef={addButtonRef}
-            >
-              <OGDialogTrigger asChild>
-                <TooltipAnchor
-                  description={localize('com_ui_add_mcp')}
-                  side="bottom"
-                  render={
-                    <Button
-                      ref={addButtonRef}
-                      variant="outline"
-                      size="icon"
-                      className="size-9 shrink-0 bg-transparent"
-                      onClick={() => setShowDialog(true)}
-                      aria-label={localize('com_ui_add_mcp')}
-                    >
-                      <Plus className="size-4" aria-hidden="true" />
-                    </Button>
-                  }
-                />
-              </OGDialogTrigger>
-            </MCPServerDialog>
+            <>
+              <TooltipAnchor
+                description={localize('com_ui_browse_curated_mcp_servers')}
+                side="bottom"
+                render={
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="size-9 shrink-0 bg-transparent"
+                    onClick={() => setShowBrowser(true)}
+                    aria-label={localize('com_ui_browse_curated_mcp_servers')}
+                  >
+                    <Compass className="size-4" aria-hidden="true" />
+                  </Button>
+                }
+              />
+              <MCPServerDialog
+                open={showDialog}
+                onOpenChange={setShowDialog}
+                triggerRef={addButtonRef}
+              >
+                <OGDialogTrigger asChild>
+                  <TooltipAnchor
+                    description={localize('com_ui_add_mcp')}
+                    side="bottom"
+                    render={
+                      <Button
+                        ref={addButtonRef}
+                        variant="outline"
+                        size="icon"
+                        className="size-9 shrink-0 bg-transparent"
+                        onClick={() => setShowDialog(true)}
+                        aria-label={localize('com_ui_add_mcp')}
+                      >
+                        <Plus className="size-4" aria-hidden="true" />
+                      </Button>
+                    }
+                  />
+                </OGDialogTrigger>
+              </MCPServerDialog>
+            </>
           )}
         </div>
       </div>
@@ -120,6 +139,8 @@ export default function MCPBuilderPanel() {
 
       {/* Config Dialog for custom user vars */}
       {configDialogProps && <MCPConfigDialog {...configDialogProps} />}
+
+      {hasCreateAccess && <CuratedServerBrowser open={showBrowser} onOpenChange={setShowBrowser} />}
 
       {user?.role === SystemRoles.ADMIN && (
         <PanelFooter>

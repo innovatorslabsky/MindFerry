@@ -22,6 +22,7 @@ import {
   OGDialogContent,
   OGDialogTemplate,
 } from '@librechat/client';
+import type { MCPServerFormData } from './hooks/useMCPServerForm';
 import { useAuthContext, useHasAccess, useResourcePermissions, MCPServerDefinition } from '~/hooks';
 import { GenericGrantAccessDialog } from '~/components/Sharing';
 import { useMCPServerForm } from './hooks/useMCPServerForm';
@@ -34,6 +35,8 @@ interface MCPServerDialogProps {
   children?: React.ReactNode;
   triggerRef?: React.MutableRefObject<HTMLDivElement | HTMLButtonElement | null>;
   server?: MCPServerDefinition | null;
+  /** See the `template` param on `useMCPServerForm` — same stable-identity requirement applies. */
+  template?: Partial<MCPServerFormData>;
 }
 
 export default function MCPServerDialog({
@@ -42,6 +45,7 @@ export default function MCPServerDialog({
   children,
   triggerRef,
   server,
+  template,
 }: MCPServerDialogProps) {
   const localize = useLocalize();
   const { user } = useAuthContext();
@@ -56,6 +60,7 @@ export default function MCPServerDialog({
   // Form hook
   const formHook = useMCPServerForm({
     server,
+    template,
     onSuccess: (serverName, isOAuth) => {
       if (isOAuth) {
         setCreatedServerId(serverName);

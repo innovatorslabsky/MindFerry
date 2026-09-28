@@ -1,0 +1,19 @@
+# Minimal SearXNG settings for the MindFerry integration. Everything not
+# listed here inherits SearXNG's shipped defaults. See docs/searxng.md.
+use_default_settings: true
+
+general:
+  instance_name: 'MindFerry Search'
+
+server:
+  # Overridden by the SEARXNG_SECRET_KEY env var set in docker-compose.searxng.yml.
+  secret_key: 'REPLACE_WITH_OPENSSL_RAND_HEX_32'
+  # Safe because this container publishes no port to the host — only reachable
+  # by other containers on the same Docker Compose network. See docs/searxng.md
+  # for why this must stay that way.
+  bind_address: '0.0.0.0'
+
+search:
+  formats:
+    - html
+    - json # required — MindFerry's webSearch feature calls the JSON API

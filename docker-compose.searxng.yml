@@ -1,0 +1,42 @@
+# SearXNG integration overlay for MindFerry: a self-hosted, keyless metasearch
+# engine used as the search provider behind MindFerry's built-in Web Search.
+#
+# Usage:
+#   cp docker-compose.searxng.yml docker-compose.override.yaml
+#   # (or append the `searxng` service below into an existing override file —
+#   # compose only applies one docker-compose.override.yaml)
+#   openssl rand -hex 32   # paste the result into searxng/settings.yml's secret_key
+#   docker compose up -d
+#
+# SearXNG is never published to the host — MindFerry's `api` container reaches
+# it at http://searxng:8080 over the internal Compose network only. See
+# docs/searxng.md for the full setup guide, including the librechat.yaml and
+# SSRF-allowlist changes this requires.
+
+services:
+  api:
+    volumes:
+      - type: bind
+        source: ./librechat.yaml
+        target: /app/librechat.yaml
+    depends_on:
+      - searxng
+
+  searxng:
+    container_name: searxng
+    image: searxng/searxng:latest
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    environment:
+      - SEARXNG_BASE_URL=http://searxng:8080/
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    # Deliberately no `ports:` entry — see the header comment above.

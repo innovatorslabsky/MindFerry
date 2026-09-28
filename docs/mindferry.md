@@ -115,6 +115,38 @@ short summary note at the end (or whenever asked to "sync" or "save this"). Copy
 `~/.claude/skills/mindferry-sync/SKILL.md` for Claude Code, or upload it as a custom skill in
 Claude.ai (Settings → Capabilities → Skills, where available).
 
+## FreeLLMAPI integration
+
+MindFerry can pair with [FreeLLMAPI](https://github.com/tashfeenahmed/freellmapi), a
+self-hosted proxy that aggregates the free tiers of 20+ LLM providers behind a single
+endpoint. Adding it gives every MindFerry user access to 100+ models without configuring
+each provider individually. See [docs/freellmapi.md](freellmapi.md) for the setup guide.
+
+## Recommended MCP servers
+
+Beyond the context hub's own MCP endpoint, MindFerry's Agents can connect to any
+external MCP server for memory, search, databases, and more. See
+[docs/mcp-servers.md](mcp-servers.md) for a curated, self-hosted-first shortlist.
+
+## Semantic search
+
+`search_context` matches keywords by default. Layering semantic re-ranking
+on top — so a query finds a thread that used different words for the same
+idea — needs an embeddings endpoint (FreeLLMAPI's works) but no schema
+change or persisted index. See [docs/semantic-search.md](semantic-search.md).
+
+## Slack bridge
+
+Send a Slack channel's messages to a MindFerry agent, and post its reply back —
+built on the same Remote Agent trigger API `POST /api/agents/v1/events` already
+exposes for any external event source. See [docs/slack-bridge.md](slack-bridge.md).
+
+## SearXNG integration
+
+MindFerry's built-in Web Search feature can run against a self-hosted, keyless
+[SearXNG](https://docs.searxng.org) instance instead of a paid third-party search
+API. See [docs/searxng.md](searxng.md) for the Docker Compose setup.
+
 ## What's not built yet
 
 - **Perplexity**: Perplexity has no bulk conversation export, so there's no file format to
