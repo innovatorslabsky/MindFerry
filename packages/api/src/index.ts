@@ -39,6 +39,7 @@ export * from './mcp/reinitialize';
 export * from './mcp/icons';
 /* Context Hub */
 export * from './hub';
+export * from './channels';
 /* Utilities */
 export * from './mcp/utils';
 export * from './mcp/domainValidation';

@@ -135,6 +135,12 @@ on top — so a query finds a thread that used different words for the same
 idea — needs an embeddings endpoint (FreeLLMAPI's works) but no schema
 change or persisted index. See [docs/semantic-search.md](semantic-search.md).
 
+## Slack bridge
+
+Send a Slack channel's messages to a MindFerry agent, and post its reply back —
+built on the same Remote Agent trigger API `POST /api/agents/v1/events` already
+exposes for any external event source. See [docs/slack-bridge.md](slack-bridge.md).
+
 ## SearXNG integration
 
 MindFerry's built-in Web Search feature can run against a self-hosted, keyless

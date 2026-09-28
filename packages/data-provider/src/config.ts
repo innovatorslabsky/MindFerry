@@ -603,6 +603,35 @@ export type ContextHubConfig = z.infer<typeof contextHubSchema>;
 export type ContextHubGitTargetConfig = z.infer<typeof contextHubGitTargetSchema>;
 export type ContextHubSemanticSearchConfig = z.infer<typeof contextHubSemanticSearchSchema>;
 
+/**
+ * Bridges one Slack workspace's messages to one LibreChat agent, over the
+ * existing Remote Agent trigger API — see docs/slack-bridge.md. Off by
+ * default; `signingSecret`/`apiKey`/`botToken` are `${ENV_VAR}` references,
+ * resolved the same way `contextHub.git.token` already is, never a raw
+ * secret written into librechat.yaml.
+ */
+export const slackChannelSchema = z.object({
+  enabled: z.boolean().default(false),
+  /** Which LibreChat agent handles every incoming Slack message. */
+  agentId: z.string(),
+  /** Slack app's Signing Secret (Basic Information page). */
+  signingSecret: z.string(),
+  /** A Remote Agents API key for the LibreChat user this bridge acts as —
+   *  that user needs VIEW access to `agentId`. */
+  apiKey: z.string(),
+  /** Slack bot token (`xoxb-...`) used to post the agent's reply back. */
+  botToken: z.string(),
+});
+
+export const channelsSchema = z
+  .object({
+    slack: slackChannelSchema.optional(),
+  })
+  .optional();
+
+export type SlackChannelConfig = z.infer<typeof slackChannelSchema>;
+export type ChannelsConfig = z.infer<typeof channelsSchema>;
+
 export type SkillSyncConfig = z.infer<typeof skillSyncConfigSchema>;
 export type SkillSyncGitHubSourceConfig = z.infer<typeof skillSyncGitHubSourceSchema>;
 
@@ -3007,6 +3036,7 @@ export const configSchema = z.object({
   summarization: summarizationConfigSchema.optional(),
   skillSync: skillSyncConfigSchema,
   contextHub: contextHubSchema,
+  channels: channelsSchema,
   secureImageLinks: z.boolean().optional(),
   imageOutputType: z.nativeEnum(EImageOutputType).default(EImageOutputType.PNG),
   includedTools: z.array(z.string()).optional(),

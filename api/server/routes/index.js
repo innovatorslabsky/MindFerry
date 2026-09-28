@@ -45,6 +45,7 @@ const hub = require('./hub');
 const hubWellKnown = require('./hubWellKnown');
 const rum = require('./rum');
 const insights = require('./insights');
+const slackChannel = require('./channels/slack');
 
 module.exports = {
   insights,
@@ -52,6 +53,7 @@ module.exports = {
   mcp,
   hub,
   hubWellKnown,
+  slackChannel,
   auth,
   adminAuth,
   adminConfig,

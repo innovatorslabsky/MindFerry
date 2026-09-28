@@ -5,6 +5,7 @@ import {
   hasActiveFiltersConfig,
   getConfigDefaults,
   contextHubSchema,
+  channelsSchema,
   langfuseConfigSchema,
   skillSyncConfigSchema,
   summarizationConfigSchema,
@@ -92,6 +93,21 @@ export function loadContextHubConfig(config: DeepPartial<TCustomConfig>): AppCon
   return parsed.data;
 }
 
+export function loadChannelsConfig(config: DeepPartial<TCustomConfig>): AppConfig['channels'] {
+  const raw = config.channels;
+  if (!raw || typeof raw !== 'object') {
+    return undefined;
+  }
+
+  const parsed = channelsSchema.safeParse(raw);
+  if (!parsed.success) {
+    logger.warn('[AppService] Invalid channels config', parsed.error.flatten());
+    return undefined;
+  }
+
+  return parsed.data;
+}
+
 export function loadLangfuseConfig(config: DeepPartial<TCustomConfig>): AppConfig['langfuse'] {
   const raw = config.langfuse;
   if (!raw || typeof raw !== 'object') {
@@ -156,6 +172,7 @@ export const AppService = async (params?: {
   const summarization = loadSummarizationConfig(config);
   const skillSync = loadSkillSyncConfig(config);
   const contextHub = loadContextHubConfig(config);
+  const channels = loadChannelsConfig(config);
   const filteredTools = config.filteredTools;
   const includedTools = config.includedTools;
   const fileStrategy = (config.fileStrategy ?? configDefaults.fileStrategy) as
@@ -197,6 +214,7 @@ export const AppService = async (params?: {
     balance,
     skillSync,
     contextHub,
+    channels,
     webSearch,
     mcpSettings,
     fileStrategy,

@@ -9,6 +9,8 @@ import {
   codeEnvironmentUserConfigSchema,
   contextHubSchema,
   contextHubSemanticSearchSchema,
+  channelsSchema,
+  slackChannelSchema,
   excludedKeys,
   resolveEndpointType,
   webSearchSchema,
@@ -1596,5 +1598,50 @@ describe('contextHubSemanticSearchSchema', () => {
       baseURL: 'http://freellmapi:3001/v1',
       model: 'text-embedding-3-small',
     });
+  });
+});
+
+describe('slackChannelSchema', () => {
+  const valid = {
+    enabled: true,
+    agentId: 'agent-1',
+    signingSecret: '${SLACK_SIGNING_SECRET}',
+    apiKey: '${SLACK_BRIDGE_API_KEY}',
+    botToken: '${SLACK_BOT_TOKEN}',
+  };
+
+  it('parses a fully configured bridge', () => {
+    expect(slackChannelSchema.parse(valid)).toEqual(valid);
+  });
+
+  it('defaults to disabled', () => {
+    expect(slackChannelSchema.parse({ ...valid, enabled: undefined }).enabled).toBe(false);
+  });
+
+  it.each(['agentId', 'signingSecret', 'apiKey', 'botToken'] as const)('requires %s', (field) => {
+    const rest: Record<string, unknown> = { ...valid };
+    delete rest[field];
+    expect(slackChannelSchema.safeParse(rest).success).toBe(false);
+  });
+});
+
+describe('channelsSchema', () => {
+  it('is optional and reachable at channels.slack', () => {
+    expect(channelsSchema.parse(undefined)).toBeUndefined();
+    const result = channelsSchema.parse({
+      slack: {
+        enabled: true,
+        agentId: 'agent-1',
+        signingSecret: '${A}',
+        apiKey: '${B}',
+        botToken: '${C}',
+      },
+    });
+    expect(result?.slack?.agentId).toBe('agent-1');
+  });
+
+  it('is off by default at the top level of configSchema, unchanged from before it existed', () => {
+    const result = configSchema.parse({ version: '1.3.5' });
+    expect(result.channels).toBeUndefined();
   });
 });

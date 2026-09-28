@@ -332,7 +332,19 @@ const startServer = async () => {
   app.use('/api/agents/chat', agentStartupIngressMiddleware);
   app.use(metricsMiddleware);
   app.use(noIndex);
-  app.use(express.json({ limit: '3mb' }));
+  app.use(
+    express.json({
+      limit: '3mb',
+      // Captures the exact request bytes alongside the parsed body. Costs
+      // nothing for the vast majority of routes that never read it, and is
+      // what lets a webhook signature check (e.g. the Slack bridge) verify
+      // against what the sender actually signed, not a re-serialization of
+      // the parsed JSON that could differ byte-for-byte from the original.
+      verify: (req, _res, buf) => {
+        req.rawBody = buf.toString('utf8');
+      },
+    }),
+  );
   app.use(express.urlencoded({ extended: true, limit: '3mb' }));
   app.use(handleJsonParseError);
 
@@ -446,6 +458,7 @@ const startServer = async () => {
   app.use('/api/mcp', routes.mcp);
   app.use('/api/hub', routes.hub);
   app.use('/.well-known', routes.hubWellKnown);
+  app.use('/api/channels/slack', routes.slackChannel);
   app.use('/api/rum', routes.rum);
 
   app.use('/metrics', metricsRouter);
