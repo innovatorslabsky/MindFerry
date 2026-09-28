@@ -73,6 +73,32 @@ If you have a specific reason to reach SearXNG directly (debugging its own web U
 for instance), publish a port bound to `127.0.0.1` only, never `0.0.0.0`, and remove
 it again once you're done.
 
+## Troubleshooting
+
+**Container keeps restarting, logs show `RuntimeError: Address family not supported
+by protocol (os error 97)`.** SearXNG's web server (granian) binds to `::` — the
+IPv6 wildcard address — by default. On a host whose kernel has IPv6 disabled
+entirely (some hardened VPS images, some minimal container base systems), that bind
+fails outright and the container crash-loops. Force IPv4-only binding by adding this
+to the `searxng` service's `environment` in your override file:
+
+```yaml
+services:
+  searxng:
+    environment:
+      - SEARXNG_BASE_URL=http://searxng:8080/
+      - GRANIAN_HOST=0.0.0.0
+```
+
+Most Docker hosts have IPv6 available at the kernel level even when unused, so this
+isn't needed by default — only add it if you hit the exact error above.
+
+**`webSearch` returns no results, or the model reports it can't search.** Check
+that `contextHub`'s or `webSearch`'s destination is actually reachable — confirm
+`allowedAddresses` includes `searxng:8080` exactly as the service is named in your
+compose file, and that `search.formats` in `searxng/settings.yml` includes `json`
+(the LibreChat backend calls SearXNG's JSON API, not its HTML page).
+
 ## The SSRF allowlist
 
 MindFerry's Web Search feature validates outbound search/scrape destinations and
@@ -112,11 +138,29 @@ webSearch:
 ## Tuning the engine mix
 
 `searxngSearchOptions.engines` in `librechat.yaml` lists which of SearXNG's built-in
-engines to query. The shipped default (`google`, `bing`, `startpage`, `qwant`) skips
+engines to query. The shipped default (`google`, `bing`, `qwant`, `brave`) skips
 DuckDuckGo, which serves CAPTCHAs to most self-hosted instances and would otherwise
-show up as silently missing results. Check which engines are actually enabled on
-your instance's `/config` page (internal-only, so you'll need `docker compose exec`
-or a temporary port-forward to view it) before adding more.
+show up as silently missing results.
+
+**Engine names change between SearXNG versions — verify before you deploy.** This
+list was tested directly against a running `searxng/searxng:latest` container
+(2026.9.25): `startpage` turned out to have been removed from the engine catalog
+entirely and silently drops out of results with no error, no warning, nothing —
+just fewer results than expected. Check what your own instance actually has before
+trusting any engine name, including the ones above:
+
+```bash
+# From the host, temporarily, or via docker compose exec — SearXNG has no port
+# published by default (see above), so pick one of these two:
+docker compose exec searxng wget -qO- http://localhost:8080/config | python3 -m json.tool
+```
+
+Look for `"engines"` entries with `"categories": ["general", ...]` and check the
+`name` field against what you listed in `searxngSearchOptions.engines`. An engine
+that's `"enabled": false` by default still works when named explicitly in that list
+— the per-request `engines` parameter activates it for that query — but an engine
+name that doesn't exist in the catalog at all is silently dropped, same as `startpage`
+above.
 
 ## Architecture
 

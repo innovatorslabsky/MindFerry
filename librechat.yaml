@@ -46,8 +46,12 @@ webSearch:
   allowedAddresses:
     - 'searxng:8080'
   searxngSearchOptions:
+    # Verified against a running SearXNG 2026.9.25 instance's /config endpoint —
+    # 'startpage' has been removed from SearXNG's engine catalog and silently
+    # drops out of results if listed. See docs/searxng.md for how to re-check
+    # this against your own instance after an upgrade.
     engines:
       - google
       - bing
-      - startpage
       - qwant
+      - brave
