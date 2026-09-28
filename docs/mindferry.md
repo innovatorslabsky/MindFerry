@@ -115,6 +115,11 @@ short summary note at the end (or whenever asked to "sync" or "save this"). Copy
 `~/.claude/skills/mindferry-sync/SKILL.md` for Claude Code, or upload it as a custom skill in
 Claude.ai (Settings → Capabilities → Skills, where available).
 
+For Claude Code specifically, [`claude-plugin/mindferry`](../claude-plugin/mindferry) does this
+automatically instead of by asking: it mounts the hub as an MCP server and wires `SessionStart`/
+`SessionEnd` hooks to read notes in and save a note back on their own, no prompt required. See
+[`claude-plugin/mindferry/README.md`](../claude-plugin/mindferry/README.md) to install it.
+
 ## FreeLLMAPI integration
 
 MindFerry can pair with [FreeLLMAPI](https://github.com/tashfeenahmed/freellmapi), a

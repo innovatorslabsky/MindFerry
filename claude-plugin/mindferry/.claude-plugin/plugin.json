@@ -1,0 +1,38 @@
+{
+  "name": "mindferry",
+  "displayName": "MindFerry Context Hub",
+  "version": "1.0.0",
+  "description": "Auto-connects Claude Code to your MindFerry context hub: reads relevant notes at session start, saves a summary back when a session ends.",
+  "author": {
+    "name": "MindFerry"
+  },
+  "homepage": "https://github.com/innovatorslabsky/MindFerry/blob/main/docs/mindferry.md",
+  "repository": "https://github.com/innovatorslabsky/MindFerry",
+  "license": "MIT",
+  "keywords": ["mindferry", "context", "mcp", "memory"],
+  "userConfig": {
+    "hub_url": {
+      "type": "string",
+      "title": "MindFerry hub URL",
+      "description": "Your MindFerry deployment's public origin, e.g. https://mindferry.example.com",
+      "required": true
+    },
+    "api_key": {
+      "type": "string",
+      "title": "Agent API key",
+      "description": "From Settings -> API Keys -> Agent API Keys in your MindFerry deployment. Needs REMOTE_AGENTS role permission.",
+      "sensitive": true,
+      "required": true
+    }
+  },
+  "mcpServers": {
+    "mindferry-hub": {
+      "type": "http",
+      "url": "${user_config.hub_url}/api/hub/mcp",
+      "headers": {
+        "Authorization": "Bearer ${user_config.api_key}"
+      }
+    }
+  },
+  "hooks": "./hooks/hooks.json"
+}
