@@ -7,7 +7,7 @@ import {
 } from 'librechat-data-provider';
 import type { HubStore, HubThreadSummary } from './store';
 import type { HubProvider } from '../thread';
-import { renderThreadMarkdown } from '../render';
+import { renderThreadMarkdown, renderThreadOutlineMarkdown } from '../render';
 import { HUB_PROVIDERS } from '../thread';
 
 /**
@@ -93,11 +93,14 @@ export function createHubMcpServer(options: HubMcpServerOptions): McpServer {
   );
 
   server.registerTool(
-    'get_thread',
+    'get_thread_outline',
     {
-      title: 'Read one archived conversation',
+      title: "Read one archived conversation's outline",
       description:
-        'Return a full archived conversation as Markdown, including reasoning and tool segments the provider exported.',
+        'List every message in an archived conversation as a compact timeline — id, role, ' +
+        'timestamp, and a short preview — without the full content. Cheaper than get_thread for ' +
+        'a long conversation: read the outline first, then pass just the message ids you need to ' +
+        "get_thread's messageIds parameter instead of fetching the whole thing.",
       inputSchema: {
         id: z.string().min(1).describe('Thread id from search_context, such as "claude:abc123"'),
       },
@@ -107,7 +110,36 @@ export function createHubMcpServer(options: HubMcpServerOptions): McpServer {
       if (!thread) {
         return asText(`No archived conversation has id "${id}".`);
       }
-      return asText(renderThreadMarkdown(thread));
+      return asText(renderThreadOutlineMarkdown(thread));
+    },
+  );
+
+  server.registerTool(
+    'get_thread',
+    {
+      title: 'Read one archived conversation',
+      description:
+        'Return an archived conversation as Markdown, including reasoning and tool segments the ' +
+        'provider exported. Returns every message by default; for a long conversation, call ' +
+        'get_thread_outline first and pass messageIds to fetch only the turns that matter.',
+      inputSchema: {
+        id: z.string().min(1).describe('Thread id from search_context, such as "claude:abc123"'),
+        messageIds: z
+          .array(z.string().min(1))
+          .max(200)
+          .optional()
+          .describe(
+            'Only return these message ids, from get_thread_outline — the cheaper way to read ' +
+              'a long conversation. Omit to return every message.',
+          ),
+      },
+    },
+    async ({ id, messageIds }) => {
+      const thread = await store.getThread(id);
+      if (!thread) {
+        return asText(`No archived conversation has id "${id}".`);
+      }
+      return asText(renderThreadMarkdown(thread, { messageIds }));
     },
   );
 

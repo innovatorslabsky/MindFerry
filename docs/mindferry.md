@@ -135,6 +135,22 @@ on top — so a query finds a thread that used different words for the same
 idea — needs an embeddings endpoint (FreeLLMAPI's works) but no schema
 change or persisted index. See [docs/semantic-search.md](semantic-search.md).
 
+## Reading a long thread cheaply
+
+`get_thread` used to be all-or-nothing: fetch a whole archived conversation
+or nothing. For a long, heavily-branched thread that burns a lot of an MCP
+client's context on turns it never needed. `get_thread_outline` is the
+middle tier: one line per message — id, role, timestamp, a short preview,
+and which segment kinds it carries (`thinking`, `code`, `tool`) — with no
+segment bodies. Read the outline, then pass only the message ids that
+matter to `get_thread`'s `messageIds` parameter to fetch those in full.
+Omitting `messageIds` still returns the whole thread, exactly as before.
+
+Together with `search_context`'s compact result list, this makes three
+tiers of increasing cost: search (which threads), outline (which messages
+in one thread), full text (only the messages worth reading) — so a client
+never has to choose between "a snippet" and "the entire conversation."
+
 ## Slack bridge
 
 Send a Slack channel's messages to a MindFerry agent, and post its reply back —

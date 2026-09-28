@@ -1,4 +1,4 @@
-import type { HubThread, HubMessage, HubSegment, HubRole } from './thread';
+import type { HubThread, HubMessage, HubSegment, HubSegmentKind, HubRole } from './thread';
 
 /**
  * Renders a canonical thread as Markdown once, for every archive target.
@@ -60,7 +60,24 @@ function renderMessage(message: HubMessage): string {
   return parts.join('\n\n');
 }
 
-export function renderThreadMarkdown(thread: HubThread): string {
+export interface RenderThreadMarkdownOptions {
+  /** Render only these messages, in the thread's own order — the cheap way
+   *  to read a long conversation once `threadOutline` has shown which turns
+   *  matter, instead of the whole thing. Omitting it renders every message,
+   *  unchanged from before this option existed. Unknown ids are dropped
+   *  silently, same as an outline entry that names a message that's since
+   *  moved — a filter, not a lookup that can fail. */
+  messageIds?: readonly string[];
+}
+
+export function renderThreadMarkdown(
+  thread: HubThread,
+  options?: RenderThreadMarkdownOptions,
+): string {
+  const messages = options?.messageIds
+    ? thread.messages.filter((message) => options.messageIds?.includes(message.id))
+    : thread.messages;
+
   const frontmatter = [
     '---',
     `id: ${yamlString(thread.id)}`,
@@ -70,9 +87,83 @@ export function renderThreadMarkdown(thread: HubThread): string {
     `createdAt: ${thread.createdAt.toISOString()}`,
     `updatedAt: ${thread.updatedAt.toISOString()}`,
     `messages: ${thread.messages.length}`,
+    ...(options?.messageIds ? [`shown: ${messages.length}`] : []),
     '---',
   ].join('\n');
 
-  const body = thread.messages.map(renderMessage);
+  const body = messages.map(renderMessage);
   return [frontmatter, `# ${thread.title}`, ...body].join('\n\n') + '\n';
+}
+
+/** Bounds a preview to `maxLength` characters, collapsing whitespace first
+ *  so a preview never breaks mid-line on a newline the caller didn't ask for. */
+function previewText(text: string, maxLength: number): string {
+  const collapsed = text.trim().replace(/\s+/g, ' ');
+  if (collapsed.length <= maxLength) {
+    return collapsed;
+  }
+  return `${collapsed.slice(0, maxLength).trimEnd()}…`;
+}
+
+export interface ThreadOutlineEntry {
+  id: string;
+  role: HubRole;
+  createdAt: Date;
+  /** Every distinct segment kind present, in the order first seen — lets a
+   *  caller spot "this turn has code" or "this turn has reasoning" without
+   *  fetching the segment bodies. */
+  kinds: readonly HubSegmentKind[];
+  preview: string;
+}
+
+const DEFAULT_OUTLINE_PREVIEW_LENGTH = 160;
+
+/**
+ * The middle tier between `search_context`'s snippet and `get_thread`'s full
+ * body: one entry per message, id + role + timestamp + a short preview, with
+ * no segment bodies. Cheap enough to read an entire long conversation's
+ * shape before deciding which message ids are actually worth fetching in
+ * full via `renderThreadMarkdown`'s `messageIds` filter.
+ */
+export function threadOutline(
+  thread: HubThread,
+  previewLength: number = DEFAULT_OUTLINE_PREVIEW_LENGTH,
+): ThreadOutlineEntry[] {
+  return thread.messages.map((message) => {
+    const kinds: HubSegmentKind[] = [];
+    for (const segment of message.segments) {
+      if (!kinds.includes(segment.kind)) {
+        kinds.push(segment.kind);
+      }
+    }
+    return {
+      id: message.id,
+      role: message.role,
+      createdAt: message.createdAt,
+      kinds,
+      preview: previewText(
+        message.segments.map((segment) => segment.text).join(' '),
+        previewLength,
+      ),
+    };
+  });
+}
+
+export function renderThreadOutlineMarkdown(
+  thread: HubThread,
+  previewLength: number = DEFAULT_OUTLINE_PREVIEW_LENGTH,
+): string {
+  const entries = threadOutline(thread, previewLength);
+  const lines = entries.map((entry) => {
+    const heading = ROLE_HEADINGS[entry.role];
+    const extraKinds = entry.kinds.filter((kind) => kind !== 'text');
+    const kindsSuffix = extraKinds.length > 0 ? ` · ${extraKinds.join('+')}` : '';
+    return `- ${entry.id} · ${heading} · ${entry.createdAt.toISOString()}${kindsSuffix}\n  ${entry.preview}`;
+  });
+
+  const header = [`# ${thread.title}`, `${thread.messages.length} messages`];
+  if (lines.length === 0) {
+    return [...header, '(no messages)'].join('\n\n') + '\n';
+  }
+  return [...header, lines.join('\n')].join('\n\n') + '\n';
 }

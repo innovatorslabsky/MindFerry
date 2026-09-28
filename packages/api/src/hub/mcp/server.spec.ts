@@ -82,6 +82,7 @@ describe('createHubMcpServer', () => {
       'append_note',
       'archive_thread',
       'get_thread',
+      'get_thread_outline',
       'read_notes',
       'search_context',
     ]);
@@ -190,6 +191,55 @@ describe('createHubMcpServer', () => {
       const { client, close } = await connect();
 
       const result = await call(client, 'get_thread', { id: 'claude:missing' });
+
+      expect(result.isError).toBeFalsy();
+      expect(textOf(result)).toContain('No archived conversation has id');
+      await close();
+    });
+
+    it('returns only the requested messages when messageIds is given', async () => {
+      const { client, close } = await connect();
+
+      const text = textOf(
+        await call(client, 'get_thread', { id: 'claude:c1', messageIds: ['m1'] }),
+      );
+
+      expect(text).toContain('How do I sync context between clients?');
+      expect(text).not.toContain('Archive both sides, then read one canonical store.');
+      await close();
+    });
+  });
+
+  describe('get_thread_outline', () => {
+    it('lists every message as a compact entry, without the full segment text', async () => {
+      const { client, close } = await connect();
+
+      const text = textOf(await call(client, 'get_thread_outline', { id: 'claude:c1' }));
+
+      expect(text).toContain('- m1 · User ·');
+      expect(text).toContain('How do I sync context between clients?');
+      expect(text).toContain('- m2 · Assistant ·');
+      expect(text).toContain('· thinking');
+      await close();
+    });
+
+    it("names an id get_thread's messageIds can then fetch in full", async () => {
+      const { client, close } = await connect();
+
+      const outline = textOf(await call(client, 'get_thread_outline', { id: 'claude:c1' }));
+      expect(outline).toContain('m2');
+
+      const full = textOf(
+        await call(client, 'get_thread', { id: 'claude:c1', messageIds: ['m2'] }),
+      );
+      expect(full).toContain('Archive both sides, then read one canonical store.');
+      await close();
+    });
+
+    it('reports an unknown id instead of failing the call', async () => {
+      const { client, close } = await connect();
+
+      const result = await call(client, 'get_thread_outline', { id: 'claude:missing' });
 
       expect(result.isError).toBeFalsy();
       expect(textOf(result)).toContain('No archived conversation has id');

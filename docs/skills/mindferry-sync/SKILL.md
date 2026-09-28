@@ -7,9 +7,9 @@ description: Two-way context sync between Claude sessions through MindFerry. Use
 
 MindFerry is a context hub: it archives conversations and stores notes, then serves both back
 over MCP. Claude.ai and Claude Code don't share memory with each other directly — this skill is
-the manual bridge, using MindFerry's `search_context`, `get_thread`, `read_notes`, `append_note`,
-and `archive_thread` tools (named `search_context` etc., typically prefixed `mcp__mindferry__` or
-`mcp__MindFerry__` depending on the client).
+the manual bridge, using MindFerry's `search_context`, `get_thread_outline`, `get_thread`,
+`read_notes`, `append_note`, and `archive_thread` tools (named `search_context` etc., typically
+prefixed `mcp__mindferry__` or `mcp__MindFerry__` depending on the client).
 
 If none of those tools are available in this session, MindFerry isn't connected here — tell the
 user and point them at `docs/mindferry.md` to connect it (Claude.ai: a custom connector; Claude
@@ -26,7 +26,9 @@ they ask to "pick up where we left off," "sync," or "check MindFerry":
    turns up under one term, try an adjacent one (a project's short name vs. its full name) before
    concluding there's nothing archived — don't stop at the first empty result.
 3. For a promising hit, call `get_thread` to read the full conversation before summarizing it back
-   to the user — a search snippet is not enough to act on.
+   to the user — a search snippet is not enough to act on. For a long or heavily-branched thread,
+   call `get_thread_outline` first and pass only the message ids that matter to `get_thread`'s
+   `messageIds` parameter, instead of fetching the whole thing.
 4. Tell the user plainly what you found (or didn't): which thread or note, roughly when, and the
    one or two facts relevant to the current ask. Don't claim continuity you don't have — you are
    reading an archive, not remembering a prior conversation.
