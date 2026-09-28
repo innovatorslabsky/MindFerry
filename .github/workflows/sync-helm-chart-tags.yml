@@ -38,12 +38,6 @@ jobs:
     permissions:
       actions: write
       contents: write
-      # GITHUB_TOKEN needs this to push any ref (tag included) whose tree
-      # contains a change to .github/workflows/*, which every tag off main
-      # now does since the upstream sync brought in workflow-file changes.
-      # Without it GitHub rejects the push: "refusing to allow a GitHub App
-      # to create or update workflow ... without `workflows` permission".
-      workflows: write
     env:
       BASE_REF: refs/remotes/origin/main
       BACKFILL_FROM_VERSION: 1.9.0
