@@ -1,11 +1,14 @@
 name: Sync Helm Chart Tags
 
+# No `push` trigger: this fork carries no chart-* tags, so every run tried to
+# backfill the whole 1.9.1..2.0.14 history, tagging old commits whose workflow
+# files differ from main's. GitHub refuses any ref push carrying workflow-file
+# changes unless the token holds the Workflows permission, and the built-in
+# GITHUB_TOKEN cannot be granted it from workflow YAML — so every push to main
+# failed here. Re-enable this only together with a token that has it (a
+# fine-grained PAT with Workflows: write, or a GitHub App token), and only if
+# this fork actually wants to publish its own Helm chart releases.
 on:
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - '**.md'
   workflow_dispatch:
     inputs:
       release_existing_tag:
