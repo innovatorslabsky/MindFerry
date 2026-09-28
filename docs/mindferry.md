@@ -116,8 +116,9 @@ short summary note at the end (or whenever asked to "sync" or "save this"). Copy
 Claude.ai (Settings → Capabilities → Skills, where available).
 
 For Claude Code specifically, [`claude-plugin/mindferry`](../claude-plugin/mindferry) does this
-automatically instead of by asking: it mounts the hub as an MCP server and wires `SessionStart`/
-`SessionEnd` hooks to read notes in and save a note back on their own, no prompt required. See
+automatically instead of by asking: it mounts the hub as an MCP server and wires `SessionStart` to
+read notes in, `Stop` to locally buffer each turn, and `SessionEnd` to save a note back to the hub
+once per session — no prompt required. See
 [`claude-plugin/mindferry/README.md`](../claude-plugin/mindferry/README.md) to install it.
 
 ## FreeLLMAPI integration

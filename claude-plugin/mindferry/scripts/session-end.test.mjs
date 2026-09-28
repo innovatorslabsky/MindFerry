@@ -1,9 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { writeFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
+import { bufferPathFor } from './session-stop.mjs';
 
 // Not exported from session-end.mjs (a hook script, not a module other code
 // imports) — re-implemented here byte-for-byte is the wrong kind of
@@ -71,7 +73,12 @@ test('extracts only user turns, from both string and array content shapes, ignor
     { type: 'assistant', message: { content: [{ type: 'text', text: 'a reply, not a turn' }] } },
     {
       type: 'user',
-      message: { content: [{ type: 'tool_result', text: 'ignored' }, { type: 'text', text: 'second question' }] },
+      message: {
+        content: [
+          { type: 'tool_result', text: 'ignored' },
+          { type: 'text', text: 'second question' },
+        ],
+      },
     },
   ]);
 
@@ -137,13 +144,134 @@ test('exits 0, without hanging, when the hub is unreachable', async () => {
   try {
     const { code } = await runScript({
       stdin: JSON.stringify({ transcript_path: transcriptPath, cwd: '/tmp' }),
-      env: { CLAUDE_PLUGIN_OPTION_HUB_URL: 'http://127.0.0.1:1', CLAUDE_PLUGIN_OPTION_API_KEY: 'k' },
+      env: {
+        CLAUDE_PLUGIN_OPTION_HUB_URL: 'http://127.0.0.1:1',
+        CLAUDE_PLUGIN_OPTION_API_KEY: 'k',
+      },
     });
     assert.equal(code, 0);
     assert.ok(Date.now() - start < 5000, 'should fail fast on connection refused, not hang');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('includes buffered assistant turns from session-stop.mjs and deletes the buffer after', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'mindferry-session-end-'));
+  const sessionId = `test-${randomUUID()}`;
+  const bufferPath = bufferPathFor(sessionId);
+  t.after(() => {
+    rmSync(dir, { recursive: true, force: true });
+    try {
+      rmSync(bufferPath);
+    } catch {
+      // deleted by session-end.mjs itself, which is what this test checks
+    }
+  });
+
+  const transcriptPath = makeTranscript(dir, [
+    { type: 'user', message: { content: 'the question' } },
+  ]);
+  writeFileSync(
+    bufferPath,
+    [{ timestamp: new Date().toISOString(), message: 'built the thing' }]
+      .map((entry) => JSON.stringify(entry))
+      .join('\n') + '\n',
+  );
+
+  let capturedBody;
+  const server = await startFakeHub((body) => {
+    capturedBody = body;
+  });
+  t.after(() => server.close());
+
+  const { code } = await runScript({
+    stdin: JSON.stringify({ transcript_path: transcriptPath, cwd: '/tmp', session_id: sessionId }),
+    env: {
+      CLAUDE_PLUGIN_OPTION_HUB_URL: `http://127.0.0.1:${server.port}`,
+      CLAUDE_PLUGIN_OPTION_API_KEY: 'test-key',
+    },
+  });
+
+  assert.equal(code, 0);
+  const noteText = capturedBody.params.arguments.text;
+  assert.match(noteText, /User asked:/);
+  assert.match(noteText, /the question/);
+  assert.match(noteText, /Claude did:/);
+  assert.match(noteText, /built the thing/);
+  assert.equal(existsSync(bufferPath), false, 'buffer should be deleted after being read');
+});
+
+test('saves a note from buffered assistant turns alone when the transcript has no user turns', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'mindferry-session-end-'));
+  const sessionId = `test-${randomUUID()}`;
+  const bufferPath = bufferPathFor(sessionId);
+  t.after(() => {
+    rmSync(dir, { recursive: true, force: true });
+    try {
+      rmSync(bufferPath);
+    } catch {
+      // deleted by session-end.mjs itself
+    }
+  });
+
+  const transcriptPath = makeTranscript(dir, [
+    { type: 'assistant', message: { content: [{ type: 'text', text: 'not a user turn' }] } },
+  ]);
+  writeFileSync(
+    bufferPath,
+    `${JSON.stringify({ timestamp: new Date().toISOString(), message: 'summary only' })}\n`,
+  );
+
+  let capturedBody;
+  const server = await startFakeHub((body) => {
+    capturedBody = body;
+  });
+  t.after(() => server.close());
+
+  const { code } = await runScript({
+    stdin: JSON.stringify({ transcript_path: transcriptPath, cwd: '/tmp', session_id: sessionId }),
+    env: {
+      CLAUDE_PLUGIN_OPTION_HUB_URL: `http://127.0.0.1:${server.port}`,
+      CLAUDE_PLUGIN_OPTION_API_KEY: 'test-key',
+    },
+  });
+
+  assert.equal(code, 0);
+  assert.doesNotMatch(capturedBody.params.arguments.text, /User asked:/);
+  assert.match(capturedBody.params.arguments.text, /Claude did:/);
+  assert.match(capturedBody.params.arguments.text, /summary only/);
+});
+
+test('proceeds normally when no buffer file exists for the session', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'mindferry-session-end-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const transcriptPath = makeTranscript(dir, [
+    { type: 'user', message: { content: 'no buffer here' } },
+  ]);
+
+  let capturedBody;
+  const server = await startFakeHub((body) => {
+    capturedBody = body;
+  });
+  t.after(() => server.close());
+
+  const { code } = await runScript({
+    stdin: JSON.stringify({
+      transcript_path: transcriptPath,
+      cwd: '/tmp',
+      session_id: `test-${randomUUID()}`,
+    }),
+    env: {
+      CLAUDE_PLUGIN_OPTION_HUB_URL: `http://127.0.0.1:${server.port}`,
+      CLAUDE_PLUGIN_OPTION_API_KEY: 'test-key',
+    },
+  });
+
+  assert.equal(code, 0);
+  assert.match(capturedBody.params.arguments.text, /no buffer here/);
+  assert.doesNotMatch(capturedBody.params.arguments.text, /Claude did:/);
 });
 
 /** A minimal stand-in for the real hub, for the tests above that need to

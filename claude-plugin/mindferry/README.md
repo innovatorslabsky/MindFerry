@@ -13,23 +13,30 @@ of the manual steps in
   the same as [manually connecting](../../docs/mindferry.md#connecting-claude-code) does.
 - **`SessionStart` hook** — reads the hub's notes and surfaces them as context automatically, so
   you don't have to ask Claude to check MindFerry every time.
-- **`SessionEnd` hook** — saves a note of the session's user turns back to the hub when the
-  session ends, so the next session (in Claude Code or Claude.ai) picks it up. Not a `Stop` hook
-  deliberately: `Stop` fires after every single response, which would flood the hub with one note
-  per turn — `SessionEnd` fires once.
+- **`Stop` hook** — fires after every assistant turn, but only ever writes to local disk: it
+  appends Claude's last reply to a small buffer file keyed by session id. It never calls the hub,
+  so it stays safe to run on every single turn.
+- **`SessionEnd` hook** — saves a note back to the hub when the session ends (once per session, not
+  once per turn), built from the user's own turns (read from Claude Code's transcript) plus
+  whatever the `Stop` hook buffered along the way. The buffer file is deleted once read.
 
-Neither hook ever blocks Claude Code: an unreachable or misconfigured hub degrades to "no extra
-context" / "nothing saved," logged to stderr, never a failed session start or a stuck response.
+The note-save itself lives only in `SessionEnd`, deliberately: `Stop` fires after every single
+response, and a hub call on every turn would either flood the hub with one note per turn or add
+network latency to every response. Neither hook ever blocks Claude Code: an unreachable or
+misconfigured hub degrades to "no extra context" / "nothing saved," logged to stderr, never a
+failed session start, a stuck response, or a stuck session end.
 
 ### What actually gets saved
 
-The last ~8 things you typed, verbatim (truncated), not a generated summary — no hook budget
-allows for an extra model call, and a literal record is what stays honest if the session covered
-several unrelated things. It comes from Claude Code's own transcript file, whose internal format
-isn't a documented, stable contract — the read is defensive (a line it doesn't recognize is
-skipped, never a crash), but a future Claude Code version could still change that format enough to
-turn this into "nothing extracted," which fails safe: no note gets saved, same as an unreachable
-hub.
+The last ~8 things you typed, verbatim (truncated), plus the last ~8 things Claude said in reply —
+not a generated summary. No hook budget allows for an extra model call, so a literal record is what
+stays honest if the session covered several unrelated things. User turns come from Claude Code's
+own transcript file, whose internal format isn't a documented, stable contract — the read is
+defensive (a line it doesn't recognize is skipped, never a crash), but a future Claude Code version
+could still change that format enough to turn this into "nothing extracted" for that half of the
+note; the reply half doesn't share that risk, since the `Stop` hook writes it itself in a format
+this plugin controls. Either half being empty fails safe: a smaller note, or none at all if both
+are empty, same as an unreachable hub.
 
 ## Setup
 

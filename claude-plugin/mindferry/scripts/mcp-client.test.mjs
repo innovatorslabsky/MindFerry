@@ -61,7 +61,11 @@ test('sends the tool name and arguments in a well-formed tools/call request', as
   const server = await startFakeHub({
     body: (request) => {
       captured = request;
-      return { jsonrpc: '2.0', id: request.id, result: { content: [{ type: 'text', text: 'ok' }] } };
+      return {
+        jsonrpc: '2.0',
+        id: request.id,
+        result: { content: [{ type: 'text', text: 'ok' }] },
+      };
     },
   });
   t.after(() => server.close());
