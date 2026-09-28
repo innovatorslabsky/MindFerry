@@ -1,0 +1,49 @@
+# FreeLLMAPI integration overlay for MindFerry.
+#
+# Usage:
+#   cp docker-compose.freellmapi.yml docker-compose.override.yaml
+#   # add FREELLMAPI_ENCRYPTION_KEY and FREELLMAPI_KEY to .env
+#   docker compose up -d
+#
+# This adds FreeLLMAPI as a sidecar service. MindFerry reaches it at
+# http://freellmapi:3001/v1 inside the Docker network. The dashboard
+# is exposed on localhost:3001 for adding provider API keys.
+#
+# See docs/freellmapi.md for the full setup guide.
+
+services:
+  api:
+    volumes:
+      - type: bind
+        source: ./librechat.yaml
+        target: /app/librechat.yaml
+    depends_on:
+      - freellmapi
+
+  freellmapi:
+    container_name: freellmapi
+    image: ghcr.io/tashfeenahmed/freellmapi:latest
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      ENCRYPTION_KEY: ${FREELLMAPI_ENCRYPTION_KEY}
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - freellmapi-data:/app/server/data
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/api/ping').then((res) => { if (!res.ok) process.exit(1); }).catch(() => process.exit(1));"
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+volumes:
+  freellmapi-data:

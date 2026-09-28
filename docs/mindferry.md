@@ -115,6 +115,13 @@ short summary note at the end (or whenever asked to "sync" or "save this"). Copy
 `~/.claude/skills/mindferry-sync/SKILL.md` for Claude Code, or upload it as a custom skill in
 Claude.ai (Settings → Capabilities → Skills, where available).
 
+## FreeLLMAPI integration
+
+MindFerry can pair with [FreeLLMAPI](https://github.com/tashfeenahmed/freellmapi), a
+self-hosted proxy that aggregates the free tiers of 20+ LLM providers behind a single
+endpoint. Adding it gives every MindFerry user access to 100+ models without configuring
+each provider individually. See [docs/freellmapi.md](freellmapi.md) for the setup guide.
+
 ## What's not built yet
 
 - **Perplexity**: Perplexity has no bulk conversation export, so there's no file format to

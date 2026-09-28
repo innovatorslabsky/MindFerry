@@ -14,3 +14,22 @@ contextHub:
     searchLimit: 20
     snippetLength: 400
     allowNotes: true
+
+# FreeLLMAPI: a self-hosted proxy that aggregates free tiers from 20+ LLM
+# providers behind one OpenAI-compatible endpoint. See docs/freellmapi.md.
+endpoints:
+  custom:
+    - name: 'FreeLLMAPI'
+      apiKey: '${FREELLMAPI_KEY}'
+      baseURL: 'http://freellmapi:3001/v1'
+      models:
+        default:
+          - 'gemini-2.5-flash'
+          - 'llama-4-scout-17b-16e-instruct'
+          - 'qwen3-235b-a22b'
+          - 'deepseek-v4-0324'
+          - 'mistral-small-latest'
+        fetch: true
+      titleConvo: true
+      titleModel: 'gemini-2.5-flash'
+      modelDisplayLabel: 'FreeLLMAPI'
