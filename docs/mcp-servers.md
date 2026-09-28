@@ -8,6 +8,18 @@ prioritizing self-hostable, no-API-key options that fit MindFerry's own local-fi
 posture, alongside a few widely-used cloud services where no free self-hosted
 equivalent exists.
 
+## Adding a remote server from the UI
+
+The servers above are for `librechat.yaml`, the operator-configured path. A signed-in
+user with the `create` MCP-servers permission can also add a server for themselves
+without touching that file — Settings → the sidebar's MCP panel → the compass icon
+next to "Add MCP" opens a **"Browse curated servers"** picker (a small, separate list
+from the one above, restricted to servers reachable over HTTP/SSE, since the
+user-managed create path can't run a stdio/command-based server — see
+`MCPServerUserInputSchema` in `librechat-data-provider`). Picking one prefills the
+create dialog's title, description, and transport type; you still supply the URL
+yourself for anything self-hosted, since that's unique to your own instance.
+
 Each entry notes whether it needs a paid API key (💳) or runs free/self-hosted (🏠).
 
 ## Memory & knowledge graphs

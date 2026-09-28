@@ -5,3 +5,6 @@ export { default as MCPServerDialog } from './MCPServerDialog';
 export { default as MCPServerCard } from './MCPServerCard';
 export { default as MCPStatusBadge, getStatusDotColor } from './MCPStatusBadge';
 export { default as MCPCardActions } from './MCPCardActions';
+export { default as CuratedServerBrowser } from './CuratedServerBrowser';
+export { curatedServers } from './curatedServers';
+export type { CuratedServer } from './curatedServers';
