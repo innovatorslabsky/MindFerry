@@ -122,6 +122,12 @@ self-hosted proxy that aggregates the free tiers of 20+ LLM providers behind a s
 endpoint. Adding it gives every MindFerry user access to 100+ models without configuring
 each provider individually. See [docs/freellmapi.md](freellmapi.md) for the setup guide.
 
+## Recommended MCP servers
+
+Beyond the context hub's own MCP endpoint, MindFerry's Agents can connect to any
+external MCP server for memory, search, databases, and more. See
+[docs/mcp-servers.md](mcp-servers.md) for a curated, self-hosted-first shortlist.
+
 ## What's not built yet
 
 - **Perplexity**: Perplexity has no bulk conversation export, so there's no file format to
