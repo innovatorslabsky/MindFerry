@@ -1,4 +1,5 @@
-import type { HubStoreMethods } from './mongoStore';
+import type { HubStoreMethods, HubSemanticSearchOptions } from './mongoStore';
+import type { EmbeddingProvider } from './embeddings';
 import type { HubThread } from '../thread';
 import { createHubMongoStore, archiveHubThread } from './mongoStore';
 
@@ -143,6 +144,128 @@ describe('createHubMongoStore', () => {
     const [result] = await store.searchThreads({ query: 'needle', limit: 10, snippetLength: 40 });
 
     expect(result.snippet).toBeUndefined();
+  });
+
+  it('fetches exactly params.limit candidates when semanticSearch is not configured', async () => {
+    const methods = fakeMethods();
+    const store = createHubMongoStore({ methods, userId: 'user-a' });
+
+    await store.searchThreads({ query: 'needle', limit: 5, snippetLength: 40 });
+
+    expect(methods.searchHubThreads).toHaveBeenCalledWith(
+      'user-a',
+      expect.objectContaining({ limit: 5 }),
+    );
+  });
+});
+
+describe('createHubMongoStore with semanticSearch', () => {
+  function fakeEmbeddingProvider(byText: Record<string, number[]>): EmbeddingProvider {
+    return {
+      embed: jest.fn(async (texts: readonly string[]) =>
+        texts.map((text) => byText[text] ?? [0, 0]),
+      ),
+    };
+  }
+
+  function candidate(overrides: { id: string; searchText: string; updatedAt?: Date }) {
+    return {
+      id: overrides.id,
+      provider: 'claude',
+      title: overrides.id,
+      createdAt: thread.createdAt,
+      updatedAt: overrides.updatedAt ?? thread.updatedAt,
+      messageCount: 1,
+      searchText: overrides.searchText,
+    };
+  }
+
+  it('widens the lexical fetch to candidatePoolSize, then truncates back to limit', async () => {
+    const methods = fakeMethods({ searchHubThreads: jest.fn().mockResolvedValue([]) });
+    const semanticSearch: HubSemanticSearchOptions = {
+      provider: fakeEmbeddingProvider({}),
+      weight: 0.5,
+      candidatePoolSize: 50,
+    };
+    const store = createHubMongoStore({ methods, userId: 'user-a', semanticSearch });
+
+    await store.searchThreads({ query: 'needle', limit: 5, snippetLength: 40 });
+
+    expect(methods.searchHubThreads).toHaveBeenCalledWith(
+      'user-a',
+      expect.objectContaining({ limit: 50 }),
+    );
+  });
+
+  it('reorders results toward the semantically closer candidate over raw lexical rank', async () => {
+    // 'lexical-best' ranks first out of $text, but 'semantic-best' is the
+    // query's actual nearest neighbor — a high semantic weight should surface it.
+    const methods = fakeMethods({
+      searchHubThreads: jest
+        .fn()
+        .mockResolvedValue([
+          candidate({ id: 'claude:lexical-best', searchText: 'needle needle needle' }),
+          candidate({ id: 'claude:semantic-best', searchText: 'about sewing thread' }),
+        ]),
+    });
+    const semanticSearch: HubSemanticSearchOptions = {
+      provider: fakeEmbeddingProvider({
+        query: [1, 0],
+        'needle needle needle': [0, 1],
+        'about sewing thread': [1, 0],
+      }),
+      weight: 0.9,
+      candidatePoolSize: 10,
+    };
+    const store = createHubMongoStore({ methods, userId: 'user-a', semanticSearch });
+
+    const results = await store.searchThreads({ query: 'query', limit: 2, snippetLength: 40 });
+
+    expect(results.map((r) => r.id)).toEqual(['claude:semantic-best', 'claude:lexical-best']);
+  });
+
+  it('falls back to lexical order when the embedding call fails', async () => {
+    const methods = fakeMethods({
+      searchHubThreads: jest
+        .fn()
+        .mockResolvedValue([
+          candidate({ id: 'claude:a', searchText: 'first' }),
+          candidate({ id: 'claude:b', searchText: 'second' }),
+        ]),
+    });
+    const semanticSearch: HubSemanticSearchOptions = {
+      provider: { embed: jest.fn().mockRejectedValue(new Error('embeddings endpoint down')) },
+      weight: 0.9,
+      candidatePoolSize: 10,
+    };
+    const store = createHubMongoStore({ methods, userId: 'user-a', semanticSearch });
+
+    const results = await store.searchThreads({ query: 'query', limit: 2, snippetLength: 40 });
+
+    expect(results.map((r) => r.id)).toEqual(['claude:a', 'claude:b']);
+  });
+
+  it('truncates the re-ranked list back down to the caller-requested limit', async () => {
+    const methods = fakeMethods({
+      searchHubThreads: jest
+        .fn()
+        .mockResolvedValue([
+          candidate({ id: 'claude:a', searchText: 'a' }),
+          candidate({ id: 'claude:b', searchText: 'b' }),
+          candidate({ id: 'claude:c', searchText: 'c' }),
+        ]),
+    });
+    const semanticSearch: HubSemanticSearchOptions = {
+      provider: fakeEmbeddingProvider({}), // every vector [0, 0] -> similarity undefined -> lexical order kept
+      weight: 0.5,
+      candidatePoolSize: 10,
+    };
+    const store = createHubMongoStore({ methods, userId: 'user-a', semanticSearch });
+
+    const results = await store.searchThreads({ query: 'query', limit: 1, snippetLength: 40 });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe('claude:a');
   });
 });
 

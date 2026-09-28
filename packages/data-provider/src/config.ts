@@ -515,6 +515,35 @@ export const CONTEXT_HUB_MIN_SEARCH_LIMIT = 1;
 export const CONTEXT_HUB_MAX_SEARCH_LIMIT = 100;
 export const CONTEXT_HUB_DEFAULT_SEARCH_LIMIT = 20;
 export const CONTEXT_HUB_DEFAULT_SNIPPET_LENGTH = 400;
+export const CONTEXT_HUB_DEFAULT_SEMANTIC_MODEL = 'text-embedding-3-small';
+export const CONTEXT_HUB_DEFAULT_SEMANTIC_WEIGHT = 0.5;
+export const CONTEXT_HUB_DEFAULT_SEMANTIC_CANDIDATE_POOL = 50;
+export const CONTEXT_HUB_MAX_SEMANTIC_CANDIDATE_POOL = 200;
+
+/**
+ * Query-time semantic re-ranking of `search_context` results, layered over
+ * the existing `$text` lexical search rather than replacing it — off by
+ * default, so an operator who doesn't configure this sees identical search
+ * behavior to before this option existed. `baseURL`/`apiKey` point at any
+ * OpenAI-compatible `/embeddings` endpoint, including a self-hosted
+ * FreeLLMAPI instance (see docs/semantic-search.md).
+ */
+export const contextHubSemanticSearchSchema = z.object({
+  enabled: z.boolean().default(false),
+  baseURL: z.string(),
+  apiKey: z.string(),
+  model: z.string().default(CONTEXT_HUB_DEFAULT_SEMANTIC_MODEL),
+  /** 0 = lexical rank only, 1 = semantic similarity only. */
+  weight: z.number().min(0).max(1).default(CONTEXT_HUB_DEFAULT_SEMANTIC_WEIGHT),
+  /** Lexical candidates fetched and re-embedded before truncating back to
+   *  the caller's requested result count. */
+  candidatePoolSize: z
+    .number()
+    .int()
+    .min(CONTEXT_HUB_MIN_SEARCH_LIMIT)
+    .max(CONTEXT_HUB_MAX_SEMANTIC_CANDIDATE_POOL)
+    .default(CONTEXT_HUB_DEFAULT_SEMANTIC_CANDIDATE_POOL),
+});
 
 /**
  * Cross-provider conversation archive and the MCP surface that serves it.
@@ -563,6 +592,7 @@ export const contextHubSchema = z
          *  not only a short note — the live-connector counterpart of "Save to
          *  MindFerry" and the file importer, neither of which it can reach. */
         allowArchive: z.boolean().default(true),
+        semanticSearch: contextHubSemanticSearchSchema.optional(),
       })
       .default({}),
     git: contextHubGitTargetSchema.optional(),
@@ -571,6 +601,7 @@ export const contextHubSchema = z
 
 export type ContextHubConfig = z.infer<typeof contextHubSchema>;
 export type ContextHubGitTargetConfig = z.infer<typeof contextHubGitTargetSchema>;
+export type ContextHubSemanticSearchConfig = z.infer<typeof contextHubSemanticSearchSchema>;
 
 export type SkillSyncConfig = z.infer<typeof skillSyncConfigSchema>;
 export type SkillSyncGitHubSourceConfig = z.infer<typeof skillSyncGitHubSourceSchema>;

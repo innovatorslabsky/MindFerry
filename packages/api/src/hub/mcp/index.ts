@@ -1,5 +1,6 @@
 export * from './store';
 export * from './snippet';
+export * from './embeddings';
 export * from './mongoStore';
 export * from './http';
 export * from './route';

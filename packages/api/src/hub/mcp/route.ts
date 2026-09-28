@@ -1,8 +1,11 @@
 import { rateLimit } from 'express-rate-limit';
 import { logger } from '@librechat/data-schemas';
+import { extractEnvVariable } from 'librechat-data-provider';
+import type { ContextHubSemanticSearchConfig } from 'librechat-data-provider';
 import type { RequestHandler, Response } from 'express';
+import type { HubStoreMethods, HubSemanticSearchOptions } from './mongoStore';
 import type { ServerRequest } from '../../types/http';
-import type { HubStoreMethods } from './mongoStore';
+import { createOpenAICompatEmbeddingProvider } from './embeddings';
 import { createHubMongoStore } from './mongoStore';
 import { isContextHubMcpEnabled } from '../config';
 import { handleHubMcpRequest } from './http';
@@ -32,6 +35,29 @@ export const contextHubMcpLimiter: RequestHandler = rateLimit({
 
 export interface CreateContextHubMcpHandlerDeps {
   methods: HubStoreMethods;
+}
+
+/**
+ * Builds the `HubSemanticSearchOptions` a request's config asks for, or
+ * `undefined` when semantic search isn't configured or is switched off —
+ * `createHubMongoStore` treats `undefined` as "behave exactly as before this
+ * option existed," so this is the only place that decision gets made.
+ */
+export function buildSemanticSearchOptions(
+  config: ContextHubSemanticSearchConfig | undefined,
+): HubSemanticSearchOptions | undefined {
+  if (!config?.enabled) {
+    return undefined;
+  }
+  return {
+    provider: createOpenAICompatEmbeddingProvider({
+      baseURL: config.baseURL,
+      apiKey: extractEnvVariable(config.apiKey),
+      model: config.model,
+    }),
+    weight: config.weight,
+    candidatePoolSize: config.candidatePoolSize,
+  };
 }
 
 /**
@@ -72,7 +98,8 @@ export function createContextHubMcpHandler(
     }
 
     const mcpConfig = req.config?.contextHub?.mcp;
-    const store = createHubMongoStore({ methods, userId });
+    const semanticSearch = buildSemanticSearchOptions(mcpConfig?.semanticSearch);
+    const store = createHubMongoStore({ methods, userId, semanticSearch });
 
     try {
       await handleHubMcpRequest({

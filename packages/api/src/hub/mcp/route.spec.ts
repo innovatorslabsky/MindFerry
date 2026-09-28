@@ -1,6 +1,11 @@
+import type { ContextHubSemanticSearchConfig } from 'librechat-data-provider';
 import type { AppConfig } from '@librechat/data-schemas';
 import type { ServerRequest } from '../../types/http';
-import { isContextHubMcpEnabled, contextHubMcpRateLimitKey } from './route';
+import {
+  isContextHubMcpEnabled,
+  contextHubMcpRateLimitKey,
+  buildSemanticSearchOptions,
+} from './route';
 
 describe('isContextHubMcpEnabled', () => {
   it('requires both the hub and its MCP surface to be enabled', () => {
@@ -35,6 +40,35 @@ describe('contextHubMcpRateLimitKey', () => {
     const req = { ip: '203.0.113.5' } as unknown as ServerRequest;
 
     expect(contextHubMcpRateLimitKey(req)).toBe('203.0.113.5');
+  });
+});
+
+describe('buildSemanticSearchOptions', () => {
+  const baseConfig: ContextHubSemanticSearchConfig = {
+    enabled: true,
+    baseURL: 'http://freellmapi:3001/v1',
+    apiKey: '${FREELLMAPI_KEY}',
+    model: 'text-embedding-3-small',
+    weight: 0.5,
+    candidatePoolSize: 50,
+  };
+
+  it('returns undefined when no config is present', () => {
+    expect(buildSemanticSearchOptions(undefined)).toBeUndefined();
+  });
+
+  it('returns undefined when the config is present but disabled', () => {
+    expect(buildSemanticSearchOptions({ ...baseConfig, enabled: false })).toBeUndefined();
+  });
+
+  it('resolves an ${ENV_VAR} apiKey reference from the environment', () => {
+    process.env.FREELLMAPI_KEY = 'resolved-secret';
+    const options = buildSemanticSearchOptions(baseConfig);
+    delete process.env.FREELLMAPI_KEY;
+
+    expect(options).toBeDefined();
+    expect(options?.weight).toBe(0.5);
+    expect(options?.candidatePoolSize).toBe(50);
   });
 });
 

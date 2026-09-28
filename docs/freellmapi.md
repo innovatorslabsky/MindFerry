@@ -14,6 +14,7 @@ configuring each provider individually, and without paying for API keys.
 | **Rate-limit pooling** | Free tiers from 20+ providers stack: combined throughput is far higher than any single provider. |
 | **Sticky sessions** | Multi-turn conversations stay on the same model for consistency. |
 | **Dashboard** | FreeLLMAPI ships a React admin UI for managing keys, viewing analytics, and reordering fallback chains. |
+| **Semantic search** | Its `/v1/embeddings` endpoint can power the context hub's [semantic search](semantic-search.md) — no separate embeddings provider needed. |
 
 ## Quick start (Docker Compose)
 

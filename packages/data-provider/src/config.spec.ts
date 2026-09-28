@@ -7,6 +7,8 @@ import {
   bedrockModels,
   configSchema,
   codeEnvironmentUserConfigSchema,
+  contextHubSchema,
+  contextHubSemanticSearchSchema,
   excludedKeys,
   resolveEndpointType,
   webSearchSchema,
@@ -1542,5 +1544,57 @@ describe('MCP UI refresh configuration', () => {
         interface: { mcpServers: { statusRefreshInterval: interval } },
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('contextHubSemanticSearchSchema', () => {
+  const valid = {
+    enabled: true,
+    baseURL: 'http://freellmapi:3001/v1',
+    apiKey: '${FREELLMAPI_KEY}',
+  };
+
+  it('defaults model, weight, and candidatePoolSize', () => {
+    const result = contextHubSemanticSearchSchema.parse(valid);
+    expect(result.model).toBe('text-embedding-3-small');
+    expect(result.weight).toBe(0.5);
+    expect(result.candidatePoolSize).toBe(50);
+  });
+
+  it('requires baseURL and apiKey', () => {
+    expect(contextHubSemanticSearchSchema.safeParse({ enabled: true }).success).toBe(false);
+  });
+
+  it('rejects a weight outside 0-1', () => {
+    expect(contextHubSemanticSearchSchema.safeParse({ ...valid, weight: 1.5 }).success).toBe(false);
+    expect(contextHubSemanticSearchSchema.safeParse({ ...valid, weight: -0.1 }).success).toBe(
+      false,
+    );
+  });
+
+  it('rejects a candidatePoolSize outside its bounds', () => {
+    expect(
+      contextHubSemanticSearchSchema.safeParse({ ...valid, candidatePoolSize: 0 }).success,
+    ).toBe(false);
+    expect(
+      contextHubSemanticSearchSchema.safeParse({ ...valid, candidatePoolSize: 201 }).success,
+    ).toBe(false);
+  });
+
+  it('is optional and off by default on contextHub.mcp, unchanged from before this field existed', () => {
+    const result = contextHubSchema.parse({ enabled: true, mcp: { enabled: true } });
+    expect(result?.mcp.semanticSearch).toBeUndefined();
+  });
+
+  it('is reachable through contextHubSchema at contextHub.mcp.semanticSearch', () => {
+    const result = contextHubSchema.parse({
+      enabled: true,
+      mcp: { enabled: true, semanticSearch: valid },
+    });
+    expect(result?.mcp.semanticSearch).toMatchObject({
+      enabled: true,
+      baseURL: 'http://freellmapi:3001/v1',
+      model: 'text-embedding-3-small',
+    });
   });
 });

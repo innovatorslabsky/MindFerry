@@ -128,6 +128,13 @@ Beyond the context hub's own MCP endpoint, MindFerry's Agents can connect to any
 external MCP server for memory, search, databases, and more. See
 [docs/mcp-servers.md](mcp-servers.md) for a curated, self-hosted-first shortlist.
 
+## Semantic search
+
+`search_context` matches keywords by default. Layering semantic re-ranking
+on top — so a query finds a thread that used different words for the same
+idea — needs an embeddings endpoint (FreeLLMAPI's works) but no schema
+change or persisted index. See [docs/semantic-search.md](semantic-search.md).
+
 ## SearXNG integration
 
 MindFerry's built-in Web Search feature can run against a self-hosted, keyless
