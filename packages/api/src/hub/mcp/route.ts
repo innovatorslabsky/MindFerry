@@ -6,6 +6,7 @@ import type { RequestHandler, Response } from 'express';
 import type { HubStoreMethods, HubSemanticSearchOptions } from './mongoStore';
 import type { ServerRequest } from '../../types/http';
 import { createOpenAICompatEmbeddingProvider } from './embeddings';
+import { contextHubRateLimitKey } from '../ratelimit';
 import { createHubMongoStore } from './mongoStore';
 import { isContextHubMcpEnabled } from '../config';
 import { handleHubMcpRequest } from './http';
@@ -22,7 +23,7 @@ export const CONTEXT_HUB_MCP_RATE_MAX = 120;
  * and a compromised key should not be able to hide behind IP rotation.
  */
 export function contextHubMcpRateLimitKey(req: ServerRequest): string {
-  return req.user?.id ?? req.ip ?? 'unknown';
+  return contextHubRateLimitKey(req);
 }
 
 export const contextHubMcpLimiter: RequestHandler = rateLimit({

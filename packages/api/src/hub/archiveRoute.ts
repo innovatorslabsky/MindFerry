@@ -7,6 +7,7 @@ import type { ServerRequest } from '../types/http';
 import { convertLibreChatConversation } from './adapters/librechat';
 import { createConfiguredGitArchiveTarget } from './git/config';
 import { archiveThreadToTargets } from './archiveTargets';
+import { contextHubRateLimitKey } from './ratelimit';
 import { isContextHubEnabled } from './config';
 
 export const CONTEXT_HUB_ARCHIVE_RATE_WINDOW_MS = 60_000;
@@ -17,7 +18,7 @@ export const contextHubArchiveLimiter: RequestHandler = rateLimit({
   max: CONTEXT_HUB_ARCHIVE_RATE_MAX,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => (req as ServerRequest).user?.id ?? req.ip ?? 'unknown',
+  keyGenerator: (req) => contextHubRateLimitKey(req as ServerRequest),
 });
 
 export interface CreateContextHubArchiveHandlerDeps {

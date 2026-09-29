@@ -2,6 +2,7 @@ import { rateLimit } from 'express-rate-limit';
 import type { HubMethods } from '@librechat/data-schemas';
 import type { RequestHandler, Response } from 'express';
 import type { ServerRequest } from '../types/http';
+import { contextHubRateLimitKey } from './ratelimit';
 import { isContextHubEnabled } from './config';
 
 /**
@@ -20,7 +21,7 @@ export const contextHubBrowseLimiter: RequestHandler = rateLimit({
   max: CONTEXT_HUB_BROWSE_RATE_MAX,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => (req as ServerRequest).user?.id ?? req.ip ?? 'unknown',
+  keyGenerator: (req) => contextHubRateLimitKey(req as ServerRequest),
 });
 
 const DEFAULT_LIST_LIMIT = 50;

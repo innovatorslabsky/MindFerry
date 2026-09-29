@@ -5,6 +5,7 @@ import type { RequestHandler, Response } from 'express';
 import type { ServerRequest } from '../types/http';
 import { runHubImportJob, HubImportFileTooLargeError } from './importJob';
 import { createConfiguredGitArchiveTarget } from './git/config';
+import { contextHubRateLimitKey } from './ratelimit';
 import { isContextHubEnabled } from './config';
 import { UnknownExportError } from './source';
 
@@ -22,7 +23,7 @@ export const contextHubImportLimiter: RequestHandler = rateLimit({
   max: CONTEXT_HUB_IMPORT_RATE_MAX,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => (req as ServerRequest).user?.id ?? req.ip ?? 'unknown',
+  keyGenerator: (req) => contextHubRateLimitKey(req as ServerRequest),
 });
 
 export interface UploadedFile {
