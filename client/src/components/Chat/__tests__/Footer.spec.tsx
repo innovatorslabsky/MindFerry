@@ -23,12 +23,12 @@ jest.mock('~/hooks', () => ({
 }));
 
 describe('Footer', () => {
-  test('opens the default LibreChat site link in a new tab', () => {
+  test('renders the default MindFerry disclaimer as plain text, without an external site link', () => {
     render(<Footer startupConfig={null} />);
-    const link = screen.getByRole('link', { name: /LibreChat/ });
-    expect(link).toHaveAttribute('href', 'https://librechat.ai');
-    expect(link).toHaveAttribute('target', '_blank');
-    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(screen.getByTestId('footer-disclaimer')).toHaveTextContent(
+      /MindFerry .+ - Every AI for Everyone\./,
+    );
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
   test('opens custom footer markdown links in a new tab', () => {

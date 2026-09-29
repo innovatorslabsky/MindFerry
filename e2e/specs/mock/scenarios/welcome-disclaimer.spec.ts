@@ -13,7 +13,7 @@ import { deleteConversations, deleteMessagesByConversation, seedConversations } 
  * projects and skip the mobile one.
  */
 
-const DISCLAIMER = 'a[href="https://librechat.ai"]';
+const DISCLAIMER = '[data-testid="footer-disclaimer"]';
 /** WCAG AA for body text; the disclaimer renders at 12px. */
 const AA_CONTRAST = 4.5;
 
@@ -30,8 +30,8 @@ async function seedConversation(title: string) {
 
 async function contrastOfDisclaimer(page: Page): Promise<number> {
   return page.evaluate((selector) => {
-    const link = document.querySelector<HTMLElement>(selector);
-    if (!link) {
+    const disclaimer = document.querySelector<HTMLElement>(selector);
+    if (!disclaimer) {
       throw new Error('the disclaimer is not rendered');
     }
     const parse = (value: string): [number, number, number] => {
@@ -49,7 +49,7 @@ async function contrastOfDisclaimer(page: Page): Promise<number> {
       return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
     };
     /** The bar itself paints nothing; walk up to whatever fills behind it. */
-    let node: HTMLElement | null = link;
+    let node: HTMLElement | null = disclaimer;
     let background = 'rgba(0, 0, 0, 0)';
     while (node) {
       const painted = getComputedStyle(node).backgroundColor;
@@ -59,7 +59,7 @@ async function contrastOfDisclaimer(page: Page): Promise<number> {
       }
       node = node.parentElement;
     }
-    const foreground = luminance(parse(getComputedStyle(link).color));
+    const foreground = luminance(parse(getComputedStyle(disclaimer).color));
     const behind = luminance(parse(background));
     const lighter = Math.max(foreground, behind);
     const darker = Math.min(foreground, behind);

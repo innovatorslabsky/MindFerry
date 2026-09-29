@@ -130,6 +130,7 @@ function Footer({ className, startupConfig, configuredOnly = false }: FooterProp
   return (
     <div className="relative w-full">
       <div
+        data-testid="footer-disclaimer"
         className={
           className ??
           /* The disclaimer is the least important text on the landing page and
