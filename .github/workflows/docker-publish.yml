@@ -42,9 +42,11 @@ on:
         default: 90
     secrets:
       DOCKERHUB_USERNAME:
-        required: true
+        description: Docker Hub account. Without both Docker Hub secrets, images go to GHCR only.
+        required: false
       DOCKERHUB_TOKEN:
-        required: true
+        description: Docker Hub access token, paired with DOCKERHUB_USERNAME.
+        required: false
       LEGACY_GHCR_TOKEN:
         description: >-
           Token that can write to the LEGACY_GHCR_OWNER namespace. Without it the
@@ -60,6 +62,8 @@ jobs:
     name: Build ${{ matrix.image.image_name }} (${{ matrix.arch }})
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     timeout-minutes: ${{ inputs.build_timeout_minutes }}
+    env:
+      HAS_DOCKERHUB: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -87,6 +91,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to Docker Hub
+        if: env.HAS_DOCKERHUB == 'true'
         uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -102,9 +107,16 @@ jobs:
         env:
           BUILD_BRANCH_INPUT: ${{ inputs.build_branch }}
           IMAGE_NAME: ${{ matrix.image.image_name }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
           set -euo pipefail
           printf 'GHCR_IMAGE=ghcr.io/%s/%s\n' "${GITHUB_REPOSITORY_OWNER,,}" "$IMAGE_NAME" >> "$GITHUB_ENV"
+          # Docker Hub is optional: without its secrets the image goes to GHCR only.
+          image_names="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${IMAGE_NAME}"
+          if [ "$HAS_DOCKERHUB" = "true" ]; then
+            image_names="${image_names},docker.io/${DOCKERHUB_USERNAME}/${IMAGE_NAME}"
+          fi
+          printf 'IMAGE_NAMES=%s\n' "$image_names" >> "$GITHUB_ENV"
           printf 'BUILD_COMMIT=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_ENV"
           printf 'BUILD_BRANCH=%s\n' "$BUILD_BRANCH_INPUT" >> "$GITHUB_ENV"
           printf 'BUILD_DATE=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
@@ -123,7 +135,7 @@ jobs:
           target: ${{ matrix.image.target }}
           cache-from: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache-${{ matrix.arch }}
           cache-to: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache-${{ matrix.arch }},mode=max
-          outputs: type=image,"name=${{ env.GHCR_IMAGE }},docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image.image_name }}",push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,"name=${{ env.IMAGE_NAMES }}",push-by-digest=true,name-canonical=true,push=true
           build-args: |
             BUILD_COMMIT=${{ env.BUILD_COMMIT }}
             BUILD_BRANCH=${{ env.BUILD_BRANCH }}
@@ -165,6 +177,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     timeout-minutes: 15
+    env:
+      HAS_DOCKERHUB: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -195,6 +209,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to Docker Hub
+        if: env.HAS_DOCKERHUB == 'true'
         uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -234,7 +249,11 @@ jobs:
           fi
 
           echo "Merging ${#digests[@]} digests into $(( ${#tag_args[@]} / 2 )) tag(s) per registry"
-          for image in "$GHCR_IMAGE" "$DOCKERHUB_IMAGE"; do
+          images=("$GHCR_IMAGE")
+          if [ "$HAS_DOCKERHUB" = "true" ]; then
+            images+=("$DOCKERHUB_IMAGE")
+          fi
+          for image in "${images[@]}"; do
             docker buildx imagetools create \
               "${tag_args[@]/IMAGE:/${image}:}" \
               "${digests[@]/#/${image}@sha256:}"
