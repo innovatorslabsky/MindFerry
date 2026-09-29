@@ -131,7 +131,7 @@ describe('searchHubThreads', () => {
 
   it('restricts results to the requested providers', async () => {
     const results = await methods.searchHubThreads(userA, {
-      query: 'how',
+      query: 'context carrots',
       providers: ['chatgpt'],
       limit: 10,
     });
@@ -140,7 +140,7 @@ describe('searchHubThreads', () => {
   });
 
   it('honors the caller-supplied limit', async () => {
-    const results = await methods.searchHubThreads(userA, { query: 'how', limit: 1 });
+    const results = await methods.searchHubThreads(userA, { query: 'context carrots', limit: 1 });
 
     expect(results).toHaveLength(1);
   });
