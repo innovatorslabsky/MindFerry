@@ -53,6 +53,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await mongoose.connection.dropDatabase();
+  await Promise.all(Object.values(mongoose.models).map((model) => model.createIndexes()));
 });
 
 describe('upsertHubThread / getHubThread', () => {
