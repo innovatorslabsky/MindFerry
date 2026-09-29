@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event_name == 'schedule' && 'dev' || github.sha }}
+          ref: ${{ github.event_name == 'schedule' && 'main' || github.sha }}
 
       - name: Capture source SHA
         id: source
