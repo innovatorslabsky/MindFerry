@@ -26,6 +26,18 @@ on:
       - 'packages/data-schemas/package.json'
       - '.github/workflows/agents-integration-tests.yml'
       - '!**.md'
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/api/src/**'
+      - 'packages/api/package.json'
+      - 'packages/data-provider/src/**'
+      - 'packages/data-provider/package.json'
+      - 'packages/data-schemas/src/**'
+      - 'packages/data-schemas/package.json'
+      - '.github/workflows/agents-integration-tests.yml'
+      - '!**.md'
 
 permissions:
   contents: read

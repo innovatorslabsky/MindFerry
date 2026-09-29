@@ -16,6 +16,7 @@ on:
   push:
     branches:
       - dev
+      - main
     paths:
       - 'e2e/client-build.test.mjs'
       - 'client/**'

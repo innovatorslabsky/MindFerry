@@ -21,6 +21,19 @@ on:
       - 'redis-config/**'
       - '.github/workflows/cache-integration-tests.yml'
       - '!**.md'
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/api/src/**'
+      - 'packages/api/package.json'
+      - 'packages/data-provider/src/**'
+      - 'packages/data-provider/package.json'
+      - 'packages/data-schemas/src/**'
+      - 'packages/data-schemas/package.json'
+      - 'redis-config/**'
+      - '.github/workflows/cache-integration-tests.yml'
+      - '!**.md'
 
 permissions:
   contents: read
