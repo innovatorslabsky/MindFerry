@@ -28,6 +28,10 @@ jest.mock('~/data-provider/Hub/queries', () => ({
   useListHubNotesQuery: (...args: unknown[]) => mockUseListHubNotesQuery(...args),
 }));
 
+/** Radix tabs switch on mouse down, not click. */
+const openNotesTab = (getByRole: (role: string, options: { name: RegExp }) => HTMLElement) =>
+  fireEvent.mouseDown(getByRole('tab', { name: /^Notes/ }));
+
 const thread = {
   id: 'mindferry:session-1',
   provider: 'mindferry',
@@ -198,6 +202,7 @@ describe('BrowseHubDialog', () => {
           name: 'Claude Code',
         }),
       );
+      openNotesTab(getByRole);
 
       expect(queryByText('From code')).toBeInTheDocument();
       expect(queryByText('From chat')).not.toBeInTheDocument();
@@ -216,6 +221,7 @@ describe('BrowseHubDialog', () => {
     });
     const { getByRole, getAllByText } = render(<BrowseHubDialog />);
     fireEvent.click(getByRole('button', { name: 'Browse' }));
+    openNotesTab(getByRole);
 
     const titles = getAllByText(/ note$/).map((element) => element.textContent);
     expect(titles).toEqual(['Newest note', 'Middle note', 'Oldest note']);

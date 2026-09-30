@@ -7,6 +7,7 @@ const {
   createContextHubImportHandler,
   createContextHubArchiveHandler,
   createContextHubContinueHandler,
+  createContextHubNoteContinueHandler,
   createHubListThreadsHandler,
   createHubGetThreadHandler,
   createHubListNotesHandler,
@@ -167,6 +168,21 @@ router.post(
   continueHandler,
 );
 router.get('/notes', requireJwtAuth, configMiddleware, contextHubBrowseLimiter, listNotesHandler);
+
+/** "Continue in chat" for a note: a new conversation that starts from the note, through the same importer. */
+const noteContinueHandler = createContextHubNoteContinueHandler({
+  methods: db,
+  importConversation: importHubConversation,
+});
+
+router.post(
+  '/notes/:id/continue',
+  requireJwtAuth,
+  configMiddleware,
+  restoreTenantContextFromReq,
+  contextHubArchiveLimiter,
+  noteContinueHandler,
+);
 
 /**
  * OAuth 2.1 authorization server for the MCP endpoint above — required

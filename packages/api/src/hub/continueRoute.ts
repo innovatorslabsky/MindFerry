@@ -1,11 +1,11 @@
 import { logger } from '@librechat/data-schemas';
-import type { HubMethods } from '@librechat/data-schemas';
+import type { HubMethods, HubNoteRecord, HubThreadRecord } from '@librechat/data-schemas';
 import type { Response } from 'express';
-import type { HubContinueImport } from './adapters/librechat';
+import type { HubContinueImport, HubContinueTarget } from './adapters/librechat';
 import type { ServerRequest } from '../types/http';
+import { convertHubNoteToChat, convertHubThreadToChat } from './adapters/librechat';
 import { isConversationImportError } from '../conversations/import';
 import { isContentFilterError } from '../middleware/contentFilter';
-import { convertHubThreadToChat } from './adapters/librechat';
 import { isContextHubEnabled } from './config';
 
 export interface HubContinueImportParams {
@@ -42,18 +42,25 @@ function optionalName(value: unknown): string | undefined {
   return typeof value === 'string' && NAME_PATTERN.test(value) ? value : undefined;
 }
 
-/**
- * "Continue in chat": opens an archived thread as an ordinary conversation
- * the person can keep talking in. The thread is converted and handed to the
- * caller's importer, which applies the same content filters, size limits and
- * model defaulting as any other import — this only adds the conversion. Each
- * call makes a new conversation; the archived thread itself is never changed.
- */
-export function createContextHubContinueHandler(
-  deps: CreateContextHubContinueHandlerDeps,
-): (req: ContinueRequest, res: Response) => Promise<void> {
-  const { methods, importConversation } = deps;
+type ContinueSource<T> = {
+  /** Used in the log line when an unexpected error escapes. */
+  kind: string;
+  load: (userId: string, id: string) => Promise<T | null>;
+  convert: (record: T, target: HubContinueTarget) => HubContinueImport;
+  notFound: { message: string; code: string };
+  empty: { message: string; code: string };
+};
 
+/**
+ * The request handling both "Continue in chat" routes share: the hub and
+ * user checks, the caller-scoped read, the conversion, and handing the
+ * result to the caller's importer — so a thread and a note can differ only
+ * in how they are read and converted.
+ */
+function createContinueHandler<T>(
+  source: ContinueSource<T>,
+  importConversation: CreateContextHubContinueHandlerDeps['importConversation'],
+): (req: ContinueRequest, res: Response) => Promise<void> {
   return async (req, res) => {
     if (!isContextHubEnabled(req.config)) {
       res.status(404).json(errorBody('Context hub is not enabled', 'not_found', 'not_found'));
@@ -68,29 +75,23 @@ export function createContextHubContinueHandler(
 
     const id = req.params.id;
     if (!id) {
-      res.status(400).json(errorBody('A thread id is required', 'no_id'));
+      res.status(400).json(errorBody(`A ${source.kind} id is required`, 'no_id'));
       return;
     }
 
     try {
-      const thread = await methods.getHubThread(userId, id);
-      if (!thread) {
-        res
-          .status(404)
-          .json(errorBody('No archived conversation has that id', 'thread_not_found', 'not_found'));
+      const record = await source.load(userId, id);
+      if (!record) {
+        res.status(404).json(errorBody(source.notFound.message, source.notFound.code, 'not_found'));
         return;
       }
 
-      const payload = convertHubThreadToChat(thread, {
+      const payload = source.convert(record, {
         endpoint: optionalName(req.body?.endpoint),
         model: optionalName(req.body?.model),
       });
       if (payload.messages.length === 0) {
-        res
-          .status(422)
-          .json(
-            errorBody('This conversation has no text a chat could continue from', 'empty_thread'),
-          );
+        res.status(422).json(errorBody(source.empty.message, source.empty.code));
         return;
       }
 
@@ -106,8 +107,61 @@ export function createContextHubContinueHandler(
         res.status(error.statusCode).json(error.body);
         return;
       }
-      logger.error(`[contextHubContinue] user: ${userId} | Error continuing thread ${id}:`, error);
+      logger.error(
+        `[contextHubContinue] user: ${userId} | Error continuing ${source.kind} ${id}:`,
+        error,
+      );
       res.status(500).json(errorBody('Internal server error', 'internal_error', 'server_error'));
     }
   };
+}
+
+/**
+ * "Continue in chat": opens an archived thread as an ordinary conversation
+ * the person can keep talking in. The thread is converted and handed to the
+ * caller's importer, which applies the same content filters, size limits and
+ * model defaulting as any other import — this only adds the conversion. Each
+ * call makes a new conversation; the archived thread itself is never changed.
+ */
+export function createContextHubContinueHandler(
+  deps: CreateContextHubContinueHandlerDeps,
+): (req: ContinueRequest, res: Response) => Promise<void> {
+  return createContinueHandler<HubThreadRecord>(
+    {
+      kind: 'thread',
+      load: deps.methods.getHubThread,
+      convert: convertHubThreadToChat,
+      notFound: { message: 'No archived conversation has that id', code: 'thread_not_found' },
+      empty: {
+        message: 'This conversation has no text a chat could continue from',
+        code: 'empty_thread',
+      },
+    },
+    deps.importConversation,
+  );
+}
+
+export interface CreateContextHubNoteContinueHandlerDeps {
+  methods: Pick<HubMethods, 'getHubNote'>;
+  importConversation: CreateContextHubContinueHandlerDeps['importConversation'];
+}
+
+/**
+ * "Continue in chat" for a note: opens a new conversation that starts from
+ * the note, through the same importer as a thread. The note is read scoped to
+ * the caller and is never changed.
+ */
+export function createContextHubNoteContinueHandler(
+  deps: CreateContextHubNoteContinueHandlerDeps,
+): (req: ContinueRequest, res: Response) => Promise<void> {
+  return createContinueHandler<HubNoteRecord>(
+    {
+      kind: 'note',
+      load: deps.methods.getHubNote,
+      convert: convertHubNoteToChat,
+      notFound: { message: 'No note has that id', code: 'note_not_found' },
+      empty: { message: 'This note has no text a chat could start from', code: 'empty_note' },
+    },
+    deps.importConversation,
+  );
 }

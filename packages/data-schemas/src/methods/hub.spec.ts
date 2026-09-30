@@ -294,6 +294,21 @@ describe('notes', () => {
     expect(all.map((n) => n.title).sort()).toEqual(['Anchored', 'Floating']);
   });
 
+  it('reads one note by id, only for the user who wrote it', async () => {
+    const written = await methods.appendHubNote(userA, {
+      title: 'Handoff',
+      text: 'Next: update the plugin.',
+      surface: 'code',
+    });
+
+    const own = await methods.getHubNote(userA, written.id);
+
+    expect(own).toMatchObject({ id: written.id, title: 'Handoff', surface: 'code' });
+    expect(await methods.getHubNote(userB, written.id)).toBeNull();
+    expect(await methods.getHubNote(userA, new mongoose.Types.ObjectId().toString())).toBeNull();
+    expect(await methods.getHubNote(userA, 'not-an-object-id')).toBeNull();
+  });
+
   it('returns the most recent notes, oldest first, when limited', async () => {
     for (const title of ['one', 'two', 'three']) {
       await methods.appendHubNote(userA, { title, text: title });

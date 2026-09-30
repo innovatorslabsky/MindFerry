@@ -2,8 +2,16 @@ import { useState } from 'react';
 import { Search } from 'lucide-react';
 import { useRecoilValue } from 'recoil';
 import { useNavigate } from 'react-router-dom';
-import { Input, Button, Spinner } from '@librechat/client';
 import { isAgentsEndpoint, isAssistantsEndpoint } from 'librechat-data-provider';
+import {
+  Tabs,
+  Input,
+  Button,
+  Spinner,
+  TabsList,
+  TabsContent,
+  TabsTrigger,
+} from '@librechat/client';
 import type {
   THubNote,
   THubContinueRequest,
@@ -15,6 +23,7 @@ import type { UseQueryResult } from '@tanstack/react-query';
 import { HUB_SURFACES, SURFACE_LABEL_KEYS, matchesSurface, surfaceOf } from './surface';
 import { useListHubThreadsQuery, useListHubNotesQuery } from '~/data-provider';
 import HubThreadDetail from './HubThreadDetail';
+import HubNoteList from './HubNoteList';
 import { useLocalize } from '~/hooks';
 import store from '~/store';
 
@@ -88,20 +97,8 @@ function ThreadsSection({ query, threadsQuery, onSelect }: ThreadsSectionProps) 
   );
 }
 
-function NoteRow({ note }: { note: THubNote }) {
-  const localize = useLocalize();
-  return (
-    <li className="px-4 py-3">
-      <p className="text-sm font-medium text-text-primary">{note.title}</p>
-      <p className="text-xs text-text-secondary">
-        {new Date(note.createdAt).toLocaleString()}
-        {note.surface != null ? ` · ${localize(SURFACE_LABEL_KEYS[note.surface])}` : ''}
-        {note.sessionTag != null ? ` · ${note.sessionTag}` : ''}
-      </p>
-      <p className="mt-1 whitespace-pre-wrap text-sm text-text-primary">{note.text}</p>
-    </li>
-  );
-}
+/** Chats come first: they are what "Continue in chat" works from, and notes are long enough to bury them. */
+type ArchiveTab = 'chats' | 'notes';
 
 function matchesQuery(note: THubNote, query: string): boolean {
   const needle = query.trim().toLowerCase();
@@ -145,6 +142,7 @@ export default function HubArchiveBrowser({ onContinued }: { onContinued?: () =>
   const [query, setQuery] = useState('');
   const [surface, setSurface] = useState<THubSurface | undefined>(undefined);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [tab, setTab] = useState<ArchiveTab>('chats');
 
   const threadsQuery = useListHubThreadsQuery(
     { q: query || undefined, limit: 50, surface },
@@ -156,16 +154,19 @@ export default function HubArchiveBrowser({ onContinued }: { onContinued?: () =>
     .filter((note) => matchesQuery(note, query) && matchesSurface(note.surface, surface))
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 
+  const threadCount = threadsQuery.data?.threads.length ?? 0;
+  const openChat = (conversationId: string) => {
+    onContinued?.();
+    navigate(`/c/${conversationId}`);
+  };
+
   if (selectedThreadId != null) {
     return (
       <HubThreadDetail
         threadId={selectedThreadId}
         onBack={() => setSelectedThreadId(null)}
         continueTarget={continueTarget}
-        onContinued={(conversationId) => {
-          onContinued?.();
-          navigate(`/c/${conversationId}`);
-        }}
+        onContinued={openChat}
       />
     );
   }
@@ -212,31 +213,41 @@ export default function HubArchiveBrowser({ onContinued }: { onContinued?: () =>
           </Button>
         ))}
       </div>
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
-        {notes.length > 0 && (
-          <div>
-            <h3 className="mb-1 px-1 text-xs font-medium uppercase text-text-secondary">
-              {localize('com_ui_context_hub_browse_notes_heading')}
-            </h3>
-            <ul className="divide-y divide-border-light overflow-hidden rounded-xl border border-border-light">
-              {notes.map((note) => (
-                <NoteRow key={note.id} note={note} />
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <div>
-          <h3 className="mb-1 px-1 text-xs font-medium uppercase text-text-secondary">
-            {localize('com_ui_context_hub_browse_threads_heading')}
-          </h3>
+      <Tabs
+        value={tab}
+        onValueChange={(value) => setTab(value as ArchiveTab)}
+        className="flex min-h-0 flex-1 flex-col"
+      >
+        <TabsList
+          aria-label={localize('com_ui_context_hub_browse_tabs_label')}
+          className="grid w-full grid-cols-2 bg-surface-secondary p-1"
+        >
+          <TabsTrigger value="chats" className="min-w-0">
+            {localize('com_ui_context_hub_browse_tab_chats', { 0: threadCount })}
+          </TabsTrigger>
+          <TabsTrigger value="notes" className="min-w-0">
+            {localize('com_ui_context_hub_browse_tab_notes', { 0: notes.length })}
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="chats" className="mt-3 min-h-0 flex-1 overflow-y-auto p-0">
           <ThreadsSection
             query={query}
             threadsQuery={threadsQuery}
             onSelect={setSelectedThreadId}
           />
-        </div>
-      </div>
+        </TabsContent>
+        <TabsContent value="notes" className="mt-3 min-h-0 flex-1 overflow-y-auto p-0">
+          <HubNoteList
+            notes={notes}
+            query={query}
+            isLoading={notesQuery.isLoading}
+            isError={notesQuery.isError}
+            continueTarget={continueTarget}
+            onContinued={openChat}
+            onOpenThread={setSelectedThreadId}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -999,6 +999,13 @@ export function continueHubThread(
   return request.post(endpoints.continueHubThread(id), target);
 }
 
+export function continueHubNote(
+  id: string,
+  target: t.THubContinueRequest = {},
+): Promise<t.THubContinueResponse> {
+  return request.post(endpoints.continueHubNote(id), target);
+}
+
 export function getHubThread(id: string): Promise<t.TGetHubThreadResponse> {
   return request.get(endpoints.hubThread(id));
 }

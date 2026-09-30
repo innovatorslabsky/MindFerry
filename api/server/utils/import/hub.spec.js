@@ -1,5 +1,5 @@
 const { EModelEndpoint, Constants } = require('librechat-data-provider');
-const { convertHubThreadToChat } = require('@librechat/api');
+const { convertHubThreadToChat, convertHubNoteToChat } = require('@librechat/api');
 const { importHubConversation } = require('./hub');
 const { bulkSaveMessages, bulkSaveConvos } = require('~/models');
 
@@ -118,6 +118,43 @@ describe('importHubConversation', () => {
     expect(new Set(messages.map((message) => message.messageId)).size).toBe(3);
     expect(messages.some((message) => message.messageId === 'm1')).toBe(false);
     expect(JSON.stringify(messages)).not.toContain('private');
+  });
+
+  it('saves a note as a new conversation that opens on the note, ready for a reply', async () => {
+    const note = {
+      id: '6abd5b35268e36677724bf4f',
+      title: 'Plugin handoff',
+      text: 'Next step: update the plugin.',
+      createdAt: new Date('2026-09-30T18:55:49Z'),
+    };
+
+    const { conversationId } = await importHubConversation({
+      userId: 'user-1',
+      userRole: 'USER',
+      payload: convertHubNoteToChat(note, {
+        endpoint: EModelEndpoint.anthropic,
+        model: 'claude-sonnet-4-6',
+      }),
+      req,
+    });
+
+    const [[conversations]] = bulkSaveConvos.mock.calls;
+    const [[messages]] = bulkSaveMessages.mock.calls;
+    expect(conversations[0]).toMatchObject({
+      conversationId,
+      user: 'user-1',
+      title: 'Plugin handoff',
+      endpoint: EModelEndpoint.anthropic,
+      model: 'claude-sonnet-4-6',
+    });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      conversationId,
+      isCreatedByUser: false,
+      parentMessageId: Constants.NO_PARENT,
+      text: '**Plugin handoff**\n\nNext step: update the plugin.',
+    });
+    expect(messages[0].messageId).not.toBe('note-6abd5b35268e36677724bf4f');
   });
 
   it('makes a new conversation each time, leaving earlier ones alone', async () => {

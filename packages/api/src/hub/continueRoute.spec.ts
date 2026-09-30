@@ -1,7 +1,10 @@
-import type { HubThreadRecord } from '@librechat/data-schemas';
+import type { HubNoteRecord, HubThreadRecord } from '@librechat/data-schemas';
 import type { HubContinueImportParams } from './continueRoute';
 import type { ServerRequest } from '../types/http';
-import { createContextHubContinueHandler } from './continueRoute';
+import {
+  createContextHubContinueHandler,
+  createContextHubNoteContinueHandler,
+} from './continueRoute';
 import { ContentFilterError } from '../middleware/contentFilter';
 
 function fakeRes() {
@@ -161,6 +164,96 @@ describe('createContextHubContinueHandler', () => {
     const response = res();
 
     await handler(fakeReq(), response);
+
+    expect(response.status).toHaveBeenCalledWith(500);
+    expect(JSON.stringify(response.json.mock.calls)).not.toContain('hunter2');
+  });
+});
+
+describe('createContextHubNoteContinueHandler', () => {
+  const note: HubNoteRecord = {
+    id: '6abd5b35268e36677724bf4f',
+    title: 'Plugin handoff',
+    text: 'Next step: update the plugin, then end a session.',
+    surface: 'code',
+    createdAt: new Date('2026-09-30T18:55:49Z'),
+  };
+  const getHubNote = jest.fn();
+  const importConversation = jest.fn();
+  const handler = createContextHubNoteContinueHandler({
+    methods: { getHubNote },
+    importConversation,
+  });
+  const res = () => fakeRes() as unknown as import('express').Response & ReturnType<typeof fakeRes>;
+  const noteReq = (overrides: Record<string, unknown> = {}) =>
+    fakeReq({ params: { id: note.id }, ...overrides });
+
+  beforeEach(() => {
+    getHubNote.mockReset().mockResolvedValue(note);
+    importConversation.mockReset().mockResolvedValue({ conversationId: 'note-convo' });
+  });
+
+  it('rejects with 404 when the hub is not enabled, and 401 without a user', async () => {
+    const disabled = res();
+    await handler(noteReq({ config: undefined }), disabled);
+    expect(disabled.status).toHaveBeenCalledWith(404);
+
+    const anonymous = res();
+    await handler(noteReq({ user: undefined }), anonymous);
+    expect(anonymous.status).toHaveBeenCalledWith(401);
+
+    expect(getHubNote).not.toHaveBeenCalled();
+  });
+
+  it("reads the note scoped to the caller and answers 404 for one that isn't theirs", async () => {
+    getHubNote.mockResolvedValue(null);
+    const response = res();
+
+    await handler(noteReq(), response);
+
+    expect(getHubNote).toHaveBeenCalledWith('user-a', note.id);
+    expect(response.status).toHaveBeenCalledWith(404);
+    expect(response.json.mock.calls[0][0].error.code).toBe('note_not_found');
+    expect(importConversation).not.toHaveBeenCalled();
+  });
+
+  it('imports a chat that starts from the note, on the named endpoint and model', async () => {
+    const response = res();
+
+    await handler(
+      noteReq({ body: { endpoint: 'anthropic', model: 'claude-sonnet-4-6' } }),
+      response,
+    );
+
+    const { payload, userId }: HubContinueImportParams = importConversation.mock.calls[0][0];
+    expect(userId).toBe('user-a');
+    expect(payload.title).toBe('Plugin handoff');
+    expect(payload.endpoint).toBe('anthropic');
+    expect(payload.messages).toHaveLength(1);
+    expect(payload.messages[0]).toMatchObject({
+      isCreatedByUser: false,
+      model: 'claude-sonnet-4-6',
+      text: '**Plugin handoff**\n\nNext step: update the plugin, then end a session.',
+    });
+    expect(response.status).toHaveBeenCalledWith(201);
+    expect(response.json).toHaveBeenCalledWith({ conversationId: 'note-convo', messageCount: 1 });
+  });
+
+  it('answers 422 without importing when the note has no text', async () => {
+    getHubNote.mockResolvedValue({ ...note, text: '   ' });
+    const response = res();
+
+    await handler(noteReq(), response);
+
+    expect(response.status).toHaveBeenCalledWith(422);
+    expect(importConversation).not.toHaveBeenCalled();
+  });
+
+  it('answers 500 without leaking details when reading the note fails', async () => {
+    getHubNote.mockRejectedValue(new Error('mongo exploded: password=hunter2'));
+    const response = res();
+
+    await handler(noteReq(), response);
 
     expect(response.status).toHaveBeenCalledWith(500);
     expect(JSON.stringify(response.json.mock.calls)).not.toContain('hunter2');

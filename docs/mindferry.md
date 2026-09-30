@@ -124,6 +124,13 @@ messages stay in the archive. It goes through the same importer as a conversatio
 deployment's content filters and size limits apply, and each click makes a new chat — the archived
 thread is never changed.
 
+The browser has two tabs, **Chats** (the default) and **Notes**, each with a count that follows the
+search and source filter. A note shows only its title, date and a two-line preview until you open
+it. An open note offers **Continue in chat** too (`POST /api/hub/notes/:id/continue`): it starts a
+new conversation whose first message is the note, from the assistant, so what you type next is a
+reply to it and the model reads the note as context. A note anchored to a conversation also offers
+**Open conversation**, which opens that archived thread.
+
 ## Two-way sync between Claude.ai and Claude Code
 
 Claude.ai and Claude Code don't share memory with each other — connecting both to the same

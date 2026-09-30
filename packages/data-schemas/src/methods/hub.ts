@@ -31,6 +31,8 @@ export interface HubMethods {
   ) => Promise<HubThreadSearchResult[]>;
   /** Oldest first. With `limit`, the most recent `limit` notes, still oldest first. */
   listHubNotes: (userId: string, threadId?: string, limit?: number) => Promise<HubNoteRecord[]>;
+  /** One of the user's own notes; `null` when the id is malformed or names another user's note. */
+  getHubNote: (userId: string, id: string) => Promise<HubNoteRecord | null>;
   appendHubNote: (userId: string, note: HubNoteInput) => Promise<HubNoteRecord>;
   /** Best text match first; same term semantics as `searchHubThreads`. */
   searchHubNotes: (userId: string, query: string, limit: number) => Promise<HubNoteRecord[]>;
@@ -254,6 +256,23 @@ export function createHubMethods(mongoose: typeof import('mongoose')): HubMethod
     }
   }
 
+  async function getHubNote(userId: string, id: string): Promise<HubNoteRecord | null> {
+    if (!Types.ObjectId.isValid(id)) {
+      return null;
+    }
+    try {
+      const HubNote = mongoose.models.HubNote;
+      const doc = (await HubNote.findOne({
+        _id: new Types.ObjectId(id),
+        userId: toObjectId(userId),
+      }).lean()) as unknown as IHubNote | null;
+      return doc ? toNoteRecord(doc) : null;
+    } catch (error) {
+      logger.error('[getHubNote] Error reading note:', error);
+      throw error;
+    }
+  }
+
   async function searchHubNotes(
     userId: string,
     query: string,
@@ -349,6 +368,7 @@ export function createHubMethods(mongoose: typeof import('mongoose')): HubMethod
     searchHubThreads,
     listHubThreads,
     listHubNotes,
+    getHubNote,
     searchHubNotes,
     appendHubNote,
     deleteAllHubData,

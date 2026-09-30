@@ -1,6 +1,10 @@
 import { Constants } from 'librechat-data-provider';
 import type { LibreChatArchiveMessage } from './librechat';
-import { convertLibreChatConversation, convertHubThreadToChat } from './librechat';
+import {
+  convertHubNoteToChat,
+  convertHubThreadToChat,
+  convertLibreChatConversation,
+} from './librechat';
 
 const conversation = {
   conversationId: 'c1',
@@ -327,5 +331,49 @@ describe('convertHubThreadToChat', () => {
     );
 
     expect(chat.messages).toEqual([]);
+  });
+});
+
+describe('convertHubNoteToChat', () => {
+  const note = {
+    id: 'n1',
+    title: '  Plugin handoff ',
+    text: 'Update the plugin.\n\n- then end a session',
+    createdAt: new Date('2026-09-30T18:55:49Z'),
+  };
+
+  it('opens as one assistant message that carries the note, with no parent', () => {
+    const chat = convertHubNoteToChat(note);
+
+    expect(chat.title).toBe('Plugin handoff');
+    expect(chat.conversationId).toBe('note:n1');
+    expect(chat.messages).toEqual([
+      {
+        messageId: 'note-n1',
+        parentMessageId: Constants.NO_PARENT,
+        text: '**Plugin handoff**\n\nUpdate the plugin.\n\n- then end a session',
+        sender: 'MindFerry',
+        isCreatedByUser: false,
+        createdAt: '2026-09-30T18:55:49.000Z',
+      },
+    ]);
+    expect(chat).not.toHaveProperty('endpoint');
+    expect(chat).not.toHaveProperty('options');
+  });
+
+  it('runs on the target endpoint and model when one is given', () => {
+    const chat = convertHubNoteToChat(note, { endpoint: 'anthropic', model: 'claude-sonnet-4-6' });
+
+    expect(chat.endpoint).toBe('anthropic');
+    expect(chat.options).toEqual({ model: 'claude-sonnet-4-6' });
+    expect(chat.messages[0]).toMatchObject({ endpoint: 'anthropic', model: 'claude-sonnet-4-6' });
+  });
+
+  it('leaves the heading out for an untitled note, and has no messages for an empty one', () => {
+    expect(convertHubNoteToChat({ ...note, title: ' ' }).messages[0].text).toBe(
+      'Update the plugin.\n\n- then end a session',
+    );
+    expect(convertHubNoteToChat({ ...note, title: ' ' }).title).toBe('MindFerry note');
+    expect(convertHubNoteToChat({ ...note, text: '\n ' }).messages).toEqual([]);
   });
 });

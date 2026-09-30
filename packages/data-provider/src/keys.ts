@@ -131,6 +131,7 @@ export enum MutationKeys {
   archiveConversationToHub = 'archiveConversationToHub',
   importHubExport = 'importHubExport',
   continueHubThread = 'continueHubThread',
+  continueHubNote = 'continueHubNote',
   submitHubOAuthConsent = 'submitHubOAuthConsent',
   fileUpload = 'fileUpload',
   fileDelete = 'fileDelete',

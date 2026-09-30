@@ -194,3 +194,50 @@ export function convertHubThreadToChat(
     messages,
   };
 }
+
+/** The shape of a note this conversion reads — the stored note record, minus what a chat has no use for. */
+export interface HubContinueNote {
+  id: string;
+  title: string;
+  text: string;
+  createdAt: Date;
+}
+
+/**
+ * Opens a note as a chat: one assistant message carrying the note, so the
+ * person's first message is a reply to it and the model reads the note as
+ * context. Notes are written by an assistant client for the next session to
+ * pick up, which is why it is the assistant's turn rather than the person's.
+ * Returns no messages when the note has no text.
+ */
+export function convertHubNoteToChat(
+  note: HubContinueNote,
+  target: HubContinueTarget = {},
+): HubContinueImport {
+  const title = note.title.trim();
+  const body = note.text.trim();
+  const root: string = Constants.NO_PARENT;
+  const messages: HubContinueMessage[] =
+    body.length === 0
+      ? []
+      : [
+          {
+            messageId: `note-${note.id}`,
+            parentMessageId: root,
+            text: title.length > 0 ? `**${title}**\n\n${body}` : body,
+            sender: 'MindFerry',
+            isCreatedByUser: false,
+            createdAt: note.createdAt.toISOString(),
+            ...(target.endpoint ? { endpoint: target.endpoint } : {}),
+            ...(target.model ? { model: target.model } : {}),
+          },
+        ];
+
+  return {
+    conversationId: `note:${note.id}`,
+    title: title || 'MindFerry note',
+    ...(target.endpoint ? { endpoint: target.endpoint } : {}),
+    ...(target.model ? { options: { model: target.model } } : {}),
+    messages,
+  };
+}

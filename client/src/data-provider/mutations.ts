@@ -977,6 +977,24 @@ export const useContinueHubThreadMutation = (
   );
 };
 
+/** Opens a note as a new conversation that starts from it; the note itself is untouched. */
+export const useContinueHubNoteMutation = (
+  options?: t.MutationOptions<t.THubContinueResponse, ContinueHubThreadVariables>,
+): UseMutationResult<t.THubContinueResponse, unknown, ContinueHubThreadVariables, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation(
+    [MutationKeys.continueHubNote],
+    ({ id, target }: ContinueHubThreadVariables) => dataService.continueHubNote(id, target),
+    {
+      ...options,
+      onSuccess: (data, variables, context) => {
+        queryClient.invalidateQueries([QueryKeys.allConversations]);
+        options?.onSuccess?.(data, variables, context);
+      },
+    },
+  );
+};
+
 /**
  * Uploads an exported conversation file (ChatGPT, Claude.ai, or Gemini/Google
  * Takeout) so the server can archive it into the context hub. The provider is
