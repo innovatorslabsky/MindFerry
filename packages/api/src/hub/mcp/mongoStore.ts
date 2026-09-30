@@ -181,8 +181,8 @@ export function createHubMongoStore(options: HubMongoStoreOptions): HubStore {
       return record ? toThread(record) : undefined;
     },
 
-    async listNotes(threadId?: string): Promise<HubNote[]> {
-      return methods.listHubNotes(userId, threadId);
+    async listNotes(threadId?: string, limit?: number): Promise<HubNote[]> {
+      return methods.listHubNotes(userId, threadId, limit);
     },
 
     async appendNote(note: HubNoteInput): Promise<HubNote> {

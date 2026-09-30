@@ -65,11 +65,10 @@ export function createHubMemoryStore(options: HubMemoryStoreOptions = {}): HubSt
       return threads.get(id);
     },
 
-    async listNotes(threadId?: string): Promise<HubNote[]> {
-      if (threadId === undefined) {
-        return [...notes];
-      }
-      return notes.filter((note) => note.threadId === threadId);
+    async listNotes(threadId?: string, limit?: number): Promise<HubNote[]> {
+      const matching =
+        threadId === undefined ? notes : notes.filter((note) => note.threadId === threadId);
+      return limit === undefined ? [...matching] : matching.slice(-limit);
     },
 
     async appendNote(note: HubNoteInput): Promise<HubNote> {

@@ -44,7 +44,7 @@ describe('createHubMongoStore', () => {
 
     expect(methods.searchHubThreads).toHaveBeenCalledWith('user-a', expect.any(Object));
     expect(methods.getHubThread).toHaveBeenCalledWith('user-a', 'claude:c1');
-    expect(methods.listHubNotes).toHaveBeenCalledWith('user-a', 'claude:c1');
+    expect(methods.listHubNotes).toHaveBeenCalledWith('user-a', 'claude:c1', undefined);
     expect(methods.appendHubNote).toHaveBeenCalledWith('user-a', { title: 't', text: 'x' });
   });
 

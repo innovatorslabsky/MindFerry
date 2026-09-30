@@ -218,6 +218,17 @@ describe('notes', () => {
     expect(all.map((n) => n.title).sort()).toEqual(['Anchored', 'Floating']);
   });
 
+  it('returns the most recent notes, oldest first, when limited', async () => {
+    for (const title of ['one', 'two', 'three']) {
+      await methods.appendHubNote(userA, { title, text: title });
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+
+    const recent = await methods.listHubNotes(userA, undefined, 2);
+
+    expect(recent.map((n) => n.title)).toEqual(['two', 'three']);
+  });
+
   it('scopes notes to their owner', async () => {
     await methods.appendHubNote(userA, { title: 'Private', text: 'a' });
 

@@ -9,6 +9,9 @@
  */
 import { callHubTool } from './mcp-client.mjs';
 
+// Session notes accumulate forever; the newest few carry the context worth injecting.
+const MAX_NOTES = 20;
+
 async function main() {
   const hubUrl = process.env.CLAUDE_PLUGIN_OPTION_HUB_URL;
   const apiKey = process.env.CLAUDE_PLUGIN_OPTION_API_KEY;
@@ -19,7 +22,7 @@ async function main() {
   }
 
   try {
-    const notes = await callHubTool(hubUrl, apiKey, 'read_notes', {});
+    const notes = await callHubTool(hubUrl, apiKey, 'read_notes', { limit: MAX_NOTES });
     if (notes && !notes.includes('The hub has no notes.')) {
       console.log(
         [

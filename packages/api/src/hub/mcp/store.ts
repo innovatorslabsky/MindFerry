@@ -62,7 +62,8 @@ export interface HubArchiveThreadInput {
 export interface HubStore {
   searchThreads(params: HubSearchParams): Promise<HubThreadSummary[]>;
   getThread(id: string): Promise<HubThread | undefined>;
-  listNotes(threadId?: string): Promise<HubNote[]>;
+  /** Oldest first; with `limit`, only the most recent `limit` notes. */
+  listNotes(threadId?: string, limit?: number): Promise<HubNote[]>;
   appendNote(note: HubNoteInput): Promise<HubNote>;
   /** Archives a full, verbatim conversation submitted by an MCP client — the
    *  live-connector counterpart to "Save to MindFerry" and the file importer,

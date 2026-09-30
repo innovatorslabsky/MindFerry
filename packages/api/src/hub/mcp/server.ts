@@ -151,10 +151,17 @@ export function createHubMcpServer(options: HubMcpServerOptions): McpServer {
         'Read notes written into the hub, optionally only those anchored to one thread. Notes are how one client leaves context for another.',
       inputSchema: {
         threadId: z.string().min(1).optional().describe('Only notes anchored to this thread'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(500)
+          .optional()
+          .describe('Only the most recent notes, up to this many. Omit to read every note.'),
       },
     },
-    async ({ threadId }) => {
-      const notes = await store.listNotes(threadId);
+    async ({ threadId, limit }) => {
+      const notes = await store.listNotes(threadId, limit);
       if (notes.length === 0) {
         return asText(
           threadId ? `No notes are anchored to "${threadId}".` : 'The hub has no notes.',

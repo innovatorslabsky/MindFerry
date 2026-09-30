@@ -96,4 +96,14 @@ describe('createHubMemoryStore', () => {
 
     expect((await store.listNotes()).map((n) => n.title)).toEqual(['one', 'two']);
   });
+
+  it('returns only the most recent notes, oldest first, when given a limit', async () => {
+    const store = createHubMemoryStore();
+
+    await store.appendNote({ title: 'one', text: 'first' });
+    await store.appendNote({ title: 'two', text: 'second' });
+    await store.appendNote({ title: 'three', text: 'third' });
+
+    expect((await store.listNotes(undefined, 2)).map((n) => n.title)).toEqual(['two', 'three']);
+  });
 });
