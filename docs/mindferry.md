@@ -103,6 +103,11 @@ read tools in place.
 
 ## Browsing the archive from MindFerry itself
 
+With the context hub enabled, the sidebar has an **Archive** entry (the archive-box icon in the icon
+rail, under the bookmarks and above attachments) that opens the same browser as a panel, so the
+archive is one click away instead of behind Settings. The text below describes that browser; the
+Settings → API Keys **Browse** button still opens it in a dialog.
+
 Settings → API Keys → Agent API Keys → Manage has a **Browse** button (next to the importer) that
 opens the archive directly — searchable threads and their notes — for a person who wants to look
 without going through an AI client. It reads the same data `search_context`, `get_thread`, and
