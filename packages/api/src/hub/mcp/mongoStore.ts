@@ -13,6 +13,7 @@ import type { EmbeddingProvider } from './embeddings';
 import { buildThreadFromArchiveInput, summarize } from './store';
 import { cosineSimilarity } from './embeddings';
 import { snippetAround } from './snippet';
+import { hubThreadId } from '../thread';
 
 /**
  * Query-time re-ranking, not a persisted vector index (see embeddings.ts):
@@ -190,7 +191,12 @@ export function createHubMongoStore(options: HubMongoStoreOptions): HubStore {
     },
 
     async archiveThread(input: HubArchiveThreadInput): Promise<HubThreadSummary> {
-      const thread = buildThreadFromArchiveInput(input, new Date());
+      const sourceId = input.sourceId?.trim();
+      const record = sourceId
+        ? await methods.getHubThread(userId, hubThreadId('mindferry', sourceId))
+        : null;
+      const previous = record ? toThread(record) : undefined;
+      const thread = buildThreadFromArchiveInput(input, new Date(), previous);
       await methods.upsertHubThread(userId, toThreadRecord(thread));
       return summarize(thread);
     },

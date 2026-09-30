@@ -77,6 +77,45 @@ describe('createHubMongoStore', () => {
     );
   });
 
+  it('keeps the stored creation time when a sourceId is archived again', async () => {
+    const created = new Date('2026-01-01T00:00:00Z');
+    const methods = fakeMethods({
+      getHubThread: jest.fn().mockResolvedValue({
+        id: 'mindferry:session-1',
+        provider: 'mindferry',
+        sourceId: 'session-1',
+        title: 'Old title',
+        createdAt: created,
+        updatedAt: created,
+        messages: [
+          {
+            id: 'm1',
+            role: 'user',
+            createdAt: created,
+            segments: [{ kind: 'text', text: 'Hello' }],
+            parentId: null,
+          },
+        ],
+      }),
+    });
+    const store = createHubMongoStore({ methods, userId: 'user-a' });
+
+    await store.archiveThread({
+      title: 'New title',
+      sourceId: 'session-1',
+      messages: [{ role: 'user', text: 'Hello' }],
+    });
+
+    expect(methods.getHubThread).toHaveBeenCalledWith('user-a', 'mindferry:session-1');
+    expect(methods.upsertHubThread).toHaveBeenCalledWith(
+      'user-a',
+      expect.objectContaining({
+        createdAt: created,
+        messages: [expect.objectContaining({ createdAt: created })],
+      }),
+    );
+  });
+
   it('maps a persisted record back into a HubThread', async () => {
     const methods = fakeMethods({
       getHubThread: jest.fn().mockResolvedValue({

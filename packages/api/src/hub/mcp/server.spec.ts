@@ -380,6 +380,45 @@ describe('createHubMcpServer', () => {
       await close();
     });
 
+    it('keeps the original creation time of a thread and its unchanged turns on update', async () => {
+      let tick = 0;
+      const store = createHubMemoryStore({
+        now: () => new Date(Date.UTC(2026, 0, 1, 0, 0, tick++)),
+      });
+      const { client, close } = await connect({ store });
+      const turns = [{ role: 'user', text: 'First turn.' }];
+
+      await call(client, 'archive_thread', { title: 'T', sourceId: 'keep', messages: turns });
+      await call(client, 'archive_thread', {
+        title: 'T',
+        sourceId: 'keep',
+        messages: [...turns, { role: 'assistant', text: 'Later reply.' }],
+      });
+
+      const thread = await store.getThread('mindferry:keep');
+      const [first, second] = thread?.messages ?? [];
+      expect(thread?.createdAt.getTime()).toBe(first.createdAt.getTime());
+      expect(second.createdAt.getTime()).toBeGreaterThan(first.createdAt.getTime());
+      await close();
+    });
+
+    it('rejects a conversation over the configured byte limit with an actionable error', async () => {
+      const { client, close } = await connect({ maxArchiveBytes: 1000 });
+
+      const result = await call(client, 'archive_thread', {
+        title: 'Too big',
+        sourceId: 'big',
+        messages: [{ role: 'user', text: 'x'.repeat(1001) }],
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toContain('different sourceIds');
+      expect(textOf(await call(client, 'get_thread', { id: 'mindferry:big' }))).toContain(
+        'No archived conversation',
+      );
+      await close();
+    });
+
     it('creates a new thread each time when no sourceId is given', async () => {
       const { client, close } = await connect();
 

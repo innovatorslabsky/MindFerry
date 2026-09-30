@@ -521,6 +521,9 @@ export const CONTEXT_HUB_MIN_SEARCH_LIMIT = 1;
 export const CONTEXT_HUB_MAX_SEARCH_LIMIT = 100;
 export const CONTEXT_HUB_DEFAULT_SEARCH_LIMIT = 20;
 export const CONTEXT_HUB_DEFAULT_SNIPPET_LENGTH = 400;
+/** A thread lives in one Mongo document (16 MB cap) that also carries a copy of its text for search. */
+export const CONTEXT_HUB_DEFAULT_MAX_ARCHIVE_BYTES = 6_000_000;
+export const CONTEXT_HUB_MAX_ARCHIVE_BYTES = 7_000_000;
 export const CONTEXT_HUB_DEFAULT_SEMANTIC_MODEL = 'text-embedding-3-small';
 export const CONTEXT_HUB_DEFAULT_SEMANTIC_WEIGHT = 0.5;
 export const CONTEXT_HUB_DEFAULT_SEMANTIC_CANDIDATE_POOL = 50;
@@ -598,6 +601,13 @@ export const contextHubSchema = z
          *  not only a short note — the live-connector counterpart of "Save to
          *  MindFerry" and the file importer, neither of which it can reach. */
         allowArchive: z.boolean().default(true),
+        /** Largest conversation (UTF-8 bytes of all turns) `archive_thread` accepts. */
+        maxArchiveBytes: z
+          .number()
+          .int()
+          .min(1000)
+          .max(CONTEXT_HUB_MAX_ARCHIVE_BYTES)
+          .default(CONTEXT_HUB_DEFAULT_MAX_ARCHIVE_BYTES),
         semanticSearch: contextHubSemanticSearchSchema.optional(),
       })
       .default({}),

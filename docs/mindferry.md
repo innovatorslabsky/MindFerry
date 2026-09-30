@@ -18,6 +18,7 @@ contextHub:
     snippetLength: 400 # 80-4000 characters, default 400
     allowNotes: true # let a connected client write notes back, not only read
     allowArchive: true # let a connected client archive a full conversation via archive_thread
+    maxArchiveBytes: 6000000 # 1000-7000000 bytes of turn text per archived thread, default 6000000
   git: # optional: also mirror the archive to a GitHub repo as Markdown
     enabled: true
     owner: your-github-username

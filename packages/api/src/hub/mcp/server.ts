@@ -4,6 +4,7 @@ import {
   CONTEXT_HUB_MAX_SEARCH_LIMIT,
   CONTEXT_HUB_DEFAULT_SEARCH_LIMIT,
   CONTEXT_HUB_DEFAULT_SNIPPET_LENGTH,
+  CONTEXT_HUB_DEFAULT_MAX_ARCHIVE_BYTES,
 } from 'librechat-data-provider';
 import type { HubStore, HubThreadSummary } from './store';
 import type { HubProvider } from '../thread';
@@ -28,6 +29,8 @@ export interface HubMcpServerOptions {
   /** When false, `archive_thread` is not registered — a client can still read
    *  and write notes, but cannot add a full conversation to the archive. */
   allowArchive?: boolean;
+  /** Largest conversation `archive_thread` accepts, in UTF-8 bytes of turn text. */
+  maxArchiveBytes?: number;
   name?: string;
   version?: string;
 }
@@ -57,6 +60,7 @@ export function createHubMcpServer(options: HubMcpServerOptions): McpServer {
     snippetLength = CONTEXT_HUB_DEFAULT_SNIPPET_LENGTH,
     allowNotes = true,
     allowArchive = true,
+    maxArchiveBytes = CONTEXT_HUB_DEFAULT_MAX_ARCHIVE_BYTES,
     name = 'mindferry',
     version = '1.0.0',
   } = options;
@@ -244,6 +248,18 @@ export function createHubMcpServer(options: HubMcpServerOptions): McpServer {
         },
       },
       async ({ title, sourceId, messages }) => {
+        const bytes = messages.reduce(
+          (total, message) => total + Buffer.byteLength(message.text),
+          0,
+        );
+        if (bytes > maxArchiveBytes) {
+          return {
+            isError: true,
+            ...asText(
+              `This conversation is ${bytes} bytes, over the ${maxArchiveBytes}-byte limit for one archived thread. Archive it as several threads with different sourceIds instead.`,
+            ),
+          };
+        }
         const summary = await store.archiveThread({ title, sourceId, messages });
         return asText(`Archived thread ${summary.id} (${summary.messageCount} messages).`);
       },

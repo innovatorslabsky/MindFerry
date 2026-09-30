@@ -77,15 +77,25 @@ export interface HubStore {
  * parent is simply the one before it. Shared by every `HubStore`
  * implementation's `archiveThread`, rather than each rebuilding this shape.
  */
-export function buildThreadFromArchiveInput(input: HubArchiveThreadInput, now: Date): HubThread {
+export function buildThreadFromArchiveInput(
+  input: HubArchiveThreadInput,
+  now: Date,
+  previous?: HubThread,
+): HubThread {
   const sourceId = input.sourceId?.trim() || randomUUID();
   let parentId: string | null = null;
   const messages: HubMessage[] = input.messages.map((message, index) => {
     const id = `m${index + 1}`;
+    const earlier = previous?.messages[index];
+    const unchanged =
+      earlier?.id === id &&
+      earlier.role === message.role &&
+      earlier.segments.length === 1 &&
+      earlier.segments[0].text === message.text;
     const converted: HubMessage = {
       id,
       role: message.role,
-      createdAt: now,
+      createdAt: unchanged ? earlier.createdAt : now,
       segments: [{ kind: 'text', text: message.text }],
       parentId,
     };
@@ -98,7 +108,7 @@ export function buildThreadFromArchiveInput(input: HubArchiveThreadInput, now: D
     provider: 'mindferry',
     sourceId,
     title: input.title.trim() || 'Untitled conversation',
-    createdAt: now,
+    createdAt: previous?.createdAt ?? now,
     updatedAt: now,
     messages,
   };

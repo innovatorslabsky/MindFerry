@@ -113,6 +113,7 @@ export function createContextHubMcpHandler(
           snippetLength: mcpConfig?.snippetLength,
           allowNotes: mcpConfig?.allowNotes,
           allowArchive: mcpConfig?.allowArchive,
+          maxArchiveBytes: mcpConfig?.maxArchiveBytes,
         },
       });
     } catch (error) {

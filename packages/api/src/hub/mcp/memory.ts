@@ -8,8 +8,8 @@ import type {
 } from './store';
 import type { HubThread } from '../thread';
 import { buildThreadFromArchiveInput, summarize } from './store';
+import { hubThreadId, threadText } from '../thread';
 import { snippetAround } from './snippet';
-import { threadText } from '../thread';
 
 /**
  * A complete `HubStore` held in memory. It is the reference implementation of
@@ -78,7 +78,9 @@ export function createHubMemoryStore(options: HubMemoryStoreOptions = {}): HubSt
     },
 
     async archiveThread(input: HubArchiveThreadInput): Promise<HubThreadSummary> {
-      const thread = buildThreadFromArchiveInput(input, now());
+      const sourceId = input.sourceId?.trim();
+      const previous = sourceId ? threads.get(hubThreadId('mindferry', sourceId)) : undefined;
+      const thread = buildThreadFromArchiveInput(input, now(), previous);
       threads.set(thread.id, thread);
       haystacks.set(thread.id, `${thread.title}\n${threadText(thread)}`);
       return summarize(thread);
