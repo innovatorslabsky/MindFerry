@@ -130,6 +130,7 @@ export enum MutationKeys {
   deleteAgentApiKey = 'deleteAgentApiKey',
   archiveConversationToHub = 'archiveConversationToHub',
   importHubExport = 'importHubExport',
+  continueHubThread = 'continueHubThread',
   submitHubOAuthConsent = 'submitHubOAuthConsent',
   fileUpload = 'fileUpload',
   fileDelete = 'fileDelete',

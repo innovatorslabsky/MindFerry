@@ -1,29 +1,78 @@
-import { ArrowLeft } from 'lucide-react';
-import { Button, Spinner } from '@librechat/client';
-import { useGetHubThreadQuery, useListHubNotesQuery } from '~/data-provider';
+import { ArrowLeft, MessageSquarePlus } from 'lucide-react';
+import { Button, Spinner, useToastContext } from '@librechat/client';
+import type { THubContinueRequest } from 'librechat-data-provider';
+import {
+  useGetHubThreadQuery,
+  useListHubNotesQuery,
+  useContinueHubThreadMutation,
+} from '~/data-provider';
 import { SURFACE_LABEL_KEYS, surfaceOf } from './surface';
+import { NotificationSeverity } from '~/common';
 import { useLocalize } from '~/hooks';
 
 type HubThreadDetailProps = {
   threadId: string;
   onBack: () => void;
+  /** Where a continued chat should run — the endpoint and model the person is using now. */
+  continueTarget?: THubContinueRequest;
+  /** Called with the new conversation's id once "Continue in chat" has made it. */
+  onContinued?: (conversationId: string) => void;
 };
 
 /** Full content of one archived thread — the same data `get_thread` returns
  *  over MCP, rendered for a person browsing the archive directly. */
-export default function HubThreadDetail({ threadId, onBack }: HubThreadDetailProps) {
+export default function HubThreadDetail({
+  threadId,
+  onBack,
+  continueTarget,
+  onContinued,
+}: HubThreadDetailProps) {
   const localize = useLocalize();
+  const { showToast } = useToastContext();
   const { data, isLoading, isError } = useGetHubThreadQuery(threadId);
   const thread = data?.thread;
   const notesQuery = useListHubNotesQuery(threadId);
   const notes = notesQuery.data?.notes ?? [];
+  const continueMutation = useContinueHubThreadMutation({
+    onSuccess: ({ conversationId }) => {
+      showToast({
+        message: localize('com_ui_context_hub_continue_success'),
+        status: NotificationSeverity.SUCCESS,
+      });
+      onContinued?.(conversationId);
+    },
+    onError: () => {
+      showToast({
+        message: localize('com_ui_context_hub_continue_error'),
+        status: NotificationSeverity.ERROR,
+      });
+    },
+  });
 
   return (
     <div className="flex h-full flex-col gap-3">
-      <Button variant="ghost" size="sm" className="w-fit gap-1.5" onClick={onBack}>
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-        {localize('com_ui_back')}
-      </Button>
+      <div className="flex items-center justify-between gap-2">
+        <Button variant="ghost" size="sm" className="w-fit gap-1.5" onClick={onBack}>
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          {localize('com_ui_back')}
+        </Button>
+        {thread != null && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={continueMutation.isLoading}
+            onClick={() => continueMutation.mutate({ id: threadId, target: continueTarget })}
+          >
+            {continueMutation.isLoading ? (
+              <Spinner className="h-4 w-4" />
+            ) : (
+              <MessageSquarePlus className="h-4 w-4" aria-hidden="true" />
+            )}
+            {localize('com_ui_context_hub_continue')}
+          </Button>
+        )}
+      </div>
       {isLoading && (
         <div className="flex items-center justify-center py-12">
           <Spinner className="h-6 w-6 text-text-secondary" />

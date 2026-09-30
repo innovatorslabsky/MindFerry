@@ -110,6 +110,15 @@ without going through an AI client. It reads the same data `search_context`, `ge
 (`GET /api/hub/threads`, `GET /api/hub/threads/:id`, `GET /api/hub/notes`) rather than the MCP
 endpoint, so it works whether or not `contextHub.mcp.enabled` is on.
 
+Each conversation shows the client it came from (Chat, Claude Code, Agent, Other), and the list can
+be filtered by that. Open one and **Continue in chat** turns it into an ordinary MindFerry
+conversation you can keep talking in (`POST /api/hub/threads/:id/continue`): your messages and the
+replies become the chat's history, on the endpoint and model of the chat you have open (or the
+deployment's default when that chat is an agent or assistant). Reasoning, tool calls and system
+messages stay in the archive. It goes through the same importer as a conversation file, so the
+deployment's content filters and size limits apply, and each click makes a new chat — the archived
+thread is never changed.
+
 ## Two-way sync between Claude.ai and Claude Code
 
 Claude.ai and Claude Code don't share memory with each other — connecting both to the same

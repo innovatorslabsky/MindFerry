@@ -992,6 +992,13 @@ export function listHubThreads(params: {
   return request.get(`${endpoints.hubThreads()}${suffix}`);
 }
 
+export function continueHubThread(
+  id: string,
+  target: t.THubContinueRequest = {},
+): Promise<t.THubContinueResponse> {
+  return request.post(endpoints.continueHubThread(id), target);
+}
+
 export function getHubThread(id: string): Promise<t.TGetHubThreadResponse> {
   return request.get(endpoints.hubThread(id));
 }

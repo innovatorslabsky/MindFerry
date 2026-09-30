@@ -1,5 +1,8 @@
 import { useState } from 'react';
+import { useRecoilValue } from 'recoil';
+import { useNavigate } from 'react-router-dom';
 import { Search, FolderOpen } from 'lucide-react';
+import { isAgentsEndpoint, isAssistantsEndpoint } from 'librechat-data-provider';
 import {
   Input,
   Button,
@@ -12,6 +15,7 @@ import {
 } from '@librechat/client';
 import type {
   THubNote,
+  THubContinueRequest,
   THubSurface,
   THubThreadSummary,
   TListHubThreadsResponse,
@@ -21,6 +25,7 @@ import { HUB_SURFACES, SURFACE_LABEL_KEYS, matchesSurface, surfaceOf } from './s
 import { useListHubThreadsQuery, useListHubNotesQuery } from '~/data-provider';
 import HubThreadDetail from './HubThreadDetail';
 import { useLocalize } from '~/hooks';
+import store from '~/store';
 
 function ThreadRow({ thread, onSelect }: { thread: THubThreadSummary; onSelect: () => void }) {
   const localize = useLocalize();
@@ -116,7 +121,24 @@ function matchesQuery(note: THubNote, query: string): boolean {
 }
 
 /**
- * Read-only browsing of the MindFerry archive for a person who wants to look
+ * The endpoint and model to run a continued chat on: the ones in use in the
+ * chat the person has open. Agent and assistant chats are left out — they
+ * need an agent or assistant id a plain conversation doesn't have — so the
+ * server picks the deployment's default instead.
+ */
+function continueTargetOf(
+  conversation: { endpoint?: string | null; model?: string | null } | null,
+): THubContinueRequest | undefined {
+  const endpoint = conversation?.endpoint;
+  const model = conversation?.model;
+  if (!endpoint || !model || isAgentsEndpoint(endpoint) || isAssistantsEndpoint(endpoint)) {
+    return undefined;
+  }
+  return { endpoint, model };
+}
+
+/**
+ * Browsing of the MindFerry archive for a person who wants to look
  * at what's in it directly, without going through an MCP client — the
  * counterpart to `search_context`/`get_thread`/`read_notes`.
  */
@@ -124,6 +146,9 @@ export default function BrowseHubDialog() {
   const localize = useLocalize();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const navigate = useNavigate();
+  const conversation = useRecoilValue(store.conversationByIndex(0));
+  const continueTarget = continueTargetOf(conversation);
   const [surface, setSurface] = useState<THubSurface | undefined>(undefined);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
 
@@ -162,7 +187,15 @@ export default function BrowseHubDialog() {
           <OGDialogTitle>{localize('com_ui_context_hub_browse_title')}</OGDialogTitle>
         </OGDialogHeader>
         {selectedThreadId != null ? (
-          <HubThreadDetail threadId={selectedThreadId} onBack={() => setSelectedThreadId(null)} />
+          <HubThreadDetail
+            threadId={selectedThreadId}
+            onBack={() => setSelectedThreadId(null)}
+            continueTarget={continueTarget}
+            onContinued={(conversationId) => {
+              handleOpenChange(false);
+              navigate(`/c/${conversationId}`);
+            }}
+          />
         ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-4">
             <div className="relative">

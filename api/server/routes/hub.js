@@ -6,6 +6,7 @@ const {
   createContextHubMcpHandler,
   createContextHubImportHandler,
   createContextHubArchiveHandler,
+  createContextHubContinueHandler,
   createHubListThreadsHandler,
   createHubGetThreadHandler,
   createHubListNotesHandler,
@@ -24,9 +25,11 @@ const {
   hubOAuthTokenLimiter,
   requireHubMcpEnabled,
   generateCheckAccess,
+  restoreTenantContextFromReq,
 } = require('@librechat/api');
 const { storage, importFileFilter } = require('~/server/routes/files/multer');
 const { configMiddleware, requireJwtAuth } = require('~/server/middleware');
+const { importHubConversation } = require('~/server/utils/import/hub');
 const db = require('~/models');
 
 const router = express.Router();
@@ -145,6 +148,23 @@ router.get(
   configMiddleware,
   contextHubBrowseLimiter,
   getThreadHandler,
+);
+/**
+ * "Continue in chat": opens an archived thread as an ordinary conversation,
+ * through the same importer a conversation file goes through.
+ */
+const continueHandler = createContextHubContinueHandler({
+  methods: db,
+  importConversation: importHubConversation,
+});
+
+router.post(
+  '/threads/:id/continue',
+  requireJwtAuth,
+  configMiddleware,
+  restoreTenantContextFromReq,
+  contextHubArchiveLimiter,
+  continueHandler,
 );
 router.get('/notes', requireJwtAuth, configMiddleware, contextHubBrowseLimiter, listNotesHandler);
 

@@ -1,11 +1,25 @@
 import React from 'react';
 import '@testing-library/jest-dom/extend-expect';
+import { RecoilRoot } from 'recoil';
 import { render, fireEvent, waitFor, within } from 'test/layout-test-utils';
 import BrowseHubDialog from '../BrowseHubDialog';
+import store from '~/store';
 
 const mockUseListHubThreadsQuery = jest.fn();
 const mockUseGetHubThreadQuery = jest.fn();
 const mockUseListHubNotesQuery = jest.fn();
+const mockContinueHubThread = jest.fn();
+
+jest.mock('librechat-data-provider', () => {
+  const actual = jest.requireActual('librechat-data-provider');
+  return {
+    ...actual,
+    dataService: {
+      ...actual.dataService,
+      continueHubThread: (...args: unknown[]) => mockContinueHubThread(...args),
+    },
+  };
+});
 
 jest.mock('~/data-provider/Hub/queries', () => ({
   ...jest.requireActual('~/data-provider/Hub/queries'),
@@ -247,5 +261,117 @@ describe('BrowseHubDialog', () => {
     await waitFor(() => expect(getByText('Notes on this conversation')).toBeInTheDocument());
     expect(getByText('Anchored summary')).toBeInTheDocument();
     expect(mockUseListHubNotesQuery).toHaveBeenCalledWith('mindferry:session-1');
+  });
+
+  describe('continue in chat', () => {
+    const detailThread = {
+      id: 'mindferry:session-1',
+      provider: 'mindferry',
+      surface: 'code',
+      sourceId: 'session-1',
+      title: 'Deciding on the sync mechanism',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-02T00:00:00Z',
+      messages: [],
+    };
+
+    const openDetail = (conversation?: Record<string, unknown>) => {
+      const utils = render(
+        <RecoilRoot
+          initializeState={({ set }) => {
+            if (conversation) {
+              set(store.conversationByIndex(0), conversation as never);
+            }
+          }}
+        >
+          <BrowseHubDialog />
+        </RecoilRoot>,
+      );
+      fireEvent.click(utils.getByRole('button', { name: 'Browse' }));
+      fireEvent.click(utils.getByText('Deciding on the sync mechanism'));
+      return utils;
+    };
+
+    beforeEach(() => {
+      window.history.pushState({}, '', '/c/new');
+      mockUseGetHubThreadQuery.mockReturnValue({
+        data: { thread: detailThread },
+        isLoading: false,
+        isError: false,
+      });
+      mockContinueHubThread
+        .mockReset()
+        .mockResolvedValue({ conversationId: 'new-convo', messageCount: 2 });
+    });
+
+    it('opens the archived thread as a new chat and leaves the archive', async () => {
+      const { getByRole, queryByText } = openDetail();
+
+      fireEvent.click(getByRole('button', { name: 'Continue in chat' }));
+
+      await waitFor(() => expect(window.location.pathname).toBe('/c/new-convo'));
+      expect(mockContinueHubThread).toHaveBeenCalledWith('mindferry:session-1', undefined);
+      expect(queryByText('MindFerry Archive')).not.toBeInTheDocument();
+    });
+
+    it('runs the new chat on the endpoint and model of the chat that is open now', async () => {
+      const { getByRole } = openDetail({ endpoint: 'anthropic', model: 'claude-sonnet-4-6' });
+
+      fireEvent.click(getByRole('button', { name: 'Continue in chat' }));
+
+      await waitFor(() => expect(mockContinueHubThread).toHaveBeenCalled());
+      expect(mockContinueHubThread).toHaveBeenCalledWith('mindferry:session-1', {
+        endpoint: 'anthropic',
+        model: 'claude-sonnet-4-6',
+      });
+    });
+
+    it('leaves the choice to the server when the open chat is an agent or assistant chat', async () => {
+      const { getByRole } = openDetail({ endpoint: 'agents', model: null });
+
+      fireEvent.click(getByRole('button', { name: 'Continue in chat' }));
+
+      await waitFor(() => expect(mockContinueHubThread).toHaveBeenCalled());
+      expect(mockContinueHubThread).toHaveBeenCalledWith('mindferry:session-1', undefined);
+    });
+
+    it('stays on the thread and does not navigate when making the chat fails', async () => {
+      mockContinueHubThread.mockRejectedValue(new Error('boom'));
+      const { getByRole, getByText } = openDetail();
+
+      fireEvent.click(getByRole('button', { name: 'Continue in chat' }));
+
+      await waitFor(() => expect(mockContinueHubThread).toHaveBeenCalled());
+      await waitFor(() =>
+        expect(getByRole('button', { name: 'Continue in chat' })).not.toBeDisabled(),
+      );
+      expect(window.location.pathname).toBe('/c/new');
+      expect(getByText('MindFerry Archive')).toBeInTheDocument();
+    });
+
+    it('disables the button while the chat is being made, so it is not made twice', async () => {
+      let finish: (value: { conversationId: string; messageCount: number }) => void = () =>
+        undefined;
+      mockContinueHubThread.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+      const { getByRole } = openDetail();
+
+      fireEvent.click(getByRole('button', { name: 'Continue in chat' }));
+
+      await waitFor(() => expect(getByRole('button', { name: 'Continue in chat' })).toBeDisabled());
+      finish({ conversationId: 'new-convo', messageCount: 1 });
+      await waitFor(() => expect(window.location.pathname).toBe('/c/new-convo'));
+      expect(mockContinueHubThread).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers no button until the thread has loaded', () => {
+      mockUseGetHubThreadQuery.mockReturnValue({
+        data: undefined,
+        isLoading: true,
+        isError: false,
+      });
+      const { queryByRole } = openDetail();
+
+      expect(queryByRole('button', { name: 'Continue in chat' })).not.toBeInTheDocument();
+    });
   });
 });

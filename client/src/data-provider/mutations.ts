@@ -953,6 +953,30 @@ export const useArchiveConversationToHubMutation = (
   );
 };
 
+export type ContinueHubThreadVariables = { id: string; target?: t.THubContinueRequest };
+
+/**
+ * Opens an archived thread as a new, ordinary conversation the person can
+ * keep chatting in. The archived thread is untouched; the sidebar list is
+ * what changes, so it is refreshed.
+ */
+export const useContinueHubThreadMutation = (
+  options?: t.MutationOptions<t.THubContinueResponse, ContinueHubThreadVariables>,
+): UseMutationResult<t.THubContinueResponse, unknown, ContinueHubThreadVariables, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation(
+    [MutationKeys.continueHubThread],
+    ({ id, target }: ContinueHubThreadVariables) => dataService.continueHubThread(id, target),
+    {
+      ...options,
+      onSuccess: (data, variables, context) => {
+        queryClient.invalidateQueries([QueryKeys.allConversations]);
+        options?.onSuccess?.(data, variables, context);
+      },
+    },
+  );
+};
+
 /**
  * Uploads an exported conversation file (ChatGPT, Claude.ai, or Gemini/Google
  * Takeout) so the server can archive it into the context hub. The provider is

@@ -177,6 +177,9 @@ export const hubThread = (id: string) => `${BASE_URL}/api/hub/threads/${encodeUR
 
 export const hubNotes = () => `${BASE_URL}/api/hub/notes`;
 
+export const continueHubThread = (id: string) =>
+  `${BASE_URL}/api/hub/threads/${encodeURIComponent(id)}/continue`;
+
 /** The absolute URL a client pastes into an `.mcp.json` entry or a Claude.ai connector. */
 export const contextHubMcpEndpoint = () => `${window.location.origin}${BASE_URL}/api/hub/mcp`;
 

@@ -1,5 +1,6 @@
+import { Constants } from 'librechat-data-provider';
 import type { LibreChatArchiveMessage } from './librechat';
-import { convertLibreChatConversation } from './librechat';
+import { convertLibreChatConversation, convertHubThreadToChat } from './librechat';
 
 const conversation = {
   conversationId: 'c1',
@@ -116,5 +117,215 @@ describe('convertLibreChatConversation', () => {
     const thread = convertLibreChatConversation({ conversationId: 'c2' }, []);
 
     expect(thread.title).toBe('Untitled conversation');
+  });
+});
+
+describe('convertHubThreadToChat', () => {
+  const record = (
+    overrides: Partial<import('@librechat/data-schemas').HubThreadRecord> = {},
+  ): import('@librechat/data-schemas').HubThreadRecord => ({
+    id: 'mindferry:sess-1',
+    provider: 'mindferry',
+    sourceId: 'sess-1',
+    title: 'Fixing the checkout',
+    createdAt: new Date('2026-01-01T00:00:00Z'),
+    updatedAt: new Date('2026-01-01T00:00:00Z'),
+    messages: [
+      {
+        id: 'm1',
+        role: 'user',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        segments: [{ kind: 'text', text: 'why does checkout fail?' }],
+        parentId: null,
+      },
+      {
+        id: 'm2',
+        role: 'assistant',
+        createdAt: new Date('2026-01-01T00:00:05Z'),
+        segments: [{ kind: 'text', text: 'The cart total is stale.' }],
+        parentId: 'm1',
+      },
+    ],
+    ...overrides,
+  });
+
+  it('turns a linear thread into a rooted chain of user and assistant messages', () => {
+    const chat = convertHubThreadToChat(record());
+
+    expect(chat.title).toBe('Fixing the checkout');
+    expect(chat.messages).toEqual([
+      {
+        messageId: 'm1',
+        parentMessageId: Constants.NO_PARENT,
+        text: 'why does checkout fail?',
+        sender: 'User',
+        isCreatedByUser: true,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        messageId: 'm2',
+        parentMessageId: 'm1',
+        text: 'The cart total is stale.',
+        sender: 'Assistant',
+        isCreatedByUser: false,
+        createdAt: '2026-01-01T00:00:05.000Z',
+      },
+    ]);
+  });
+
+  it('labels the assistant by the provider the thread came from', () => {
+    const chat = convertHubThreadToChat(record({ provider: 'claude' }));
+
+    expect(chat.messages[1].sender).toBe('Claude');
+  });
+
+  it('carries the chosen endpoint and model onto the conversation and its assistant messages only', () => {
+    const chat = convertHubThreadToChat(record(), {
+      endpoint: 'anthropic',
+      model: 'claude-sonnet-4-6',
+    });
+
+    expect(chat.endpoint).toBe('anthropic');
+    expect(chat.options).toEqual({ model: 'claude-sonnet-4-6' });
+    expect(chat.messages[0]).not.toHaveProperty('model');
+    expect(chat.messages[1]).toMatchObject({ endpoint: 'anthropic', model: 'claude-sonnet-4-6' });
+  });
+
+  it('leaves the endpoint and model to the deployment when none is chosen', () => {
+    const chat = convertHubThreadToChat(record());
+
+    expect(chat).not.toHaveProperty('endpoint');
+    expect(chat).not.toHaveProperty('options');
+  });
+
+  it('keeps code as a fenced block and leaves reasoning, tool calls and system messages behind', () => {
+    const chat = convertHubThreadToChat(
+      record({
+        messages: [
+          {
+            id: 'm0',
+            role: 'system',
+            createdAt: new Date('2026-01-01T00:00:00Z'),
+            segments: [{ kind: 'text', text: 'hidden system prompt' }],
+            parentId: null,
+          },
+          {
+            id: 'm1',
+            role: 'user',
+            createdAt: new Date('2026-01-01T00:00:01Z'),
+            segments: [{ kind: 'text', text: 'show me' }],
+            parentId: 'm0',
+          },
+          {
+            id: 'm2',
+            role: 'assistant',
+            createdAt: new Date('2026-01-01T00:00:02Z'),
+            segments: [
+              { kind: 'thinking', text: 'private reasoning' },
+              { kind: 'text', text: 'Here:' },
+              { kind: 'tool', text: '{"a":1}', name: 'Bash' },
+              { kind: 'code', text: 'npm test', language: 'bash' },
+            ],
+            parentId: 'm1',
+          },
+        ],
+      }),
+    );
+
+    expect(chat.messages.map((message) => message.text)).toEqual([
+      'show me',
+      'Here:\n\n```bash\nnpm test\n```',
+    ]);
+    expect(JSON.stringify(chat)).not.toMatch(/hidden system prompt|private reasoning|Bash/);
+    expect(chat.messages[0].parentMessageId).toBe(Constants.NO_PARENT);
+  });
+
+  it('re-parents the replies of a message that had nothing a chat can show', () => {
+    const chat = convertHubThreadToChat(
+      record({
+        messages: [
+          {
+            id: 'm1',
+            role: 'user',
+            createdAt: new Date('2026-01-01T00:00:00Z'),
+            segments: [{ kind: 'text', text: 'question' }],
+            parentId: null,
+          },
+          {
+            id: 'm2',
+            role: 'assistant',
+            createdAt: new Date('2026-01-01T00:00:01Z'),
+            segments: [{ kind: 'tool', text: '{}', name: 'Bash' }],
+            parentId: 'm1',
+          },
+          {
+            id: 'm3',
+            role: 'assistant',
+            createdAt: new Date('2026-01-01T00:00:02Z'),
+            segments: [{ kind: 'text', text: 'answer' }],
+            parentId: 'm2',
+          },
+        ],
+      }),
+    );
+
+    expect(chat.messages.map((message) => [message.messageId, message.parentMessageId])).toEqual([
+      ['m1', Constants.NO_PARENT],
+      ['m3', 'm1'],
+    ]);
+  });
+
+  it('preserves branching from an exported tree', () => {
+    const chat = convertHubThreadToChat(
+      record({
+        messages: [
+          {
+            id: 'a',
+            role: 'user',
+            createdAt: new Date('2026-01-01T00:00:00Z'),
+            segments: [{ kind: 'text', text: 'root' }],
+            parentId: null,
+          },
+          {
+            id: 'b1',
+            role: 'assistant',
+            createdAt: new Date('2026-01-01T00:00:01Z'),
+            segments: [{ kind: 'text', text: 'first try' }],
+            parentId: 'a',
+          },
+          {
+            id: 'b2',
+            role: 'assistant',
+            createdAt: new Date('2026-01-01T00:00:02Z'),
+            segments: [{ kind: 'text', text: 'regenerated' }],
+            parentId: 'a',
+          },
+        ],
+      }),
+    );
+
+    expect(chat.messages.map((message) => message.parentMessageId)).toEqual([
+      Constants.NO_PARENT,
+      'a',
+      'a',
+    ]);
+  });
+
+  it('returns no messages for a thread with nothing to show', () => {
+    const chat = convertHubThreadToChat(
+      record({
+        messages: [
+          {
+            id: 'm1',
+            role: 'assistant',
+            createdAt: new Date('2026-01-01T00:00:00Z'),
+            segments: [{ kind: 'thinking', text: 'only thoughts' }],
+            parentId: null,
+          },
+        ],
+      }),
+    );
+
+    expect(chat.messages).toEqual([]);
   });
 });

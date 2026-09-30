@@ -609,6 +609,12 @@ export type THubNote = {
   createdAt: string;
 };
 
+/** Where a continued conversation should run; either may be omitted for the deployment's default. */
+export type THubContinueRequest = { endpoint?: string; model?: string };
+
+/** The new conversation `POST /api/hub/threads/:id/continue` made from an archived thread. */
+export type THubContinueResponse = { conversationId: string; messageCount: number };
+
 export type TListHubThreadsResponse = { threads: THubThreadSummary[] };
 export type TGetHubThreadResponse = { thread: THubThread };
 export type TListHubNotesResponse = { notes: THubNote[] };
