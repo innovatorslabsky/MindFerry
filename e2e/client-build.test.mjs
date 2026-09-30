@@ -78,7 +78,7 @@ test(
       browser = await chromium.launch({
         headless: true,
         channel: process.env.PLAYWRIGHT_CHANNEL,
-        timeout: 10000,
+        timeout: 30000,
       });
       const page = await browser.newPage();
       page.setDefaultTimeout(10000);
