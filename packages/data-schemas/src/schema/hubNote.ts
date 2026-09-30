@@ -33,4 +33,7 @@ const hubNoteSchema: Schema<IHubNote> = new Schema({
 
 hubNoteSchema.index({ userId: 1, threadId: 1, createdAt: 1 });
 
+/** `userId` prefixes the text index so a note search is scoped to one user's rows, as for threads. */
+hubNoteSchema.index({ userId: 1, title: 'text', text: 'text' });
+
 export default hubNoteSchema;

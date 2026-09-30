@@ -28,6 +28,7 @@ function fakeMethods(overrides: Partial<HubStoreMethods> = {}): jest.Mocked<HubS
     searchHubThreads: jest.fn().mockResolvedValue([]),
     listHubNotes: jest.fn().mockResolvedValue([]),
     appendHubNote: jest.fn(),
+    searchHubNotes: jest.fn().mockResolvedValue([]),
     ...overrides,
   } as jest.Mocked<HubStoreMethods>;
 }
@@ -41,11 +42,13 @@ describe('createHubMongoStore', () => {
     await store.getThread('claude:c1');
     await store.listNotes('claude:c1');
     await store.appendNote({ title: 't', text: 'x' });
+    await store.searchNotes('zebra', 5);
 
     expect(methods.searchHubThreads).toHaveBeenCalledWith('user-a', expect.any(Object));
     expect(methods.getHubThread).toHaveBeenCalledWith('user-a', 'claude:c1');
     expect(methods.listHubNotes).toHaveBeenCalledWith('user-a', 'claude:c1', undefined);
     expect(methods.appendHubNote).toHaveBeenCalledWith('user-a', { title: 't', text: 'x' });
+    expect(methods.searchHubNotes).toHaveBeenCalledWith('user-a', 'zebra', 5);
   });
 
   it('archives a verbatim thread under the given sourceId, scoped to the user', async () => {

@@ -81,7 +81,12 @@ async function rerankBySemanticSimilarity(
  */
 export type HubStoreMethods = Pick<
   HubMethods,
-  'upsertHubThread' | 'getHubThread' | 'searchHubThreads' | 'listHubNotes' | 'appendHubNote'
+  | 'upsertHubThread'
+  | 'getHubThread'
+  | 'searchHubThreads'
+  | 'listHubNotes'
+  | 'appendHubNote'
+  | 'searchHubNotes'
 >;
 
 export interface HubMongoStoreOptions {
@@ -184,6 +189,10 @@ export function createHubMongoStore(options: HubMongoStoreOptions): HubStore {
 
     async listNotes(threadId?: string, limit?: number): Promise<HubNote[]> {
       return methods.listHubNotes(userId, threadId, limit);
+    },
+
+    async searchNotes(query: string, limit: number): Promise<HubNote[]> {
+      return methods.searchHubNotes(userId, query, limit);
     },
 
     async appendNote(note: HubNoteInput): Promise<HubNote> {

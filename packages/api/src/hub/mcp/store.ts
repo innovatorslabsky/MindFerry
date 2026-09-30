@@ -65,6 +65,8 @@ export interface HubStore {
   /** Oldest first; with `limit`, only the most recent `limit` notes. */
   listNotes(threadId?: string, limit?: number): Promise<HubNote[]>;
   appendNote(note: HubNoteInput): Promise<HubNote>;
+  /** Notes matching `query` in title or body, best match first. */
+  searchNotes(query: string, limit: number): Promise<HubNote[]>;
   /** Archives a full, verbatim conversation submitted by an MCP client — the
    *  live-connector counterpart to "Save to MindFerry" and the file importer,
    *  neither of which an external client can reach. */

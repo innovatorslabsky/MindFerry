@@ -108,6 +108,36 @@ describe('createHubMcpServer', () => {
   });
 
   describe('search_context', () => {
+    it('lists a matching note separately, with the thread it is anchored to', async () => {
+      const { client, store, close } = await connect();
+      await store.appendNote({
+        title: 'Sync decision',
+        text: 'We chose zebra archiving over live sync.',
+        threadId: 'claude:c1',
+        surface: 'code',
+      });
+
+      const found = textOf(await call(client, 'search_context', { query: 'zebra' }));
+
+      expect(found).toContain('Notes');
+      expect(found).toContain('Sync decision');
+      expect(found).toContain('zebra archiving');
+      expect(found).toContain('thread: claude:c1');
+      await close();
+    });
+
+    it('leaves notes out when the search is restricted to providers', async () => {
+      const { client, store, close } = await connect();
+      await store.appendNote({ title: 'N', text: 'zebra note' });
+
+      const found = textOf(
+        await call(client, 'search_context', { query: 'zebra', providers: ['claude'] }),
+      );
+
+      expect(found).toContain('No archived conversation matches');
+      await close();
+    });
+
     it('finds a thread by its message content and returns its id', async () => {
       const { client, close } = await connect();
 

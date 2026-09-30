@@ -229,6 +229,16 @@ describe('notes', () => {
     expect(recent.map((n) => n.title)).toEqual(['two', 'three']);
   });
 
+  it('finds notes by a word in the title or body, scoped to their owner', async () => {
+    await methods.appendHubNote(userA, { title: 'Zebra plan', text: 'about stripes' });
+    await methods.appendHubNote(userA, { title: 'Other', text: 'nothing relevant' });
+    await methods.appendHubNote(userB, { title: 'Zebra secret', text: 'not yours' });
+
+    const found = await methods.searchHubNotes(userA, 'zebra', 10);
+
+    expect(found.map((n) => n.title)).toEqual(['Zebra plan']);
+  });
+
   it('scopes notes to their owner', async () => {
     await methods.appendHubNote(userA, { title: 'Private', text: 'a' });
 

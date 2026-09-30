@@ -78,6 +78,7 @@ describe('createContextHubMcpHandler', () => {
     getHubThread: jest.fn(),
     searchHubThreads: jest.fn(),
     listHubNotes: jest.fn(),
+    searchHubNotes: jest.fn(),
     appendHubNote: jest.fn(),
   };
 

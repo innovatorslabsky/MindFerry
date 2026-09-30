@@ -71,6 +71,17 @@ export function createHubMemoryStore(options: HubMemoryStoreOptions = {}): HubSt
       return limit === undefined ? [...matching] : matching.slice(-limit);
     },
 
+    async searchNotes(query: string, limit: number): Promise<HubNote[]> {
+      const needle = query.trim().toLowerCase();
+      if (needle.length === 0) {
+        return [];
+      }
+      return notes
+        .filter((note) => `${note.title}\n${note.text}`.toLowerCase().includes(needle))
+        .reverse()
+        .slice(0, limit);
+    },
+
     async appendNote(note: HubNoteInput): Promise<HubNote> {
       const stored: HubNote = { ...note, id: newId(), createdAt: now() };
       notes.push(stored);

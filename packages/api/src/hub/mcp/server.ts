@@ -6,9 +6,10 @@ import {
   CONTEXT_HUB_DEFAULT_SNIPPET_LENGTH,
   CONTEXT_HUB_DEFAULT_MAX_ARCHIVE_BYTES,
 } from 'librechat-data-provider';
-import type { HubStore, HubThreadSummary } from './store';
+import type { HubStore, HubNote, HubThreadSummary } from './store';
 import type { HubProvider } from '../thread';
 import { renderThreadMarkdown, renderThreadOutlineMarkdown } from '../render';
+import { snippetAround } from './snippet';
 import { HUB_PROVIDERS } from '../thread';
 
 /**
@@ -38,6 +39,17 @@ export interface HubMcpServerOptions {
 const TEXT = 'text' as const;
 
 const asText = (text: string) => ({ content: [{ type: TEXT, text }] });
+
+function formatNoteMatch(note: HubNote, query: string, snippetLength: number): string {
+  const at = note.text.toLowerCase().indexOf(query.trim().toLowerCase());
+  const meta = [note.createdAt.toISOString(), note.surface, note.sessionTag].filter(Boolean);
+  const lines = [`- ${note.title}`, `  note: ${note.id}`, `  ${meta.join(' · ')}`];
+  if (note.threadId) {
+    lines.push(`  thread: ${note.threadId}`);
+  }
+  lines.push(`  match: ${snippetAround(note.text, Math.max(at, 0), snippetLength)}`);
+  return lines.join('\n');
+}
 
 function formatSummary(summary: HubThreadSummary): string {
   const lines = [
@@ -72,7 +84,7 @@ export function createHubMcpServer(options: HubMcpServerOptions): McpServer {
     {
       title: 'Search archived conversations',
       description:
-        'Search conversations archived from every connected assistant. Returns thread ids to pass to get_thread.',
+        'Search conversations archived from every connected assistant, and the notes clients have written. Returns thread ids to pass to get_thread; a matching note is listed separately with the thread it is anchored to, if any.',
       inputSchema: {
         query: z.string().min(1).describe('Text to look for in titles and message content'),
         providers: z
@@ -83,16 +95,25 @@ export function createHubMcpServer(options: HubMcpServerOptions): McpServer {
       },
     },
     async ({ query, providers, limit }) => {
-      const summaries = await store.searchThreads({
-        query,
-        providers: providers as HubProvider[] | undefined,
-        limit: Math.min(limit ?? searchLimit, searchLimit),
-        snippetLength,
-      });
-      if (summaries.length === 0) {
+      const cap = Math.min(limit ?? searchLimit, searchLimit);
+      const [summaries, noteMatches] = await Promise.all([
+        store.searchThreads({
+          query,
+          providers: providers as HubProvider[] | undefined,
+          limit: cap,
+          snippetLength,
+        }),
+        providers?.length ? Promise.resolve([]) : store.searchNotes(query, cap),
+      ]);
+      if (summaries.length === 0 && noteMatches.length === 0) {
         return asText(`No archived conversation matches "${query}".`);
       }
-      return asText(summaries.map(formatSummary).join('\n\n'));
+      const sections = [summaries.map(formatSummary).join('\n\n')];
+      if (noteMatches.length > 0) {
+        const notes = noteMatches.map((note) => formatNoteMatch(note, query, snippetLength));
+        sections.push(`Notes (pass the thread id to read_notes):\n${notes.join('\n\n')}`);
+      }
+      return asText(sections.filter(Boolean).join('\n\n'));
     },
   );
 

@@ -27,6 +27,8 @@ export interface HubMethods {
   /** Oldest first. With `limit`, the most recent `limit` notes, still oldest first. */
   listHubNotes: (userId: string, threadId?: string, limit?: number) => Promise<HubNoteRecord[]>;
   appendHubNote: (userId: string, note: HubNoteInput) => Promise<HubNoteRecord>;
+  /** Best text match first; same term semantics as `searchHubThreads`. */
+  searchHubNotes: (userId: string, query: string, limit: number) => Promise<HubNoteRecord[]>;
   deleteAllHubData: (userId: string) => Promise<HubDataDeleteResult>;
   /** Dynamic client registration (RFC 7591) is unauthenticated by design —
    *  no userId scoping, since a registered client belongs to the hub's OAuth
@@ -229,6 +231,31 @@ export function createHubMethods(mongoose: typeof import('mongoose')): HubMethod
     }
   }
 
+  async function searchHubNotes(
+    userId: string,
+    query: string,
+    limit: number,
+  ): Promise<HubNoteRecord[]> {
+    const terms = query.trim();
+    if (terms.length === 0) {
+      return [];
+    }
+    try {
+      const HubNote = mongoose.models.HubNote;
+      const docs = (await HubNote.find(
+        { userId: toObjectId(userId), $text: { $search: terms } },
+        { score: { $meta: 'textScore' } },
+      )
+        .sort({ score: { $meta: 'textScore' } })
+        .limit(limit)
+        .lean()) as unknown as IHubNote[];
+      return docs.map(toNoteRecord);
+    } catch (error) {
+      logger.error('[searchHubNotes] Error searching notes:', error);
+      throw error;
+    }
+  }
+
   async function appendHubNote(userId: string, note: HubNoteInput): Promise<HubNoteRecord> {
     try {
       const HubNote = mongoose.models.HubNote;
@@ -299,6 +326,7 @@ export function createHubMethods(mongoose: typeof import('mongoose')): HubMethod
     searchHubThreads,
     listHubThreads,
     listHubNotes,
+    searchHubNotes,
     appendHubNote,
     deleteAllHubData,
     registerHubOAuthClient,
