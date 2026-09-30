@@ -1303,8 +1303,6 @@
   "com_ui_context_hub_browse": "Browse",
   "com_ui_context_hub_browse_title": "MindFerry Archive",
   "com_ui_context_hub_browse_search_placeholder": "Search archived conversations",
-  "com_ui_context_hub_browse_notes_heading": "Notes",
-  "com_ui_context_hub_browse_threads_heading": "Conversations",
   "com_ui_context_hub_browse_empty_threads": "No archived conversations yet",
   "com_ui_context_hub_browse_empty_search": "Nothing matches that search",
   "com_ui_context_hub_browse_empty_notes": "No notes yet",
