@@ -27,6 +27,7 @@ const mockUseFavorites = jest.fn(() => ({
 const mockUseGetConversationTags = jest.fn(() => ({ data: [] as unknown[] }));
 const mockConversationsRender = jest.fn();
 const mockSetChatsExpanded = jest.fn();
+let mockHubEnabled = false;
 const mockMoveToTop = jest.fn();
 const mockUseTitleGeneration = jest.fn(() => {
   useRecoilValue(streamTickAtom);
@@ -86,7 +87,9 @@ jest.mock('~/data-provider', () => ({
   usePinnedConversationsQuery: () => mockPinnedResult,
   useTitleGeneration: () => mockUseTitleGeneration(),
   useGetEndpointsQuery: () => ({ data: {}, isLoading: false }),
-  useGetStartupConfig: () => ({ data: { modelSpecs: { list: [] } } }),
+  useGetStartupConfig: () => ({
+    data: { modelSpecs: { list: [] }, contextHubEnabled: mockHubEnabled },
+  }),
   useGetConversationTags: () => mockUseGetConversationTags(),
 }));
 
@@ -152,6 +155,11 @@ jest.mock('~/components/Conversations/PinnedSection', () => {
   return { __esModule: true, default: PinnedSectionStub };
 });
 
+jest.mock('~/components/Conversations/HubSection', () => ({
+  __esModule: true,
+  default: ({ query }: { query: string }) => <div data-testid="hub-stub" data-query={query} />,
+}));
+
 jest.mock('~/components/Nav/SearchBar', () => ({
   __esModule: true,
   default: () => <div data-testid="searchbar-stub" />,
@@ -162,6 +170,8 @@ jest.mock('~/components/Nav/Favorites/FavoriteItem', () => ({
   default: () => <div data-testid="favorite-item-stub" />,
 }));
 
+import { getDefaultStore } from 'jotai';
+import { chatFilterStatusAtom } from '~/components/Conversations/chatFilters';
 import ConversationsSection from '../ConversationsSection';
 import store from '~/store';
 
@@ -237,6 +247,60 @@ describe('ConversationsSection section order', () => {
       projects.compareDocumentPosition(pinned) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(pinned.compareDocumentPosition(chats) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+describe('ConversationsSection Chats and Archived tabs', () => {
+  afterEach(() => {
+    mockHubEnabled = false;
+    getDefaultStore().set(chatFilterStatusAtom, 'active');
+  });
+
+  it('opens on Chats, with Projects and Pinned above the list and no archive section', async () => {
+    const { getByRole, getByTestId, queryByTestId } = renderSection();
+    await settleRenders();
+
+    expect(getByRole('tab', { name: 'com_ui_chats' })).toHaveAttribute('aria-selected', 'true');
+    expect(getByRole('tab', { name: 'com_ui_archived' })).toHaveAttribute('aria-selected', 'false');
+    expect(getByTestId('projects-stub')).toBeInTheDocument();
+    expect(getByTestId('pinned-stub')).toBeInTheDocument();
+    expect(queryByTestId('hub-stub')).not.toBeInTheDocument();
+  });
+
+  it('switches to Archived: the archive section replaces Projects and Pinned above the list', async () => {
+    mockHubEnabled = true;
+    const { getByRole, getByTestId, queryByTestId } = renderSection();
+    await settleRenders();
+
+    fireEvent.mouseDown(getByRole('tab', { name: 'com_ui_archived' }));
+    await settleRenders();
+
+    expect(getDefaultStore().get(chatFilterStatusAtom)).toBe('archived');
+    expect(queryByTestId('projects-stub')).not.toBeInTheDocument();
+    expect(queryByTestId('pinned-stub')).not.toBeInTheDocument();
+    const hub = getByTestId('hub-stub');
+    expect(
+      hub.compareDocumentPosition(getByTestId('conversations-stub')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('passes the sidebar search to the archive section', async () => {
+    mockHubEnabled = true;
+    getDefaultStore().set(chatFilterStatusAtom, 'archived');
+    const { getByTestId } = renderSection('handoff');
+    await settleRenders();
+
+    expect(getByTestId('hub-stub')).toHaveAttribute('data-query', 'handoff');
+  });
+
+  it('shows no archive section in Archived while the context hub is off', async () => {
+    getDefaultStore().set(chatFilterStatusAtom, 'archived');
+    const { queryByTestId, getByTestId } = renderSection();
+    await settleRenders();
+
+    expect(queryByTestId('hub-stub')).not.toBeInTheDocument();
+    expect(getByTestId('conversations-stub')).toBeInTheDocument();
   });
 });
 

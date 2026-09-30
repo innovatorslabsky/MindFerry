@@ -124,6 +124,8 @@ interface ChatsHeaderProps {
 /** Collapsible header for the Chats section */
 const ChatsHeader: FC<ChatsHeaderProps> = memo(({ isExpanded, onToggle, trailing, highlight }) => {
   const localize = useLocalize();
+  /** In Archived the list sits under the Claude.ai & Claude Code section, so it says whose chats these are. */
+  const isArchivedView = useAtomValue(isArchivedChatViewAtom);
 
   return (
     <div
@@ -138,7 +140,9 @@ const ChatsHeader: FC<ChatsHeaderProps> = memo(({ isExpanded, onToggle, trailing
         type="button"
         aria-expanded={isExpanded}
       >
-        <span className="select-none truncate">{localize('com_ui_chats')}</span>
+        <span className="select-none truncate">
+          {localize(isArchivedView ? 'com_ui_mindferry_chats' : 'com_ui_chats')}
+        </span>
         <ChevronDown
           className={cn(
             'h-3 w-3 shrink-0 transition-transform duration-200',

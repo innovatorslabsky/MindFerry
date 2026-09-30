@@ -977,8 +977,13 @@ export function listHubThreads(params: {
   q?: string;
   limit?: number;
   surface?: t.THubSurface;
+  /** Leave out MindFerry chats that are still in the chat list. */
+  excludeLive?: boolean;
 }): Promise<t.TListHubThreadsResponse> {
   const query = new URLSearchParams();
+  if (params.excludeLive) {
+    query.set('excludeLive', 'true');
+  }
   if (params.surface) {
     query.set('surface', params.surface);
   }

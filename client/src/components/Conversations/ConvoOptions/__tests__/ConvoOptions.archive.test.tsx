@@ -6,6 +6,7 @@ import '@testing-library/jest-dom';
 import ConvoOptions from '../ConvoOptions';
 
 const mockArchiveMutate = jest.fn();
+const mockShowToast = jest.fn();
 const mockNavigate = jest.fn();
 const mockNewConversation = jest.fn();
 const mockRetainView = jest.fn();
@@ -56,7 +57,7 @@ jest.mock('@librechat/client', () => ({
   ),
   Spinner: () => <span role="status" />,
   buttonVariants: () => '',
-  useToastContext: () => ({ showToast: jest.fn() }),
+  useToastContext: () => ({ showToast: mockShowToast }),
   useMediaQuery: () => false,
 }));
 
@@ -135,6 +136,7 @@ describe('ConvoOptions archive action', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     mockArchiveMutate.mockReset();
+    mockShowToast.mockReset();
     mockNavigate.mockReset();
     mockNewConversation.mockReset();
     mockRetainView.mockReset();
@@ -193,6 +195,37 @@ describe('ConvoOptions archive action', () => {
     const [, callbacks] = mockArchiveMutate.mock.calls[0];
     act(() => callbacks.onSuccess());
     expect(mockNewConversation).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).toHaveBeenCalledWith('/c/new', { replace: true });
+  });
+
+  it('says the chat was archived and saved to MindFerry when the hub took it', () => {
+    renderOptions(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'com_ui_archive' }));
+    const [, callbacks] = mockArchiveMutate.mock.calls[0];
+    act(() => callbacks.onSuccess({ conversationId: 'conversation-1', hubSync: 'saved' }));
+
+    expect(mockAnnouncePolite).toHaveBeenCalledWith({
+      message: 'com_ui_convo_archived_hub',
+      isStatus: true,
+    });
+    expect(mockShowToast).not.toHaveBeenCalled();
+  });
+
+  it('warns that the MindFerry copy failed while still archiving the chat', () => {
+    renderOptions(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'com_ui_archive' }));
+    const [, callbacks] = mockArchiveMutate.mock.calls[0];
+    act(() => callbacks.onSuccess({ conversationId: 'conversation-1', hubSync: 'failed' }));
+
+    expect(mockAnnouncePolite).toHaveBeenCalledWith({
+      message: 'com_ui_convo_archived',
+      isStatus: true,
+    });
+    expect(mockShowToast).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'com_ui_convo_archived_hub_failed', severity: 'warning' }),
+    );
     expect(mockNavigate).toHaveBeenCalledWith('/c/new', { replace: true });
   });
 

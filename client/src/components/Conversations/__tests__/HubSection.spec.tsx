@@ -1,7 +1,9 @@
 import React from 'react';
 import '@testing-library/jest-dom/extend-expect';
+import { Provider, createStore } from 'jotai';
 import { render, fireEvent, waitFor, within } from 'test/layout-test-utils';
-import ArchivePanel from './ArchivePanel';
+import { chatFilterStatusAtom } from '../chatFilters';
+import HubSection from '../HubSection';
 
 const mockUseListHubThreadsQuery = jest.fn();
 const mockUseGetHubThreadQuery = jest.fn();
@@ -65,8 +67,23 @@ const thread = {
   messageCount: 4,
 };
 
-describe('ArchivePanel', () => {
+const mockToggleNav = jest.fn();
+let store: ReturnType<typeof createStore>;
+
+/** The section as Chat History hosts it in Archived: following the sidebar search, no field of its own. */
+function ArchivePanel({ query = '' }: { query?: string }) {
+  return (
+    <Provider store={store}>
+      <HubSection query={query} toggleNav={mockToggleNav} />
+    </Provider>
+  );
+}
+
+describe('HubSection', () => {
   beforeEach(() => {
+    store = createStore();
+    store.set(chatFilterStatusAtom, 'archived');
+    mockToggleNav.mockReset();
     window.history.pushState({}, '', '/c/new');
     mockUseListHubThreadsQuery.mockReturnValue({
       data: { threads: [thread] },
@@ -87,11 +104,38 @@ describe('ArchivePanel', () => {
       .mockResolvedValue({ conversationId: 'new-convo', messageCount: 4 });
   });
 
-  it('lists the archived conversations straight away, with no dialog to open first', () => {
-    const { getByText } = render(<ArchivePanel />);
+  it('lists the archived conversations from other clients, leaving out chats still in the list', () => {
+    const { getByText, getByRole } = render(<ArchivePanel />);
 
+    expect(getByRole('region', { name: 'Claude.ai & Claude Code' })).toBeInTheDocument();
     expect(getByText('A Claude Code session')).toBeInTheDocument();
     expect(getByText(/^Claude Code · mindferry/)).toBeInTheDocument();
+    expect(mockUseListHubThreadsQuery).toHaveBeenLastCalledWith(
+      expect.objectContaining({ excludeLive: true }),
+      expect.anything(),
+    );
+  });
+
+  it('follows the Chat History search instead of showing a field of its own', () => {
+    const { queryByLabelText } = render(<ArchivePanel query="checkout" />);
+
+    expect(queryByLabelText('Search')).not.toBeInTheDocument();
+    expect(mockUseListHubThreadsQuery).toHaveBeenLastCalledWith(
+      expect.objectContaining({ q: 'checkout' }),
+      expect.anything(),
+    );
+  });
+
+  it('collapses and expands under its heading', () => {
+    const { getByRole, queryByText } = render(<ArchivePanel />);
+    const heading = getByRole('button', { name: 'Claude.ai & Claude Code' });
+
+    expect(heading).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(heading);
+    expect(heading).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(heading);
+    expect(heading).toHaveAttribute('aria-expanded', 'true');
+    expect(queryByText('A Claude Code session')).toBeInTheDocument();
   });
 
   it('shows the loading and error states of the list', () => {
@@ -113,7 +157,7 @@ describe('ArchivePanel', () => {
     expect(failed.getByText("Couldn't load the MindFerry archive")).toBeInTheDocument();
   });
 
-  it('opens a conversation and continues it as a chat, leaving the panel in place', async () => {
+  it('continues a conversation as a chat and switches back to Chats, where that chat now is', async () => {
     const { getByText, getByRole } = render(<ArchivePanel />);
 
     fireEvent.click(getByText('A Claude Code session'));
@@ -121,7 +165,8 @@ describe('ArchivePanel', () => {
 
     await waitFor(() => expect(window.location.pathname).toBe('/c/new-convo'));
     expect(mockContinueHubThread).toHaveBeenCalledWith('mindferry:session-1', undefined);
-    expect(getByRole('button', { name: 'Back' })).toBeInTheDocument();
+    expect(store.get(chatFilterStatusAtom)).toBe('active');
+    expect(mockToggleNav).toHaveBeenCalledTimes(1);
   });
 
   describe('chats and notes tabs', () => {
@@ -149,12 +194,11 @@ describe('ArchivePanel', () => {
     });
 
     it('counts only the notes that match the search and source filter', () => {
-      const { getByRole, getByLabelText } = render(<ArchivePanel />);
+      const searched = render(<ArchivePanel query="plugin" />);
+      expect(searched.getByRole('tab', { name: 'Notes (1)' })).toBeInTheDocument();
+      searched.unmount();
 
-      fireEvent.change(getByLabelText('Search'), { target: { value: 'plugin' } });
-      expect(getByRole('tab', { name: 'Notes (1)' })).toBeInTheDocument();
-
-      fireEvent.change(getByLabelText('Search'), { target: { value: '' } });
+      const { getByRole } = render(<ArchivePanel />);
       fireEvent.click(
         within(getByRole('group', { name: 'Filter by source' })).getByRole('button', {
           name: 'Chat',
@@ -198,6 +242,7 @@ describe('ArchivePanel', () => {
 
       await waitFor(() => expect(window.location.pathname).toBe('/c/note-convo'));
       expect(mockContinueHubNote).toHaveBeenCalledWith('note-new', undefined);
+      expect(store.get(chatFilterStatusAtom)).toBe('active');
       expect(mockContinueHubThread).not.toHaveBeenCalled();
     });
 

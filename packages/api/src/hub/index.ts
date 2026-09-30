@@ -13,6 +13,8 @@ export * from './importJob';
 export * from './importRoute';
 export * from './archiveRoute';
 export * from './continueRoute';
+export * from './sync';
+export * from './combinedImport';
 export * from './browseRoute';
 export * from './oauth/code';
 export * from './oauth/pkce';

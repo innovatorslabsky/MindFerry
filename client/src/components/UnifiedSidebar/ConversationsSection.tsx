@@ -6,19 +6,22 @@ import type { InfiniteQueryObserverResult } from '@tanstack/react-query';
 import type { ConversationListResponse } from 'librechat-data-provider';
 import type { List } from 'react-virtualized';
 import {
-  chatFilterTagsAtom,
-  chatSortAtom,
-  isArchivedChatViewAtom,
-} from '~/components/Conversations/chatFilters';
-import {
+  useGetStartupConfig,
   useConversationsInfiniteQuery,
   usePinnedConversationsQuery,
   useTitleGeneration,
 } from '~/data-provider';
+import {
+  chatFilterTagsAtom,
+  chatSortAtom,
+  isArchivedChatViewAtom,
+} from '~/components/Conversations/chatFilters';
 import { useLocalize, useAuthContext, useLocalStorage, useNavScrolling } from '~/hooks';
 import ProjectsSection from '~/components/Conversations/ProjectsSection';
 import ChatFilterMenu from '~/components/Conversations/ChatFilterMenu';
 import PinnedSection from '~/components/Conversations/PinnedSection';
+import StatusTabs from '~/components/Conversations/StatusTabs';
+import HubSection from '~/components/Conversations/HubSection';
 import useSidebarToggle from '~/hooks/Nav/useSidebarToggle';
 import { Conversations } from '~/components/Conversations';
 import { collectPinnedConversations } from '~/utils';
@@ -40,6 +43,8 @@ const ConversationsSection = memo(() => {
   const sort = useAtomValue(chatSortAtom);
   const isArchivedView = useAtomValue(isArchivedChatViewAtom);
   const search = useRecoilValue(store.search);
+  const { data: startupConfig } = useGetStartupConfig();
+  const hubEnabled = startupConfig?.contextHubEnabled === true;
 
   const {
     data,
@@ -178,6 +183,9 @@ const ConversationsSection = memo(() => {
           <SearchBar isSmallScreen={isSmallScreen} />
         </div>
       )}
+      <div className="px-3 pb-1 pt-2">
+        <StatusTabs />
+      </div>
       <div
         ref={setScrollViewport}
         className="scrollbar-gutter-stable min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
@@ -185,10 +193,13 @@ const ConversationsSection = memo(() => {
         {/* `min-h-full` keeps the sections filling a tall sidebar, so the chats
             list still claims the space below them when there is little to show. */}
         <div ref={setScrollContent} className="flex min-h-full flex-col">
-          {!search.query && (
+          {!search.query && !isArchivedView && (
             <ProjectsSection toggleNav={toggleNav} isAuthenticated={isAuthenticated} />
           )}
-          {!search.query && (
+          {isArchivedView && hubEnabled && (
+            <HubSection query={search.debouncedQuery ?? ''} toggleNav={toggleNav} />
+          )}
+          {!search.query && !isArchivedView && (
             <PinnedSection
               conversations={pinnedConversations}
               toggleNav={toggleNav}

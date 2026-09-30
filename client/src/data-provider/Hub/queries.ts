@@ -9,12 +9,18 @@ import store from '~/store';
  *  MindFerry's own "browse the archive" page, distinct from the MCP tools an
  *  external client uses for the same data. */
 export const useListHubThreadsQuery = (
-  params: { q?: string; limit?: number; surface?: t.THubSurface } = {},
+  params: { q?: string; limit?: number; surface?: t.THubSurface; excludeLive?: boolean } = {},
   config?: UseQueryOptions<t.TListHubThreadsResponse>,
 ): QueryObserverResult<t.TListHubThreadsResponse> => {
   const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
   return useQuery<t.TListHubThreadsResponse>(
-    [QueryKeys.hubThreads, params.q ?? '', params.limit ?? null, params.surface ?? ''],
+    [
+      QueryKeys.hubThreads,
+      params.q ?? '',
+      params.limit ?? null,
+      params.surface ?? '',
+      params.excludeLive === true,
+    ],
     () => dataService.listHubThreads(params),
     {
       refetchOnWindowFocus: false,

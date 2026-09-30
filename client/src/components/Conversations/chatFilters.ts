@@ -69,13 +69,11 @@ export const chatSortAtom = atom(
 /** Read by conversation rows to offer restoring instead of archiving. */
 export const isArchivedChatViewAtom = atom((get) => get(chatFilterStatusAtom) === 'archived');
 
-/** Drives the trigger's badge: how many choices differ from the default list. */
+/** Drives the trigger's badge: how many choices differ from the default list. Chats or
+ *  Archived is left out — the tabs above the list already show which one is open. */
 export const chatFilterCountAtom = atom((get) => {
   const sort = get(chatSortAtom);
   let count = get(chatFilterTagsAtom).length;
-  if (get(chatFilterStatusAtom) !== 'active') {
-    count += 1;
-  }
   if (sort.field !== DEFAULT_CHAT_SORT.field || sort.direction !== DEFAULT_CHAT_SORT.direction) {
     count += 1;
   }

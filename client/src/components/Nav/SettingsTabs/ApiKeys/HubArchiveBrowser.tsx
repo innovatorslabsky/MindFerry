@@ -134,18 +134,31 @@ function continueTargetOf(
  * Archive panel in the sidebar; `onContinued` lets the host tidy up (close
  * itself) once the new chat has been made and opened.
  */
-export default function HubArchiveBrowser({ onContinued }: { onContinued?: () => void }) {
+type HubArchiveBrowserProps = {
+  onContinued?: () => void;
+  /** A search term the host already owns; given, the browser shows no search field of its own. */
+  query?: string;
+  /** Leave out MindFerry chats that are still in the chat list, for a host that lists those itself. */
+  excludeLive?: boolean;
+};
+
+export default function HubArchiveBrowser({
+  onContinued,
+  query: hostQuery,
+  excludeLive = false,
+}: HubArchiveBrowserProps) {
   const localize = useLocalize();
   const navigate = useNavigate();
   const conversation = useRecoilValue(store.conversationByIndex(0));
   const continueTarget = continueTargetOf(conversation);
-  const [query, setQuery] = useState('');
+  const [ownQuery, setOwnQuery] = useState('');
+  const query = hostQuery ?? ownQuery;
   const [surface, setSurface] = useState<THubSurface | undefined>(undefined);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [tab, setTab] = useState<ArchiveTab>('chats');
 
   const threadsQuery = useListHubThreadsQuery(
-    { q: query || undefined, limit: 50, surface },
+    { q: query || undefined, limit: 50, surface, excludeLive: excludeLive || undefined },
     { keepPreviousData: true },
   );
   const notesQuery = useListHubNotesQuery();
@@ -173,19 +186,21 @@ export default function HubArchiveBrowser({ onContinued }: { onContinued?: () =>
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="relative">
-        <Search
-          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary"
-          aria-hidden="true"
-        />
-        <Input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={localize('com_ui_context_hub_browse_search_placeholder')}
-          className="pl-9"
-          aria-label={localize('com_ui_search')}
-        />
-      </div>
+      {hostQuery === undefined && (
+        <div className="relative">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary"
+            aria-hidden="true"
+          />
+          <Input
+            value={query}
+            onChange={(event) => setOwnQuery(event.target.value)}
+            placeholder={localize('com_ui_context_hub_browse_search_placeholder')}
+            className="pl-9"
+            aria-label={localize('com_ui_search')}
+          />
+        </div>
+      )}
       <div
         role="group"
         aria-label={localize('com_ui_context_hub_browse_filter_label')}

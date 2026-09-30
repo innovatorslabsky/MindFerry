@@ -143,6 +143,10 @@ export const useArchiveConvoMutation = (
         if (_data.chatProjectId) {
           queryClient.invalidateQueries([QueryKeys.project, _data.chatProjectId]);
         }
+        /** Archiving also saved the chat into the MindFerry archive. */
+        if (_data.hubSync === 'saved') {
+          queryClient.invalidateQueries([QueryKeys.hubThreads]);
+        }
 
         onSuccess?.(_data, vars, context);
       },
@@ -995,21 +999,6 @@ export const useContinueHubNoteMutation = (
   );
 };
 
-/**
- * Uploads an exported conversation file (ChatGPT, Claude.ai, or Gemini/Google
- * Takeout) so the server can archive it into the context hub. The provider is
- * auto-detected server-side from the file's shape — the caller only picks a file.
- */
-export const useImportHubExportMutation = (
-  options?: t.MutationOptions<t.TImportHubExportResponse, FormData>,
-): UseMutationResult<t.TImportHubExportResponse, unknown, FormData, unknown> => {
-  return useMutation(
-    [MutationKeys.importHubExport],
-    (formData: FormData) => dataService.importHubExport(formData),
-    options,
-  );
-};
-
 export type SubmitHubOAuthConsentOptions = t.MutationOptions<
   t.THubOAuthConsentResponse,
   t.THubOAuthConsentRequest
@@ -1092,6 +1081,10 @@ export const useUploadConversationsMutation = (
       queryClient.invalidateQueries([QueryKeys.archivedConversations]);
       /** An imported chat can carry `pinned: true`. */
       queryClient.invalidateQueries([QueryKeys.pinnedConversations]);
+      /** The same upload can also land in the MindFerry archive. */
+      if (data.archive?.status === 'imported') {
+        queryClient.invalidateQueries([QueryKeys.hubThreads]);
+      }
       if (onSuccess) {
         onSuccess(data, variables, context);
       }

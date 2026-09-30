@@ -1,13 +1,10 @@
 import { rateLimit } from 'express-rate-limit';
 import { logger } from '@librechat/data-schemas';
-import type { HubMethods } from '@librechat/data-schemas';
 import type { RequestHandler, Response } from 'express';
-import type { LibreChatArchiveMessage, LibreChatArchiveConversation } from './adapters/librechat';
 import type { ServerRequest } from '../types/http';
-import { convertLibreChatConversation } from './adapters/librechat';
-import { createConfiguredGitArchiveTarget } from './git/config';
-import { archiveThreadToTargets } from './archiveTargets';
+import type { ConversationHubDeps } from './sync';
 import { contextHubRateLimitKey } from './ratelimit';
+import { saveConversationToHub } from './sync';
 import { isContextHubEnabled } from './config';
 
 export const CONTEXT_HUB_ARCHIVE_RATE_WINDOW_MS = 60_000;
@@ -21,18 +18,7 @@ export const contextHubArchiveLimiter: RequestHandler = rateLimit({
   keyGenerator: (req) => contextHubRateLimitKey(req as ServerRequest),
 });
 
-export interface CreateContextHubArchiveHandlerDeps {
-  methods: Pick<HubMethods, 'upsertHubThread'>;
-  /** Loads the conversation, scoped to its owner; `null`/`undefined` means not found or not theirs. */
-  getConvo: (
-    userId: string,
-    conversationId: string,
-  ) => Promise<LibreChatArchiveConversation | null | undefined>;
-  getMessages: (params: {
-    conversationId: string;
-    user: string;
-  }) => Promise<LibreChatArchiveMessage[]>;
-}
+export type CreateContextHubArchiveHandlerDeps = ConversationHubDeps;
 
 /**
  * Builds the handler behind "Save to MindFerry": converts a
@@ -47,8 +33,6 @@ type ArchiveRequest = ServerRequest & { params: { conversationId?: string } };
 export function createContextHubArchiveHandler(
   deps: CreateContextHubArchiveHandlerDeps,
 ): (req: ArchiveRequest, res: Response) => Promise<void> {
-  const { methods, getConvo, getMessages } = deps;
-
   return async (req, res) => {
     if (!isContextHubEnabled(req.config)) {
       res.status(404).json({
@@ -82,8 +66,8 @@ export function createContextHubArchiveHandler(
     }
 
     try {
-      const conversation = await getConvo(userId, conversationId);
-      if (!conversation) {
+      const saved = await saveConversationToHub(deps, userId, conversationId, req.config);
+      if (!saved) {
         res.status(404).json({
           error: {
             message: 'Conversation not found',
@@ -94,18 +78,10 @@ export function createContextHubArchiveHandler(
         return;
       }
 
-      const messages = await getMessages({ conversationId, user: userId });
-      const thread = convertLibreChatConversation(conversation, messages);
-      const targets = {
-        methods,
-        git: createConfiguredGitArchiveTarget(req.config?.contextHub?.git),
-      };
-      await archiveThreadToTargets(targets, userId, thread);
-
       res.status(201).json({
         message: 'Conversation archived successfully',
-        threadId: thread.id,
-        messageCount: thread.messages.length,
+        threadId: saved.threadId,
+        messageCount: saved.messageCount,
       });
     } catch (error) {
       logger.error(

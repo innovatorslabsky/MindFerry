@@ -5,6 +5,7 @@ const MOCKS = '../__test-utils__/convos-route-mocks';
 jest.mock('~/server/services/Config/app', () => ({ getAppConfig: jest.fn() }));
 const {
   archiveAllHandler,
+  archiveHubSync,
   generationJobManager,
   moderateText,
   moderatedTexts,
@@ -1911,6 +1912,63 @@ describe('Convos Routes', () => {
   });
 
   describe('POST /archive', () => {
+    beforeEach(() => {
+      archiveHubSync.mockReset().mockResolvedValue('saved');
+    });
+
+    it('saves an archived chat to the MindFerry hub as the caller, and reports how that went', async () => {
+      saveConvo.mockResolvedValue({ conversationId: 'conv-hub', isArchived: true });
+
+      const response = await request(app)
+        .post('/api/convos/archive')
+        .send({ arg: { conversationId: 'conv-hub', isArchived: true } });
+
+      expect(archiveHubSync).toHaveBeenCalledTimes(1);
+      expect(archiveHubSync).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'test-user-123', conversationId: 'conv-hub' }),
+      );
+      expect(response.status).toBe(200);
+      expect(response.body.hubSync).toBe('saved');
+    });
+
+    it('still archives the chat when saving it to the hub fails', async () => {
+      archiveHubSync.mockResolvedValue('failed');
+      saveConvo.mockResolvedValue({ conversationId: 'conv-hub', isArchived: true });
+
+      const response = await request(app)
+        .post('/api/convos/archive')
+        .send({ arg: { conversationId: 'conv-hub', isArchived: true } });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        conversationId: 'conv-hub',
+        isArchived: true,
+        hubSync: 'failed',
+      });
+    });
+
+    it('leaves the hub copy alone when a chat is unarchived', async () => {
+      saveConvo.mockResolvedValue({ conversationId: 'conv-hub', isArchived: false });
+
+      const response = await request(app)
+        .post('/api/convos/archive')
+        .send({ arg: { conversationId: 'conv-hub', isArchived: false } });
+
+      expect(archiveHubSync).not.toHaveBeenCalled();
+      expect(response.body).not.toHaveProperty('hubSync');
+    });
+
+    it('does not touch the hub when the chat to archive does not exist', async () => {
+      saveConvo.mockResolvedValue(null);
+
+      const response = await request(app)
+        .post('/api/convos/archive')
+        .send({ arg: { conversationId: 'missing', isArchived: true } });
+
+      expect(response.status).toBe(404);
+      expect(archiveHubSync).not.toHaveBeenCalled();
+    });
+
     it('should archive a conversation successfully', async () => {
       const mockConversationId = 'conv-123';
       const mockArchivedConvo = {
@@ -1932,7 +1990,7 @@ describe('Convos Routes', () => {
         });
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual(mockArchivedConvo);
+      expect(response.body).toEqual({ ...mockArchivedConvo, hubSync: 'saved' });
       expect(saveConvo).toHaveBeenCalledWith(
         expect.objectContaining({ userId: 'test-user-123' }),
         {

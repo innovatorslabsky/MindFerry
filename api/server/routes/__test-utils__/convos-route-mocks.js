@@ -1,4 +1,5 @@
 const archiveAllHandler = jest.fn();
+const archiveHubSync = jest.fn();
 const generationJobManager = {
   getCleanupJob: jest.fn().mockResolvedValue(null),
   abortJob: jest.fn().mockResolvedValue({ success: true }),
@@ -58,6 +59,7 @@ function resetCheckpointRows(rows = []) {
 
 module.exports = {
   archiveAllHandler,
+  archiveHubSync,
   ownerPrefix,
   generationJobManager,
   subagentActivityHandlerInputs,
@@ -114,6 +116,11 @@ module.exports = {
     })),
     logAxiosError: jest.fn(),
     restoreTenantContextFromReq: jest.fn((req, res, next) => next()),
+    createArchiveHubSync: jest.fn(() => archiveHubSync),
+    /** The real handler, so the route's import contract is tested through it. */
+    createCombinedImportHandler: jest.requireActual(
+      '../../../../packages/api/src/hub/combinedImport',
+    ).createCombinedImportHandler,
     createArchiveAllHandler: jest.fn(({ archiveAllConvos }) => {
       archiveAllHandler.mockImplementation(async (req, res) => {
         const result = await archiveAllConvos(req.user.id);

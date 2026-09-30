@@ -112,6 +112,61 @@ describe('createHubListThreadsHandler', () => {
   });
 });
 
+describe('createHubListThreadsHandler with excludeLive', () => {
+  const threads = [
+    { id: 'mindferry:live-chat', provider: 'mindferry', title: 'Still in Chats' },
+    { id: 'mindferry:deleted-chat', provider: 'mindferry', title: 'Chat since deleted' },
+    { id: 'claude:c1', provider: 'claude', title: 'From Claude.ai' },
+    { id: 'mindferry:session-1', provider: 'mindferry', title: 'Claude Code session' },
+  ];
+  const listHubThreads = jest.fn().mockResolvedValue(threads);
+  const searchHubThreads = jest.fn().mockResolvedValue(threads);
+  const findLiveConversationIds = jest.fn(async (_userId: string, ids: string[]) =>
+    ids.filter((id) => id === 'live-chat'),
+  );
+  const handler = createHubListThreadsHandler({
+    methods: { listHubThreads, searchHubThreads },
+    findLiveConversationIds,
+  });
+
+  beforeEach(() => findLiveConversationIds.mockClear());
+
+  it("leaves out the archive copy of a chat that is still in the caller's chat list", async () => {
+    const res = fakeRes();
+
+    await handler(fakeReq({ query: { excludeLive: 'true' } }), res as never);
+
+    expect(findLiveConversationIds).toHaveBeenCalledWith('user-a', [
+      'live-chat',
+      'deleted-chat',
+      'session-1',
+    ]);
+    expect(res.json.mock.calls[0][0].threads.map((t: { title: string }) => t.title)).toEqual([
+      'Chat since deleted',
+      'From Claude.ai',
+      'Claude Code session',
+    ]);
+  });
+
+  it('applies to a search as well', async () => {
+    const res = fakeRes();
+
+    await handler(fakeReq({ query: { q: 'chat', excludeLive: 'true' } }), res as never);
+
+    expect(searchHubThreads).toHaveBeenCalled();
+    expect(res.json.mock.calls[0][0].threads).toHaveLength(3);
+  });
+
+  it('keeps every thread, and asks nothing, without excludeLive', async () => {
+    const res = fakeRes();
+
+    await handler(fakeReq(), res as never);
+
+    expect(findLiveConversationIds).not.toHaveBeenCalled();
+    expect(res.json.mock.calls[0][0].threads).toHaveLength(4);
+  });
+});
+
 describe('createHubGetThreadHandler', () => {
   const getHubThread = jest.fn();
   const handler = createHubGetThreadHandler({ methods: { getHubThread } });

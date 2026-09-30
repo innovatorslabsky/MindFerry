@@ -103,12 +103,28 @@ read tools in place.
 
 ## Browsing the archive from MindFerry itself
 
-With the context hub enabled, the sidebar has an **Archive** entry (the archive-box icon in the icon
-rail, under the bookmarks and above attachments) that opens the same browser as a panel, so the
-archive is one click away instead of behind Settings. The text below describes that browser; the
-Settings → API Keys **Browse** button still opens it in a dialog.
+Chat History has two tabs above the list, **Chats** and **Archived**. With the context hub enabled,
+archiving a chat (its ⋯ menu → Archive) also saves it into the archive as a MindFerry conversation,
+keyed by the chat's id, so Claude.ai and Claude Code can read it; archiving it again later updates
+that copy. Unarchiving puts the chat back in Chats and leaves the archive copy in place. If the
+save fails, the chat is still archived and a warning says so; archiving it again retries. "Archive
+all chats" in Settings does not save to the archive.
 
-Settings → API Keys → Agent API Keys → Manage has a **Browse** button (next to the importer) that
+**Archived** shows, first, a **Claude.ai & Claude Code** section with the archive's conversations
+and notes from other clients (the browser described below, following the Chat History search),
+and then **MindFerry chats**, the chats you archived here. A MindFerry chat's archive copy is left
+out of the first section while the chat still exists (`GET /api/hub/threads?excludeLive=true`), so
+nothing is listed twice. Continue in chat on an entry opens it as a new chat and switches back to
+Chats. The Settings → API Keys **Browse** button still opens the whole archive in a dialog.
+
+One **Import** in Settings → Data & Privacy takes an export for both destinations. With the hub
+enabled it offers **Chats and archive** (the default), **Chats only** or **Archive only**, sent as
+`target` with the upload to `POST /api/convos/import` (absent means chats only, as before). Each
+side reads its own copy of the file, and a format only one side reads goes there alone — a Gemini
+export reaches only the archive, a LibreChat one only the chats — with a message naming the side
+that could not take it. `POST /api/hub/import` remains for API clients.
+
+Settings → API Keys → Agent API Keys → Manage has a **Browse** button that
 opens the archive directly — searchable threads and their notes — for a person who wants to look
 without going through an AI client. It reads the same data `search_context`, `get_thread`, and
 `read_notes` serve over MCP, through ordinary session-authenticated routes

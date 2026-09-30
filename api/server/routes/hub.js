@@ -132,7 +132,18 @@ router.post(
  * Read-only browsing of the archive from MindFerry's own UI — for a person
  * who wants to look at what's in the hub without going through an AI client.
  */
-const listThreadsHandler = createHubListThreadsHandler({ methods: db });
+const listThreadsHandler = createHubListThreadsHandler({
+  methods: db,
+  findLiveConversationIds: async (userId, conversationIds) => {
+    const { conversations } = await db.getConvosQueried(
+      userId,
+      conversationIds.map((conversationId) => ({ conversationId })),
+      null,
+      conversationIds.length,
+    );
+    return conversations.map((conversation) => conversation.conversationId);
+  },
+});
 const getThreadHandler = createHubGetThreadHandler({ methods: db });
 const listNotesHandler = createHubListNotesHandler({ methods: db });
 

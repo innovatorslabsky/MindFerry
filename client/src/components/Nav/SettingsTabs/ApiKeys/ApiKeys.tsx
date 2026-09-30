@@ -13,7 +13,6 @@ import {
 import { useGetStartupConfig } from '~/data-provider';
 import ContextHubEndpoint from './ContextHubEndpoint';
 import BrowseHubDialog from './BrowseHubDialog';
-import ImportHubExport from './ImportHubExport';
 import CreateKeyDialog from './CreateKeyDialog';
 import { useLocalize } from '~/hooks';
 import Admin from './Admin';
@@ -48,7 +47,6 @@ export default function ApiKeys() {
           {contextHubEnabled && (
             <>
               <ContextHubEndpoint />
-              <ImportHubExport />
               <div className="flex justify-end">
                 <BrowseHubDialog />
               </div>

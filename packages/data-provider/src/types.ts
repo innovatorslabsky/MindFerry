@@ -462,7 +462,10 @@ export type TArchiveConversationRequest = {
   isArchived: boolean;
 };
 
-export type TArchiveConversationResponse = TConversation;
+/** How saving an archived chat to the MindFerry archive went; absent on unarchive. */
+export type TArchiveHubSync = 'saved' | 'disabled' | 'failed';
+
+export type TArchiveConversationResponse = TConversation & { hubSync?: TArchiveHubSync };
 
 export type TArchiveAllConversationsResponse = {
   archivedCount: number;
@@ -929,11 +932,24 @@ export type TRequestPasswordResetResponse = {
 /**
  * Represents the response from the import endpoint.
  */
+/** Where an import goes: the chat list, the MindFerry archive, or both. */
+export type TImportTarget = 'chats' | 'archive' | 'both';
+
+/** How one destination of an import went; `threadCount` is what the archive stored. */
+export type TImportSideResult = {
+  status: 'imported' | 'unsupported' | 'failed';
+  threadCount?: number;
+};
+
 export type TImportResponse = {
   /**
    * The message associated with the response.
    */
   message: string;
+  /** Present when the import was sent to the chat list. */
+  chats?: TImportSideResult;
+  /** Present when the import was sent to the MindFerry archive. */
+  archive?: TImportSideResult;
 };
 
 /** Prompts */

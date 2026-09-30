@@ -22,8 +22,9 @@ import {
   Pin,
   Trash,
 } from 'lucide-react';
-import type { TMessage } from 'librechat-data-provider';
+import type { TMessage, TArchiveHubSync } from 'librechat-data-provider';
 import type { MouseEvent } from 'react';
+import type { TranslationKeys } from '~/hooks';
 import {
   useDuplicateConversationMutation,
   useAssignConversationToProjectMutation,
@@ -39,6 +40,17 @@ import ProjectButton from './ProjectButton';
 import DeleteButton from './DeleteButton';
 import ShareButton from './ShareButton';
 import { cn } from '~/utils';
+/** What to announce once a chat is archived or restored; archiving also says whether it reached the MindFerry archive. */
+function archiveAnnouncementKey(
+  wasArchived: boolean,
+  hubSync: TArchiveHubSync | undefined,
+): TranslationKeys {
+  if (wasArchived) {
+    return 'com_ui_convo_unarchived';
+  }
+  return hubSync === 'saved' ? 'com_ui_convo_archived_hub' : 'com_ui_convo_archived';
+}
+
 /** The overflow menu and the shift-held quick action show the same archive control in two
  *  sizes, and must never disagree about which direction it moves the conversation. */
 function renderArchiveIcon(isLoading: boolean, isArchived: boolean, className: string) {
@@ -230,7 +242,7 @@ function ConvoOptions({
       archiveConvoMutation.mutate(
         { conversationId: convoId, isArchived: !isArchived },
         {
-          onSuccess: () => {
+          onSuccess: (data) => {
             /* The request outlives the row: by the time it resolves the user may have opened
                another chat, so the open conversation is identified at commit time rather than
                from the one this callback closed over. */
@@ -238,9 +250,16 @@ function ConvoOptions({
               prev?.conversationId === convoId ? { ...prev, isArchived: !isArchived } : prev,
             );
             announcePolite({
-              message: localize(isArchived ? 'com_ui_convo_unarchived' : 'com_ui_convo_archived'),
+              message: localize(archiveAnnouncementKey(isArchived, data?.hubSync)),
               isStatus: true,
             });
+            if (data?.hubSync === 'failed') {
+              showToast({
+                message: localize('com_ui_convo_archived_hub_failed'),
+                severity: NotificationSeverity.WARNING,
+                showIcon: true,
+              });
+            }
             const openConvoId = openConvoIdRef.current;
             if (!isArchived && (openConvoId === convoId || openConvoId === 'new')) {
               newConversation();

@@ -34,8 +34,10 @@ const {
   extractStoredMessageContent,
   GenerationJobManager,
   isStopConfirmed,
+  createArchiveHubSync,
+  createCombinedImportHandler,
 } = require('@librechat/api');
-const { logger } = require('@librechat/data-schemas');
+const { logger, CLIENT_MESSAGE_SELECT } = require('@librechat/data-schemas');
 const { getAppConfig } = require('~/server/services/Config/app');
 const { CacheKeys, EModelEndpoint } = require('librechat-data-provider');
 const {
@@ -65,6 +67,28 @@ const assistantClients = {
 
 const router = express.Router();
 const archiveAllHandler = createArchiveAllHandler({ archiveAllConvos: db.archiveAllConvos });
+/** One import for the chat list and the MindFerry archive; `target` in the form picks where. */
+const importHandler = createCombinedImportHandler({
+  methods: db,
+  importChats: (req, filepath) =>
+    importConversations({
+      filepath,
+      requestUserId: req.user.id,
+      userRole: req.user.role,
+      interfaceConfig: req.config?.interfaceConfig,
+      filters: req.config?.filters,
+      ...(req.config?.messageFilter?.pii == null
+        ? {}
+        : { legacyPii: req.config.messageFilter.pii }),
+    }),
+  isImportRefusal: (error) => isContentFilterError(error) || isConversationImportError(error),
+});
+/** Archiving a chat also saves it to the MindFerry hub, so other clients can read it. */
+const syncArchivedConvoToHub = createArchiveHubSync({
+  methods: db,
+  getConvo: db.getConvo,
+  getMessages: (params) => db.getMessages(params, CLIENT_MESSAGE_SELECT),
+});
 const subagentThreadViewHandler = createSubagentThreadViewHandler({
   getConvoOwnership: db.getConvoOwnership,
   getSubagentThreadForParent: db.getSubagentThreadForParent,
@@ -617,7 +641,7 @@ router.delete('/all', configMiddleware, async (req, res) => {
  * @param {boolean} req.body.arg.isArchived - Whether to archive (true) or unarchive (false).
  * @returns {object} 200 - The updated conversation object.
  */
-router.post('/archive', validateConvoAccess, async (req, res) => {
+router.post('/archive', validateConvoAccess, configMiddleware, async (req, res) => {
   const { conversationId, isArchived } = req.body?.arg ?? {};
 
   if (!conversationId) {
@@ -652,7 +676,15 @@ router.post('/archive', validateConvoAccess, async (req, res) => {
       return res.status(404).json({ error: 'Conversation not found' });
     }
 
-    res.status(200).json(dbResponse);
+    if (!isArchived) {
+      return res.status(200).json(dbResponse);
+    }
+    const hubSync = await syncArchivedConvoToHub({
+      userId: req.user.id,
+      conversationId,
+      config: req.config,
+    });
+    res.status(200).json({ ...dbResponse, hubSync });
   } catch (error) {
     logger.error('Error archiving conversation', error);
     res.status(500).send('Error archiving conversation');
@@ -772,9 +804,10 @@ function handleUpload(req, res, next) {
 }
 
 /**
- * Imports a conversation from a JSON file and saves it to the database.
+ * Imports a conversation export into the chat list, the MindFerry archive, or both.
  * @route POST /import
  * @param {Express.Multer.File} req.file - The JSON file to import.
+ * @param {'chats'|'archive'|'both'} [req.body.target] - Where it goes; `chats` when absent.
  * @returns {object} 201 - success response - application/json
  */
 router.post(
@@ -784,31 +817,7 @@ router.post(
   configMiddleware,
   handleUpload,
   restoreTenantContextFromReq,
-  async (req, res) => {
-    try {
-      /* TODO: optimize to return imported conversations and add manually */
-      await importConversations({
-        filepath: req.file.path,
-        requestUserId: req.user.id,
-        userRole: req.user.role,
-        interfaceConfig: req.config?.interfaceConfig,
-        filters: req.config?.filters,
-        ...(req.config?.messageFilter?.pii == null
-          ? {}
-          : { legacyPii: req.config.messageFilter.pii }),
-      });
-      res.status(201).json({ message: 'Conversation(s) imported successfully' });
-    } catch (error) {
-      if (isContentFilterError(error)) {
-        return res.status(error.statusCode).json(error.body);
-      }
-      if (isConversationImportError(error)) {
-        return res.status(error.statusCode).json(error.body);
-      }
-      logger.error('Error processing file', error);
-      res.status(500).send('Error processing file');
-    }
-  },
+  importHandler,
 );
 
 /**

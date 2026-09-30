@@ -3,7 +3,6 @@ import { MCPIcon, AttachmentIcon, OpenAIMinimalIcon } from '@librechat/client';
 import {
   Bot,
   Brain,
-  Archive,
   Bookmark,
   NotebookPen,
   ScrollText,
@@ -33,11 +32,9 @@ import BookmarkPanel from '~/components/SidePanel/Bookmarks/BookmarkPanel';
 import PanelSwitch from '~/components/SidePanel/Builder/PanelSwitch';
 import { SchedulePanel } from '~/components/SidePanel/Schedules';
 import Parameters from '~/components/SidePanel/Parameters/Panel';
-import { ArchivePanel } from '~/components/SidePanel/Archive';
 import { MemoryPanel } from '~/components/SidePanel/Memories';
 import FilesPanel from '~/components/SidePanel/Files/Panel';
 import { PromptsAccordion } from '~/components/Prompts';
-import { useGetStartupConfig } from '~/data-provider';
 import { SkillsAccordion } from '~/components/Skills';
 
 export default function useSideNavLinks({
@@ -97,8 +94,6 @@ export default function useSideNavLinks({
     permissionType: PermissionTypes.SCHEDULES,
     permission: Permissions.USE,
   });
-  const { data: startupConfig } = useGetStartupConfig();
-  const contextHubEnabled = startupConfig?.contextHubEnabled === true;
   const { availableMCPServers } = useMCPServerManager();
 
   const { agentsConfig } = useGetAgentsConfig({ endpointsConfig });
@@ -201,16 +196,6 @@ export default function useSideNavLinks({
       });
     }
 
-    if (contextHubEnabled) {
-      links.push({
-        title: 'com_ui_context_hub_archive_nav',
-        label: '',
-        icon: Archive,
-        id: 'hub-archive',
-        Component: ArchivePanel,
-      });
-    }
-
     links.push({
       title: 'com_sidepanel_attach_files',
       label: '',
@@ -270,7 +255,6 @@ export default function useSideNavLinks({
     hasAccessToMemories,
     hasAccessToReadMemories,
     hasAccessToSchedules,
-    contextHubEnabled,
     interfaceConfig.schedules,
     interfaceConfig.parameters,
     endpointType,

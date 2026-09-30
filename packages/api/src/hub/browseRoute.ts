@@ -64,13 +64,44 @@ function requireUserId(req: ServerRequest, res: Response): string | undefined {
 
 export interface CreateHubListThreadsHandlerDeps {
   methods: Pick<HubMethods, 'listHubThreads' | 'searchHubThreads'>;
+  /**
+   * Which of these conversation ids are still chats the user can open —
+   * supplied by the caller, whose conversation store this module does not
+   * own. Used by `excludeLive` to leave out the archive copy of a chat that
+   * is still in the chat list, so it is not shown twice.
+   */
+  findLiveConversationIds?: (userId: string, conversationIds: string[]) => Promise<string[]>;
 }
 
-/** `GET /api/hub/threads?q=&limit=&surface=` — a search term lists matches, its absence lists recent threads; `surface` narrows to one client. */
+const MINDFERRY_PREFIX = 'mindferry:';
+
+async function withoutLiveChats<T extends { id: string; provider: string }>(
+  threads: T[],
+  userId: string,
+  findLive: NonNullable<CreateHubListThreadsHandlerDeps['findLiveConversationIds']>,
+): Promise<T[]> {
+  const chatIds = threads
+    .filter((thread) => thread.provider === 'mindferry' && thread.id.startsWith(MINDFERRY_PREFIX))
+    .map((thread) => thread.id.slice(MINDFERRY_PREFIX.length));
+  if (chatIds.length === 0) {
+    return threads;
+  }
+  const live = new Set(await findLive(userId, chatIds));
+  return threads.filter(
+    (thread) =>
+      thread.provider !== 'mindferry' || !live.has(thread.id.slice(MINDFERRY_PREFIX.length)),
+  );
+}
+
+/**
+ * `GET /api/hub/threads?q=&limit=&surface=&excludeLive=` — a search term lists
+ * matches, its absence lists recent threads; `surface` narrows to one client;
+ * `excludeLive=true` drops MindFerry chats that are still in the chat list.
+ */
 export function createHubListThreadsHandler(
   deps: CreateHubListThreadsHandlerDeps,
 ): (req: ServerRequest, res: Response) => Promise<void> {
-  const { methods } = deps;
+  const { methods, findLiveConversationIds } = deps;
 
   return async (req, res) => {
     const userId = requireUserId(req, res);
@@ -79,12 +110,16 @@ export function createHubListThreadsHandler(
     }
 
     const limit = clampLimit(req.query.limit);
+    const excludeLive = req.query.excludeLive === 'true' && findLiveConversationIds != null;
     const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
     const surface = parseSurface(req.query.surface);
 
-    const threads = query
+    const found = query
       ? await methods.searchHubThreads(userId, { query, limit, surface })
       : await methods.listHubThreads(userId, limit, surface);
+    const threads = excludeLive
+      ? await withoutLiveChats(found, userId, findLiveConversationIds)
+      : found;
 
     res.status(200).json({ threads });
   };

@@ -125,12 +125,10 @@ describe('ApiKeys', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('shows the hub export importer once the operator enables the context hub', () => {
+  it('has no importer of its own: the one Import in Data & Privacy also fills the archive', () => {
     mockUseGetStartupConfig.mockReturnValue({ data: { contextHubEnabled: true } });
-    const { getByText } = openManageDialog();
-    expect(
-      getByText('Import a ChatGPT, Claude.ai, or Gemini export into MindFerry'),
-    ).toBeInTheDocument();
+    const { queryByRole } = openManageDialog();
+    expect(queryByRole('button', { name: 'Import' })).not.toBeInTheDocument();
   });
 
   it('hides the browse-archive button when the operator has not enabled the context hub', () => {
