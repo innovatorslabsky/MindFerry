@@ -49,6 +49,9 @@ export function createHubMemoryStore(options: HubMemoryStoreOptions = {}): HubSt
         if (allowed && !allowed.has(thread.provider)) {
           continue;
         }
+        if (params.surface && (thread.surface ?? 'chat') !== params.surface) {
+          continue;
+        }
         const haystack = haystacks.get(thread.id) ?? '';
         const at = haystack.toLowerCase().indexOf(needle);
         if (at < 0) {

@@ -193,6 +193,82 @@ describe('listHubThreads', () => {
   });
 });
 
+describe('thread surface', () => {
+  const archiveAcrossSurfaces = async () => {
+    await methods.upsertHubThread(
+      userA,
+      thread({ id: 'mindferry:code1', provider: 'mindferry', sourceId: 'code1', surface: 'code' }),
+    );
+    await methods.upsertHubThread(
+      userA,
+      thread({ id: 'mindferry:chat1', provider: 'mindferry', sourceId: 'chat1', surface: 'chat' }),
+    );
+    await methods.upsertHubThread(userA, thread({ id: 'claude:legacy', sourceId: 'legacy' }));
+  };
+
+  it('persists which client archived a thread and reads it back', async () => {
+    await methods.upsertHubThread(
+      userA,
+      thread({ id: 'mindferry:s1', provider: 'mindferry', sourceId: 's1', surface: 'code' }),
+    );
+
+    const stored = await methods.getHubThread(userA, 'mindferry:s1');
+
+    expect(stored?.surface).toBe('code');
+  });
+
+  it('leaves the surface unset for a thread archived without one', async () => {
+    await methods.upsertHubThread(userA, thread());
+
+    expect((await methods.getHubThread(userA, 'claude:c1'))?.surface).toBeUndefined();
+  });
+
+  it('keeps the stored surface when the thread is upserted again without one', async () => {
+    await methods.upsertHubThread(
+      userA,
+      thread({ id: 'mindferry:s2', provider: 'mindferry', sourceId: 's2', surface: 'code' }),
+    );
+    await methods.upsertHubThread(
+      userA,
+      thread({ id: 'mindferry:s2', provider: 'mindferry', sourceId: 's2', title: 'Renamed' }),
+    );
+
+    const stored = await methods.getHubThread(userA, 'mindferry:s2');
+
+    expect(stored?.title).toBe('Renamed');
+    expect(stored?.surface).toBe('code');
+  });
+
+  it('lists only threads from the requested surface', async () => {
+    await archiveAcrossSurfaces();
+
+    const results = await methods.listHubThreads(userA, 10, 'code');
+
+    expect(results.map((r) => r.id)).toEqual(['mindferry:code1']);
+    expect(results[0].surface).toBe('code');
+  });
+
+  it('counts a thread with no recorded surface as chat', async () => {
+    await archiveAcrossSurfaces();
+
+    const results = await methods.listHubThreads(userA, 10, 'chat');
+
+    expect(results.map((r) => r.id).sort()).toEqual(['claude:legacy', 'mindferry:chat1']);
+  });
+
+  it('narrows a text search to the requested surface', async () => {
+    await archiveAcrossSurfaces();
+
+    const results = await methods.searchHubThreads(userA, {
+      query: 'context',
+      surface: 'code',
+      limit: 10,
+    });
+
+    expect(results.map((r) => r.id)).toEqual(['mindferry:code1']);
+  });
+});
+
 describe('notes', () => {
   it('carries an appended note through to a later read', async () => {
     await methods.appendHubNote(userA, {

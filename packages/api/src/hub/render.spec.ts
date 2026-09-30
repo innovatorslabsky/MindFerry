@@ -26,6 +26,7 @@ describe('renderThreadMarkdown', () => {
 
     expect(markdown).toContain('id: "claude:abc"');
     expect(markdown).toContain('provider: claude');
+    expect(markdown).not.toContain('surface:');
     expect(markdown).toContain('createdAt: 2024-01-07T10:00:00.000Z');
     expect(markdown).toContain('messages: 1');
   });

@@ -16,9 +16,12 @@ of the manual steps in
 - **`Stop` hook** — fires after every assistant turn, but only ever writes to local disk: it
   appends Claude's last reply to a small buffer file keyed by session id. It never calls the hub,
   so it stays safe to run on every single turn.
-- **`SessionEnd` hook** — saves a note back to the hub when the session ends (once per session, not
-  once per turn), built from the user's own turns (read from Claude Code's transcript) plus
-  whatever the `Stop` hook buffered along the way. The buffer file is deleted once read.
+- **`SessionEnd` hook** — when the session ends (once per session, not once per turn) it does two
+  things. First it archives the **whole conversation as one thread** (`archive_thread`, tagged
+  `surface: code` so MindFerry's Browse shows it as coming from Claude Code, keyed by the session id
+  so resuming the session updates the same thread). Then it saves a short note anchored to that
+  thread, built from the user's own turns plus whatever the `Stop` hook buffered along the way; the
+  buffer file is deleted once read.
 
 The note-save itself lives only in `SessionEnd`, deliberately: `Stop` fires after every single
 response, and a hub call on every turn would either flood the hub with one note per turn or add
@@ -27,6 +30,16 @@ misconfigured hub degrades to "no extra context" / "nothing saved," logged to st
 failed session start, a stuck response, or a stuck session end.
 
 ### What actually gets saved
+
+**The thread** holds what you typed and what Claude said, verbatim and in order — every assistant
+text block between two of your messages is joined into one reply. Left out: thinking, tool calls and
+their results, subagent traffic, slash-command wrappers, images, and messages the harness (not you)
+generated. If a session is too large for the hub's limit (`contextHub.mcp.maxArchiveBytes`), long
+turns are cut and, if needed, the oldest turns are dropped, with a marker saying so. If the hub
+refuses the archive (an older build, or `allowArchive` off), the note below is still saved, just not
+anchored to a thread.
+
+**The note** is a short bridge for the next session:
 
 The last ~8 things you typed, verbatim (truncated), plus the last ~8 things Claude said in reply —
 not a generated summary. No hook budget allows for an extra model call, so a literal record is what

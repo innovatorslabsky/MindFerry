@@ -82,6 +82,7 @@ export function renderThreadMarkdown(
     '---',
     `id: ${yamlString(thread.id)}`,
     `provider: ${thread.provider}`,
+    ...(thread.surface ? [`surface: ${thread.surface}`] : []),
     `sourceId: ${yamlString(thread.sourceId)}`,
     `title: ${yamlString(thread.title)}`,
     `createdAt: ${thread.createdAt.toISOString()}`,

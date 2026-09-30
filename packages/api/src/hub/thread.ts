@@ -10,6 +10,11 @@ export const HUB_PROVIDERS = ['chatgpt', 'claude', 'gemini', 'perplexity', 'mind
 
 export type HubProvider = (typeof HUB_PROVIDERS)[number];
 
+/** Which client a conversation or note came from — claude.ai web, Claude Code, an external agent, or other. */
+export const HUB_SURFACES = ['chat', 'code', 'agent', 'other'] as const;
+
+export type HubSurface = (typeof HUB_SURFACES)[number];
+
 export type HubRole = 'user' | 'assistant' | 'system';
 
 /**
@@ -44,6 +49,8 @@ export interface HubThread {
   /** `${provider}:${sourceId}` — stable across re-imports of the same export. */
   id: string;
   provider: HubProvider;
+  /** Which client held the conversation; absent for imported exports, which read as `chat`. */
+  surface?: HubSurface;
   /** The provider's own conversation identifier. */
   sourceId: string;
   title: string;

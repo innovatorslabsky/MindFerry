@@ -80,6 +80,28 @@ describe('createHubMongoStore', () => {
     );
   });
 
+  it('stores the surface it was given and passes a surface filter to the search', async () => {
+    const methods = fakeMethods();
+    const store = createHubMongoStore({ methods, userId: 'user-a' });
+
+    await store.archiveThread({
+      title: 'A session',
+      sourceId: 'session-2',
+      surface: 'code',
+      messages: [{ role: 'user', text: 'hello' }],
+    });
+    await store.searchThreads({ query: 'x', surface: 'code', limit: 5, snippetLength: 40 });
+
+    expect(methods.upsertHubThread).toHaveBeenCalledWith(
+      'user-a',
+      expect.objectContaining({ id: 'mindferry:session-2', surface: 'code' }),
+    );
+    expect(methods.searchHubThreads).toHaveBeenCalledWith(
+      'user-a',
+      expect.objectContaining({ surface: 'code' }),
+    );
+  });
+
   it('keeps the stored creation time when a sourceId is archived again', async () => {
     const created = new Date('2026-01-01T00:00:00Z');
     const methods = fakeMethods({

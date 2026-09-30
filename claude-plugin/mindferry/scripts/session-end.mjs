@@ -10,6 +10,13 @@
  * still runs on Stop, but only to buffer turns locally (see
  * readAssistantBuffer below) — never to talk to the hub.
  *
+ * The whole conversation is also archived as one thread (`archive_thread`,
+ * keyed by the session id so a resumed session updates the same thread
+ * rather than adding another), tagged as coming from Claude Code, and the
+ * summary note is anchored to it. If that archive fails — the operator turned
+ * `allowArchive` off, or the hub is an older build — the note is still saved,
+ * unanchored, exactly as before.
+ *
  * User turns come from the raw transcript JSONL Claude Code writes at
  * `transcript_path`. That entry format is internal and undocumented —
  * Claude Code's own docs warn it "changes between versions, so scripts
@@ -23,10 +30,14 @@
 import { readFileSync, existsSync, unlinkSync } from 'node:fs';
 import { callHubTool } from './mcp-client.mjs';
 import { bufferPathFor } from './session-stop.mjs';
+import { readConversation, fitToLimits, conversationTitle } from './transcript.mjs';
 
 const MAX_TURNS = 8;
 const MAX_TURN_LENGTH = 300;
 const HUB_CALL_TIMEOUT_MS = 8000;
+const ARCHIVE_CALL_TIMEOUT_MS = 20000;
+/** Under the hub's default `contextHub.mcp.maxArchiveBytes` (6000000), with room for the omission marker. */
+const ARCHIVE_LIMITS = { maxBytes: 5_000_000, maxTurnChars: 150_000, maxTurns: 2000 };
 
 function readStdin() {
   return new Promise((resolve, reject) => {
@@ -147,6 +158,35 @@ async function withTimeout(promise, ms) {
   }
 }
 
+/** Archives the whole session as one thread; returns its id, or undefined
+ *  when there is nothing to archive or the hub refused it. */
+async function archiveSession({ hubUrl, apiKey, payload }) {
+  const sessionId = payload.session_id;
+  if (!sessionId) {
+    return undefined;
+  }
+  const { messages, aiTitle } = readConversation(payload.transcript_path);
+  if (messages.length === 0) {
+    return undefined;
+  }
+  const fitted = fitToLimits(messages, ARCHIVE_LIMITS);
+  try {
+    const result = await withTimeout(
+      callHubTool(hubUrl, apiKey, 'archive_thread', {
+        title: conversationTitle({ aiTitle, messages, cwd: payload.cwd }),
+        sourceId: sessionId,
+        surface: 'code',
+        messages: fitted.messages,
+      }),
+      ARCHIVE_CALL_TIMEOUT_MS,
+    );
+    return /Archived thread (\S+)/.exec(result)?.[1] ?? `mindferry:${sessionId}`;
+  } catch (error) {
+    console.error(`[mindferry] Could not archive the session: ${error.message}`);
+    return undefined;
+  }
+}
+
 async function main() {
   const hubUrl = process.env.CLAUDE_PLUGIN_OPTION_HUB_URL;
   const apiKey = process.env.CLAUDE_PLUGIN_OPTION_API_KEY;
@@ -168,6 +208,8 @@ async function main() {
     process.exit(0);
   }
 
+  const threadId = await archiveSession({ hubUrl, apiKey, payload });
+
   const sections = [];
   if (turns.length > 0) {
     sections.push(['User asked', turns]);
@@ -188,6 +230,7 @@ async function main() {
       callHubTool(hubUrl, apiKey, 'append_note', {
         title,
         text,
+        threadId,
         surface: 'code',
         sessionTag: payload.cwd,
       }),

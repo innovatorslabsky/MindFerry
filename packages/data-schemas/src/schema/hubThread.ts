@@ -27,6 +27,8 @@ export interface IHubThread extends Document {
   /** Canonical `${provider}:${sourceId}`, unique per user. */
   id: string;
   provider: string;
+  /** Which client the conversation came from; absent for imported exports. */
+  surface?: 'chat' | 'code' | 'agent' | 'other';
   sourceId: string;
   title: string;
   createdAt: Date;
@@ -71,6 +73,7 @@ const hubThreadSchema: Schema<IHubThread> = new Schema(
     },
     id: { type: String, required: true },
     provider: { type: String, required: true, index: true },
+    surface: { type: String, enum: ['chat', 'code', 'agent', 'other'] },
     sourceId: { type: String, required: true },
     title: { type: String, required: true },
     createdAt: { type: Date, required: true },

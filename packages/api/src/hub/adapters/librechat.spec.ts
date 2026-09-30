@@ -35,6 +35,7 @@ describe('convertLibreChatConversation', () => {
 
     expect(thread.id).toBe('mindferry:c1');
     expect(thread.provider).toBe('mindferry');
+    expect(thread.surface).toBe('chat');
     expect(thread.title).toBe('Designing the hub');
     expect(thread.messages).toHaveLength(2);
     expect(thread.messages[0].parentId).toBeNull();

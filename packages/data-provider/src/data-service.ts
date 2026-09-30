@@ -976,8 +976,12 @@ export function importHubExport(data: FormData): Promise<t.TImportHubExportRespo
 export function listHubThreads(params: {
   q?: string;
   limit?: number;
+  surface?: t.THubSurface;
 }): Promise<t.TListHubThreadsResponse> {
   const query = new URLSearchParams();
+  if (params.surface) {
+    query.set('surface', params.surface);
+  }
   if (params.q) {
     query.set('q', params.q);
   }

@@ -2,8 +2,10 @@ import { rateLimit } from 'express-rate-limit';
 import type { HubMethods } from '@librechat/data-schemas';
 import type { RequestHandler, Response } from 'express';
 import type { ServerRequest } from '../types/http';
+import type { HubSurface } from './thread';
 import { contextHubRateLimitKey } from './ratelimit';
 import { isContextHubEnabled } from './config';
+import { HUB_SURFACES } from './thread';
 
 /**
  * Read-only browsing of a user's own archive from MindFerry's own UI — the
@@ -35,6 +37,10 @@ function clampLimit(raw: unknown): number {
   return Math.min(parsed, MAX_LIST_LIMIT);
 }
 
+function parseSurface(raw: unknown): HubSurface | undefined {
+  return HUB_SURFACES.find((surface) => surface === raw);
+}
+
 function requireUserId(req: ServerRequest, res: Response): string | undefined {
   if (!isContextHubEnabled(req.config)) {
     res.status(404).json({
@@ -60,7 +66,7 @@ export interface CreateHubListThreadsHandlerDeps {
   methods: Pick<HubMethods, 'listHubThreads' | 'searchHubThreads'>;
 }
 
-/** `GET /api/hub/threads?q=&limit=` — a search term lists matches, its absence lists recent threads. */
+/** `GET /api/hub/threads?q=&limit=&surface=` — a search term lists matches, its absence lists recent threads; `surface` narrows to one client. */
 export function createHubListThreadsHandler(
   deps: CreateHubListThreadsHandlerDeps,
 ): (req: ServerRequest, res: Response) => Promise<void> {
@@ -74,10 +80,11 @@ export function createHubListThreadsHandler(
 
     const limit = clampLimit(req.query.limit);
     const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const surface = parseSurface(req.query.surface);
 
     const threads = query
-      ? await methods.searchHubThreads(userId, { query, limit })
-      : await methods.listHubThreads(userId, limit);
+      ? await methods.searchHubThreads(userId, { query, limit, surface })
+      : await methods.listHubThreads(userId, limit, surface);
 
     res.status(200).json({ threads });
   };

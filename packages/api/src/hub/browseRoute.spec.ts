@@ -57,7 +57,7 @@ describe('createHubListThreadsHandler', () => {
 
     await handler(req, res as unknown as import('express').Response);
 
-    expect(listHubThreads).toHaveBeenCalledWith('user-a', 50);
+    expect(listHubThreads).toHaveBeenCalledWith('user-a', 50, undefined);
     expect(searchHubThreads).not.toHaveBeenCalled();
   });
 
@@ -71,13 +71,44 @@ describe('createHubListThreadsHandler', () => {
     expect(listHubThreads).not.toHaveBeenCalled();
   });
 
+  it('narrows the list to one surface when asked', async () => {
+    const req = fakeReq({ query: { surface: 'code' } });
+    const res = fakeRes();
+
+    await handler(req, res as unknown as import('express').Response);
+
+    expect(listHubThreads).toHaveBeenCalledWith('user-a', 50, 'code');
+  });
+
+  it('narrows a search to one surface too', async () => {
+    const req = fakeReq({ query: { q: 'sync', surface: 'chat' } });
+    const res = fakeRes();
+
+    await handler(req, res as unknown as import('express').Response);
+
+    expect(searchHubThreads).toHaveBeenCalledWith('user-a', {
+      query: 'sync',
+      limit: 50,
+      surface: 'chat',
+    });
+  });
+
+  it('ignores a surface it does not know rather than filtering on it', async () => {
+    const req = fakeReq({ query: { surface: 'toaster' } });
+    const res = fakeRes();
+
+    await handler(req, res as unknown as import('express').Response);
+
+    expect(listHubThreads).toHaveBeenCalledWith('user-a', 50, undefined);
+  });
+
   it('clamps an out-of-range limit rather than passing it through', async () => {
     const req = fakeReq({ query: { limit: '99999' } });
     const res = fakeRes();
 
     await handler(req, res as unknown as import('express').Response);
 
-    expect(listHubThreads).toHaveBeenCalledWith('user-a', 100);
+    expect(listHubThreads).toHaveBeenCalledWith('user-a', 100, undefined);
   });
 });
 

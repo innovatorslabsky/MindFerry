@@ -285,13 +285,13 @@ function startFakeHub(onToolCall) {
       req.on('data', (chunk) => (raw += chunk));
       req.on('end', () => {
         const body = JSON.parse(raw);
-        onToolCall(body);
+        const override = onToolCall(body);
         res.writeHead(200, { 'Content-Type': 'text/event-stream' });
         res.end(
           `event: message\ndata: ${JSON.stringify({
             jsonrpc: '2.0',
             id: body.id,
-            result: { content: [{ type: 'text', text: 'Saved note test-1.' }] },
+            result: override ?? { content: [{ type: 'text', text: 'Saved note test-1.' }] },
           })}\n\n`,
         );
       });
@@ -301,3 +301,152 @@ function startFakeHub(onToolCall) {
     });
   });
 }
+
+const OK = (text) => ({ content: [{ type: 'text', text }] });
+
+async function runWithHub(
+  t,
+  { entries, sessionId = `test-${randomUUID()}`, cwd = '/tmp/shop', respond },
+) {
+  const dir = mkdtempSync(join(tmpdir(), 'mindferry-session-end-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const transcriptPath = makeTranscript(dir, entries);
+  const calls = [];
+  const server = await startFakeHub((body) => {
+    calls.push(body.params);
+    return respond?.(body.params);
+  });
+  t.after(() => server.close());
+  const result = await runScript({
+    stdin: JSON.stringify({ transcript_path: transcriptPath, cwd, session_id: sessionId }),
+    env: {
+      CLAUDE_PLUGIN_OPTION_HUB_URL: `http://127.0.0.1:${server.port}`,
+      CLAUDE_PLUGIN_OPTION_API_KEY: 'test-key',
+    },
+  });
+  return { ...result, calls, sessionId };
+}
+
+const conversation = [
+  { type: 'ai-title', aiTitle: 'Fixing the checkout' },
+  { type: 'user', origin: { kind: 'human' }, message: { content: 'why does checkout fail?' } },
+  { type: 'assistant', message: { content: [{ type: 'text', text: 'The cart total is stale.' }] } },
+  { type: 'user', origin: { kind: 'human' }, message: { content: 'fix it' } },
+  { type: 'assistant', message: { content: [{ type: 'text', text: 'Fixed and tested.' }] } },
+];
+
+test('archives the whole session as one Claude Code thread keyed by the session id', async (t) => {
+  const { code, calls, sessionId } = await runWithHub(t, {
+    entries: conversation,
+    respond: (params) =>
+      params.name === 'archive_thread'
+        ? OK(`Archived thread mindferry:s (4 messages).`)
+        : undefined,
+  });
+
+  assert.equal(code, 0);
+  const archive = calls.find((call) => call.name === 'archive_thread');
+  assert.ok(archive, 'expected an archive_thread call');
+  assert.equal(archive.arguments.sourceId, sessionId);
+  assert.equal(archive.arguments.surface, 'code');
+  assert.equal(archive.arguments.title, 'Fixing the checkout — shop');
+  assert.deepEqual(archive.arguments.messages, [
+    { role: 'user', text: 'why does checkout fail?' },
+    { role: 'assistant', text: 'The cart total is stale.' },
+    { role: 'user', text: 'fix it' },
+    { role: 'assistant', text: 'Fixed and tested.' },
+  ]);
+});
+
+test('anchors the summary note to the archived thread', async (t) => {
+  const { calls } = await runWithHub(t, {
+    entries: conversation,
+    respond: (params) =>
+      params.name === 'archive_thread'
+        ? OK('Archived thread mindferry:abc (4 messages).')
+        : undefined,
+  });
+
+  assert.deepEqual(
+    calls.map((call) => call.name),
+    ['archive_thread', 'append_note'],
+  );
+  assert.equal(calls[1].arguments.threadId, 'mindferry:abc');
+  assert.equal(calls[1].arguments.surface, 'code');
+});
+
+test('still saves the note, unanchored, when the hub refuses the archive', async (t) => {
+  const { code, stderr, calls } = await runWithHub(t, {
+    entries: conversation,
+    respond: (params) =>
+      params.name === 'archive_thread'
+        ? { isError: true, content: [{ type: 'text', text: 'over the limit' }] }
+        : undefined,
+  });
+
+  assert.equal(code, 0);
+  assert.match(stderr, /Could not archive the session: .*over the limit/);
+  const note = calls.find((call) => call.name === 'append_note');
+  assert.ok(note, 'expected the note to be saved anyway');
+  assert.equal(note.arguments.threadId, undefined);
+});
+
+test('does not archive without a session id, since it would create a new thread every time', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'mindferry-session-end-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const transcriptPath = makeTranscript(dir, conversation);
+  const calls = [];
+  const server = await startFakeHub((body) => {
+    calls.push(body.params.name);
+  });
+  t.after(() => server.close());
+
+  const { code } = await runScript({
+    stdin: JSON.stringify({ transcript_path: transcriptPath, cwd: '/tmp' }),
+    env: {
+      CLAUDE_PLUGIN_OPTION_HUB_URL: `http://127.0.0.1:${server.port}`,
+      CLAUDE_PLUGIN_OPTION_API_KEY: 'test-key',
+    },
+  });
+
+  assert.equal(code, 0);
+  assert.deepEqual(calls, ['append_note']);
+});
+
+test('sends the same sourceId when the same session ends again, so the thread is updated', async (t) => {
+  const sessionId = `test-${randomUUID()}`;
+  const first = await runWithHub(t, { entries: conversation, sessionId });
+  const second = await runWithHub(t, {
+    entries: [
+      ...conversation,
+      { type: 'user', origin: { kind: 'human' }, message: { content: 'one more thing' } },
+    ],
+    sessionId,
+  });
+
+  const ids = [first, second].map(
+    (run) => run.calls.find((call) => call.name === 'archive_thread').arguments.sourceId,
+  );
+  assert.deepEqual(ids, [sessionId, sessionId]);
+});
+
+test('archives a long session within the hub size limit, newest turns kept', async (t) => {
+  const big = 'y'.repeat(140_000);
+  const entries = [];
+  for (let i = 0; i < 60; i++) {
+    entries.push({ type: 'user', origin: { kind: 'human' }, message: { content: `q${i} ${big}` } });
+    entries.push({
+      type: 'assistant',
+      message: { content: [{ type: 'text', text: `a${i} ${big}` }] },
+    });
+  }
+
+  const { code, calls } = await runWithHub(t, { entries });
+
+  assert.equal(code, 0);
+  const { messages } = calls.find((call) => call.name === 'archive_thread').arguments;
+  const bytes = messages.reduce((total, message) => total + Buffer.byteLength(message.text), 0);
+  assert.ok(bytes <= 5_100_000, `archive payload too large: ${bytes}`);
+  assert.match(messages[0].text, /earlier conversation not archived/);
+  assert.match(messages.at(-1).text, /^a59 /);
+});

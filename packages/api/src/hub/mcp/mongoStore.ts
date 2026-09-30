@@ -115,6 +115,7 @@ function toThreadRecord(thread: HubThread): HubThreadRecord {
   return {
     id: thread.id,
     provider: thread.provider,
+    surface: thread.surface,
     sourceId: thread.sourceId,
     title: thread.title,
     createdAt: thread.createdAt,
@@ -127,6 +128,7 @@ function toThread(record: HubThreadRecord): HubThread {
   return {
     id: record.id,
     provider: record.provider as HubProvider,
+    surface: record.surface,
     sourceId: record.sourceId,
     title: record.title,
     createdAt: record.createdAt,
@@ -154,6 +156,7 @@ export function createHubMongoStore(options: HubMongoStoreOptions): HubStore {
       const results = await methods.searchHubThreads(userId, {
         query: params.query,
         providers: params.providers,
+        surface: params.surface,
         limit: fetchLimit,
       });
 
@@ -165,6 +168,7 @@ export function createHubMongoStore(options: HubMongoStoreOptions): HubStore {
         const summary: HubThreadSummary = {
           id: result.id,
           provider: result.provider as HubProvider,
+          surface: result.surface,
           title: result.title,
           createdAt: result.createdAt,
           updatedAt: result.updatedAt,

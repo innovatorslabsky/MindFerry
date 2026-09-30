@@ -449,6 +449,82 @@ describe('createHubMcpServer', () => {
       await close();
     });
 
+    it('records which client archived a thread and shows it in search results', async () => {
+      const { client, close } = await connect();
+
+      await call(client, 'archive_thread', {
+        title: 'A Claude Code session',
+        sourceId: 'code-1',
+        surface: 'code',
+        messages: [{ role: 'user', text: 'refactor the flamingo module' }],
+      });
+
+      const found = textOf(await call(client, 'search_context', { query: 'flamingo' }));
+
+      expect(found).toContain('mindferry:code-1');
+      expect(found).toContain('surface: code');
+      await close();
+    });
+
+    it('filters search_context by surface, counting a thread with no surface as chat', async () => {
+      const { client, close } = await connect();
+      await call(client, 'archive_thread', {
+        title: 'Code one',
+        sourceId: 'c1',
+        surface: 'code',
+        messages: [{ role: 'user', text: 'pelican in the terminal' }],
+      });
+      await call(client, 'archive_thread', {
+        title: 'Chat one',
+        sourceId: 'c2',
+        surface: 'chat',
+        messages: [{ role: 'user', text: 'pelican in the browser' }],
+      });
+      await call(client, 'archive_thread', {
+        title: 'Legacy one',
+        sourceId: 'c3',
+        messages: [{ role: 'user', text: 'pelican from an old client' }],
+      });
+
+      const code = textOf(
+        await call(client, 'search_context', { query: 'pelican', surface: 'code' }),
+      );
+      const chat = textOf(
+        await call(client, 'search_context', { query: 'pelican', surface: 'chat' }),
+      );
+
+      expect(code).toContain('mindferry:c1');
+      expect(code).not.toContain('mindferry:c2');
+      expect(code).not.toContain('mindferry:c3');
+      expect(chat).toContain('mindferry:c2');
+      expect(chat).toContain('mindferry:c3');
+      expect(chat).not.toContain('mindferry:c1');
+      await close();
+    });
+
+    it('keeps the recorded surface when the same sourceId is archived again without one', async () => {
+      const { client, close } = await connect();
+
+      await call(client, 'archive_thread', {
+        title: 'Session',
+        sourceId: 'keep-surface',
+        surface: 'code',
+        messages: [{ role: 'user', text: 'first ibis turn' }],
+      });
+      await call(client, 'archive_thread', {
+        title: 'Session',
+        sourceId: 'keep-surface',
+        messages: [
+          { role: 'user', text: 'first ibis turn' },
+          { role: 'assistant', text: 'second ibis turn' },
+        ],
+      });
+
+      const found = textOf(await call(client, 'search_context', { query: 'ibis' }));
+      expect(found).toContain('surface: code');
+      await close();
+    });
+
     it('creates a new thread each time when no sourceId is given', async () => {
       const { client, close } = await connect();
 

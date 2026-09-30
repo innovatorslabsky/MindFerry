@@ -156,3 +156,19 @@ test('throws a clear error when the response has no text content', async (t) => 
 
   await assert.rejects(() => callHubTool(server.url, 'k', 'read_notes', {}), /no text content/);
 });
+
+test('throws with the tool text when the hub reports a tool-level error', async (t) => {
+  const server = await startFakeHub({
+    body: {
+      jsonrpc: '2.0',
+      id: 1,
+      result: { isError: true, content: [{ type: 'text', text: 'over the 6000000-byte limit' }] },
+    },
+  });
+  t.after(() => server.close());
+
+  await assert.rejects(
+    () => callHubTool(server.url, 'test-key', 'archive_thread', {}),
+    /"archive_thread" reported an error: over the 6000000-byte limit/,
+  );
+});

@@ -10,8 +10,14 @@ import {
   OGDialogTrigger,
   OGDialogContent,
 } from '@librechat/client';
-import type { THubThreadSummary, THubNote, TListHubThreadsResponse } from 'librechat-data-provider';
+import type {
+  THubNote,
+  THubSurface,
+  THubThreadSummary,
+  TListHubThreadsResponse,
+} from 'librechat-data-provider';
 import type { UseQueryResult } from '@tanstack/react-query';
+import { HUB_SURFACES, SURFACE_LABEL_KEYS, matchesSurface, surfaceOf } from './surface';
 import { useListHubThreadsQuery, useListHubNotesQuery } from '~/data-provider';
 import HubThreadDetail from './HubThreadDetail';
 import { useLocalize } from '~/hooks';
@@ -27,7 +33,8 @@ function ThreadRow({ thread, onSelect }: { thread: THubThreadSummary; onSelect: 
       >
         <span className="text-sm font-medium text-text-primary">{thread.title}</span>
         <span className="text-xs text-text-secondary">
-          {thread.provider} · {new Date(thread.updatedAt).toLocaleString()} ·{' '}
+          {localize(SURFACE_LABEL_KEYS[surfaceOf(thread.surface)])} · {thread.provider} ·{' '}
+          {new Date(thread.updatedAt).toLocaleString()} ·{' '}
           {localize('com_ui_context_hub_browse_message_count', { 0: thread.messageCount })}
         </span>
         {thread.snippet != null && (
@@ -86,12 +93,13 @@ function ThreadsSection({ query, threadsQuery, onSelect }: ThreadsSectionProps) 
 }
 
 function NoteRow({ note }: { note: THubNote }) {
+  const localize = useLocalize();
   return (
     <li className="px-4 py-3">
       <p className="text-sm font-medium text-text-primary">{note.title}</p>
       <p className="text-xs text-text-secondary">
         {new Date(note.createdAt).toLocaleString()}
-        {note.surface != null ? ` · ${note.surface}` : ''}
+        {note.surface != null ? ` · ${localize(SURFACE_LABEL_KEYS[note.surface])}` : ''}
         {note.sessionTag != null ? ` · ${note.sessionTag}` : ''}
       </p>
       <p className="mt-1 whitespace-pre-wrap text-sm text-text-primary">{note.text}</p>
@@ -116,20 +124,24 @@ export default function BrowseHubDialog() {
   const localize = useLocalize();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [surface, setSurface] = useState<THubSurface | undefined>(undefined);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
 
   const threadsQuery = useListHubThreadsQuery(
-    { q: query || undefined, limit: 50 },
+    { q: query || undefined, limit: 50, surface },
     { enabled: open },
   );
   const notesQuery = useListHubNotesQuery(undefined, { enabled: open });
 
-  const notes = (notesQuery.data?.notes ?? []).filter((note) => matchesQuery(note, query));
+  const notes = (notesQuery.data?.notes ?? [])
+    .filter((note) => matchesQuery(note, query) && matchesSurface(note.surface, surface))
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
     if (!next) {
       setQuery('');
+      setSurface(undefined);
       setSelectedThreadId(null);
     }
   };
@@ -165,6 +177,33 @@ export default function BrowseHubDialog() {
                 className="pl-9"
                 aria-label={localize('com_ui_search')}
               />
+            </div>
+            <div
+              role="group"
+              aria-label={localize('com_ui_context_hub_browse_filter_label')}
+              className="flex flex-wrap gap-2"
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                aria-pressed={surface === undefined}
+                className={surface === undefined ? 'bg-surface-active' : undefined}
+                onClick={() => setSurface(undefined)}
+              >
+                {localize('com_ui_context_hub_browse_filter_all')}
+              </Button>
+              {HUB_SURFACES.map((option) => (
+                <Button
+                  key={option}
+                  variant="outline"
+                  size="sm"
+                  aria-pressed={surface === option}
+                  className={surface === option ? 'bg-surface-active' : undefined}
+                  onClick={() => setSurface(option)}
+                >
+                  {localize(SURFACE_LABEL_KEYS[option])}
+                </Button>
+              ))}
             </div>
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
               {notes.length > 0 && (

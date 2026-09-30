@@ -52,6 +52,9 @@ export async function callHubTool(baseUrl, apiKey, name, args) {
   if (!first || first.type !== 'text') {
     throw new Error(`MindFerry hub tool "${name}" returned no text content`);
   }
+  if (message.result?.isError) {
+    throw new Error(`MindFerry hub tool "${name}" reported an error: ${first.text}`);
+  }
   return first.text;
 }
 

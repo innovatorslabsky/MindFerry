@@ -31,6 +31,8 @@ export interface HubThreadRecord {
   /** Canonical `${provider}:${sourceId}`. */
   id: string;
   provider: string;
+  /** Which client the conversation came from; absent for imported exports, which read as `chat`. */
+  surface?: HubNoteSurface;
   sourceId: string;
   title: string;
   createdAt: Date;
@@ -41,12 +43,15 @@ export interface HubThreadRecord {
 export interface HubThreadSearchQuery {
   query: string;
   providers?: readonly string[];
+  /** Only threads from this client; `chat` also matches threads with no recorded surface. */
+  surface?: HubNoteSurface;
   limit: number;
 }
 
 export interface HubThreadSearchResult {
   id: string;
   provider: string;
+  surface?: HubNoteSurface;
   title: string;
   createdAt: Date;
   updatedAt: Date;

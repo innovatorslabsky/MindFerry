@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { HubThread, HubMessage, HubProvider } from '../thread';
+import type { HubThread, HubMessage, HubProvider, HubSurface } from '../thread';
 import { hubThreadId } from '../thread';
 
 /**
@@ -11,6 +11,7 @@ import { hubThreadId } from '../thread';
 export interface HubThreadSummary {
   id: string;
   provider: HubProvider;
+  surface?: HubSurface;
   title: string;
   createdAt: Date;
   updatedAt: Date;
@@ -22,6 +23,7 @@ export interface HubThreadSummary {
 export interface HubSearchParams {
   query: string;
   providers?: readonly HubProvider[];
+  surface?: HubSurface;
   /** Already clamped by the server to the configured ceiling. */
   limit: number;
   snippetLength: number;
@@ -29,7 +31,7 @@ export interface HubSearchParams {
 
 /** Which client wrote a note — lets a note left by one surface read as
  *  distinct from one left by another when several clients share the archive. */
-export type HubNoteSurface = 'chat' | 'code' | 'agent' | 'other';
+export type HubNoteSurface = HubSurface;
 
 export interface HubNoteInput {
   title: string;
@@ -56,6 +58,8 @@ export interface HubArchiveThreadInput {
   title: string;
   /** Pass the same id again to update this thread instead of creating a new one. */
   sourceId?: string;
+  /** Which client is archiving it; kept from the earlier archive when omitted on an update. */
+  surface?: HubSurface;
   messages: HubArchiveMessageInput[];
 }
 
@@ -108,6 +112,7 @@ export function buildThreadFromArchiveInput(
   return {
     id: hubThreadId('mindferry', sourceId),
     provider: 'mindferry',
+    surface: input.surface ?? previous?.surface,
     sourceId,
     title: input.title.trim() || 'Untitled conversation',
     createdAt: previous?.createdAt ?? now,
@@ -120,6 +125,7 @@ export function summarize(thread: HubThread, snippet?: string): HubThreadSummary
   return {
     id: thread.id,
     provider: thread.provider,
+    surface: thread.surface,
     title: thread.title,
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt,

@@ -47,7 +47,9 @@ this for later":
    `archive_thread` with the title and every turn so far (`{ role, text }`) — this is a second,
    separate write from the note. Pass a stable `sourceId` (e.g. this session's own conversation
    id) if you might call it again later in the same conversation, so it updates the existing
-   thread instead of creating a duplicate. `append_note` is still the right tool for the short
+   thread instead of creating a duplicate. Also pass `surface`: `"chat"` from Claude.ai,
+   `"code"` from Claude Code, so the person can tell where each conversation came from when they
+   browse the archive. `append_note` is still the right tool for the short
    bridging summary; `archive_thread` is for keeping the transcript itself. If `archive_thread`
    isn't available (the operator disabled it), tell the user to use "Save to MindFerry" from the
    conversation's export menu instead — the UI-side equivalent of the same archive.

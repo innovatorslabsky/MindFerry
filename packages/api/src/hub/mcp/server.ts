@@ -9,8 +9,8 @@ import {
 import type { HubStore, HubNote, HubThreadSummary } from './store';
 import type { HubProvider } from '../thread';
 import { renderThreadMarkdown, renderThreadOutlineMarkdown } from '../render';
+import { HUB_PROVIDERS, HUB_SURFACES } from '../thread';
 import { snippetAround } from './snippet';
-import { HUB_PROVIDERS } from '../thread';
 
 /**
  * The hub's MCP surface. One server serves every client that speaks MCP — a
@@ -56,6 +56,7 @@ function formatSummary(summary: HubThreadSummary): string {
     `- ${summary.title}`,
     `  id: ${summary.id}`,
     `  provider: ${summary.provider}`,
+    `  surface: ${summary.surface ?? 'chat'}`,
     `  updated: ${summary.updatedAt.toISOString()}`,
     `  messages: ${summary.messageCount}`,
   ];
@@ -91,15 +92,22 @@ export function createHubMcpServer(options: HubMcpServerOptions): McpServer {
           .array(z.enum(HUB_PROVIDERS))
           .optional()
           .describe('Restrict the search to these providers'),
+        surface: z
+          .enum(HUB_SURFACES)
+          .optional()
+          .describe(
+            'Only conversations from this client: chat (claude.ai and imported exports), code (Claude Code), agent, or other',
+          ),
         limit: z.number().int().min(1).max(CONTEXT_HUB_MAX_SEARCH_LIMIT).optional(),
       },
     },
-    async ({ query, providers, limit }) => {
+    async ({ query, providers, surface, limit }) => {
       const cap = Math.min(limit ?? searchLimit, searchLimit);
       const [summaries, noteMatches] = await Promise.all([
         store.searchThreads({
           query,
           providers: providers as HubProvider[] | undefined,
+          surface,
           limit: cap,
           snippetLength,
         }),
@@ -217,7 +225,7 @@ export function createHubMcpServer(options: HubMcpServerOptions): McpServer {
           text: z.string().min(1).describe('The note body, in Markdown'),
           threadId: z.string().min(1).optional().describe('Anchor the note to this thread'),
           surface: z
-            .enum(['chat', 'code', 'agent', 'other'])
+            .enum(HUB_SURFACES)
             .optional()
             .describe(
               'Which client is writing this note — claude.ai chat, Claude Code, an external agent, or other',
@@ -248,6 +256,12 @@ export function createHubMcpServer(options: HubMcpServerOptions): McpServer {
           'Pass the same sourceId again later to update this thread instead of creating a new one.',
         inputSchema: {
           title: z.string().min(1).describe('A short, descriptive title for the conversation'),
+          surface: z
+            .enum(HUB_SURFACES)
+            .optional()
+            .describe(
+              'Which client is archiving this: chat for claude.ai, code for Claude Code, agent for an external agent. Shown next to the conversation when browsing.',
+            ),
           sourceId: z
             .string()
             .min(1)
@@ -268,7 +282,7 @@ export function createHubMcpServer(options: HubMcpServerOptions): McpServer {
             .describe('Every turn, in order, verbatim — not a summary or excerpt'),
         },
       },
-      async ({ title, sourceId, messages }) => {
+      async ({ title, sourceId, surface, messages }) => {
         const bytes = messages.reduce(
           (total, message) => total + Buffer.byteLength(message.text),
           0,
@@ -281,7 +295,7 @@ export function createHubMcpServer(options: HubMcpServerOptions): McpServer {
             ),
           };
         }
-        const summary = await store.archiveThread({ title, sourceId, messages });
+        const summary = await store.archiveThread({ title, sourceId, surface, messages });
         return asText(`Archived thread ${summary.id} (${summary.messageCount} messages).`);
       },
     );

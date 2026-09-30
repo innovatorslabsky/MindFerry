@@ -92,6 +92,7 @@ export function convertLibreChatConversation(
   return {
     id: hubThreadId('mindferry', conversation.conversationId),
     provider: 'mindferry',
+    surface: 'chat',
     sourceId: conversation.conversationId,
     title: conversation.title?.trim() || 'Untitled conversation',
     createdAt,

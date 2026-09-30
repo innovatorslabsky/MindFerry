@@ -2,6 +2,7 @@ import { Types } from 'mongoose';
 import type {
   HubNoteInput,
   HubNoteRecord,
+  HubNoteSurface,
   HubThreadRecord,
   HubMessageRecord,
   HubDataDeleteResult,
@@ -23,7 +24,11 @@ export interface HubMethods {
     params: HubThreadSearchQuery,
   ) => Promise<HubThreadSearchResult[]>;
   /** Most-recently-updated threads first, for browsing the archive without a search term. */
-  listHubThreads: (userId: string, limit: number) => Promise<HubThreadSearchResult[]>;
+  listHubThreads: (
+    userId: string,
+    limit: number,
+    surface?: HubNoteSurface,
+  ) => Promise<HubThreadSearchResult[]>;
   /** Oldest first. With `limit`, the most recent `limit` notes, still oldest first. */
   listHubNotes: (userId: string, threadId?: string, limit?: number) => Promise<HubNoteRecord[]>;
   appendHubNote: (userId: string, note: HubNoteInput) => Promise<HubNoteRecord>;
@@ -71,11 +76,33 @@ function toThreadRecord(doc: IHubThread): HubThreadRecord {
   return {
     id: doc.id,
     provider: doc.provider,
+    surface: doc.surface,
     sourceId: doc.sourceId,
     title: doc.title,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
     messages: doc.messages.map(toMessageRecord),
+  };
+}
+
+/** `chat` is also what a thread archived before surfaces were recorded reads as. */
+function surfaceFilter(surface: HubNoteSurface): Record<string, unknown> {
+  if (surface === 'chat') {
+    return { $or: [{ surface: 'chat' }, { surface: { $exists: false } }] };
+  }
+  return { surface };
+}
+
+function toSearchResult(doc: IHubThread): HubThreadSearchResult {
+  return {
+    id: doc.id,
+    provider: doc.provider,
+    surface: doc.surface,
+    title: doc.title,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+    messageCount: doc.messages.length,
+    searchText: doc.searchText,
   };
 }
 
@@ -111,6 +138,7 @@ export function createHubMethods(mongoose: typeof import('mongoose')): HubMethod
             userId: toObjectId(userId),
             id: thread.id,
             provider: thread.provider,
+            ...(thread.surface ? { surface: thread.surface } : {}),
             sourceId: thread.sourceId,
             title: thread.title,
             createdAt: thread.createdAt,
@@ -159,44 +187,39 @@ export function createHubMethods(mongoose: typeof import('mongoose')): HubMethod
       if (params.providers && params.providers.length > 0) {
         filter.provider = { $in: params.providers };
       }
+      if (params.surface) {
+        Object.assign(filter, surfaceFilter(params.surface));
+      }
 
       const docs = (await HubThread.find(filter, { score: { $meta: 'textScore' } })
         .sort({ score: { $meta: 'textScore' } })
         .limit(params.limit)
         .lean()) as unknown as IHubThread[];
 
-      return docs.map((doc) => ({
-        id: doc.id,
-        provider: doc.provider,
-        title: doc.title,
-        createdAt: doc.createdAt,
-        updatedAt: doc.updatedAt,
-        messageCount: doc.messages.length,
-        searchText: doc.searchText,
-      }));
+      return docs.map(toSearchResult);
     } catch (error) {
       logger.error('[searchHubThreads] Error searching threads:', error);
       throw error;
     }
   }
 
-  async function listHubThreads(userId: string, limit: number): Promise<HubThreadSearchResult[]> {
+  async function listHubThreads(
+    userId: string,
+    limit: number,
+    surface?: HubNoteSurface,
+  ): Promise<HubThreadSearchResult[]> {
     try {
       const HubThread = mongoose.models.HubThread;
-      const docs = (await HubThread.find({ userId: toObjectId(userId) })
+      const filter: Record<string, unknown> = { userId: toObjectId(userId) };
+      if (surface) {
+        Object.assign(filter, surfaceFilter(surface));
+      }
+      const docs = (await HubThread.find(filter)
         .sort({ updatedAt: -1 })
         .limit(limit)
         .lean()) as unknown as IHubThread[];
 
-      return docs.map((doc) => ({
-        id: doc.id,
-        provider: doc.provider,
-        title: doc.title,
-        createdAt: doc.createdAt,
-        updatedAt: doc.updatedAt,
-        messageCount: doc.messages.length,
-        searchText: doc.searchText,
-      }));
+      return docs.map(toSearchResult);
     } catch (error) {
       logger.error('[listHubThreads] Error listing threads:', error);
       throw error;

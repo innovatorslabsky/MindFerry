@@ -94,7 +94,11 @@ MindFerry" and the file importer, neither of which it can reach. It takes a titl
 verbatim (`{ role, text }`), and an optional `sourceId`: passing the same one again updates that
 thread instead of creating a duplicate, so a client can re-call it as a conversation grows.
 Archived this way, threads carry `provider: "mindferry"`, same as one saved from this app's own
-UI. Turning `contextHub.mcp.allowArchive` off removes the tool but leaves `append_note` and the
+UI. The optional `surface` says which client archived it — `chat` (claude.ai), `code` (Claude Code),
+`agent` or `other` — and Browse shows it next to the conversation and can filter by it;
+`search_context` takes a `surface` filter too. A thread with no recorded surface (an imported
+export, or one archived before this existed) counts as `chat`. The Claude Code plugin archives
+every session this way automatically, so the whole session appears as one Claude Code conversation. Turning `contextHub.mcp.allowArchive` off removes the tool but leaves `append_note` and the
 read tools in place.
 
 ## Browsing the archive from MindFerry itself

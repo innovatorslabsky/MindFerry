@@ -1,6 +1,7 @@
 import { ArrowLeft } from 'lucide-react';
 import { Button, Spinner } from '@librechat/client';
-import { useGetHubThreadQuery } from '~/data-provider';
+import { useGetHubThreadQuery, useListHubNotesQuery } from '~/data-provider';
+import { SURFACE_LABEL_KEYS, surfaceOf } from './surface';
 import { useLocalize } from '~/hooks';
 
 type HubThreadDetailProps = {
@@ -14,6 +15,8 @@ export default function HubThreadDetail({ threadId, onBack }: HubThreadDetailPro
   const localize = useLocalize();
   const { data, isLoading, isError } = useGetHubThreadQuery(threadId);
   const thread = data?.thread;
+  const notesQuery = useListHubNotesQuery(threadId);
+  const notes = notesQuery.data?.notes ?? [];
 
   return (
     <div className="flex h-full flex-col gap-3">
@@ -36,9 +39,25 @@ export default function HubThreadDetail({ threadId, onBack }: HubThreadDetailPro
           <div className="border-b border-border-light px-4 py-3">
             <h3 className="text-sm font-medium text-text-primary">{thread.title}</h3>
             <p className="text-xs text-text-secondary">
-              {thread.provider} · {new Date(thread.updatedAt).toLocaleString()}
+              {localize(SURFACE_LABEL_KEYS[surfaceOf(thread.surface)])} · {thread.provider} ·{' '}
+              {new Date(thread.updatedAt).toLocaleString()}
             </p>
           </div>
+          {notes.length > 0 && (
+            <div className="border-b border-border-light px-4 py-3">
+              <h4 className="mb-1 text-xs font-medium uppercase text-text-secondary">
+                {localize('com_ui_context_hub_browse_thread_notes_heading')}
+              </h4>
+              <ul className="space-y-2">
+                {notes.map((note) => (
+                  <li key={note.id}>
+                    <p className="text-sm font-medium text-text-primary">{note.title}</p>
+                    <p className="whitespace-pre-wrap text-sm text-text-primary">{note.text}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="divide-y divide-border-light">
             {thread.messages.map((message) => (
               <div key={message.id} className="px-4 py-3">
