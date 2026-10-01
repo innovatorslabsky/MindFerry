@@ -1,107 +1,26 @@
 import { useState, useRef, useCallback } from 'react';
 import { Import } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
-import { Spinner, useToastContext, Label, Button, Dropdown } from '@librechat/client';
-import type { TImportResponse, TImportTarget, TStartupConfig } from 'librechat-data-provider';
-import {
-  startupConfigKey,
-  useGetStartupConfig,
-  useUploadConversationsMutation,
-} from '~/data-provider';
-import { importToastFor, isUnsupportedImport } from './outcome';
-import { NotificationSeverity } from '~/common';
+import { Spinner, Label, Button, Dropdown } from '@librechat/client';
+import type { TImportTarget } from 'librechat-data-provider';
+import useConversationImport from '~/hooks/Conversations/useConversationImport';
 import { useLocalize } from '~/hooks';
-import { cn, logger } from '~/utils';
+import { cn } from '~/utils';
 
 function ImportConversations() {
   const localize = useLocalize();
-  const queryClient = useQueryClient();
-  const { showToast } = useToastContext();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const { data: startupConfig } = useGetStartupConfig();
-  const hubEnabled = startupConfig?.contextHubEnabled === true;
+  const { hubEnabled, isUploading, importFile } = useConversationImport();
   const [chosenTarget, setChosenTarget] = useState<TImportTarget>('both');
-  const target: TImportTarget = hubEnabled ? chosenTarget : 'chats';
-
-  const handleSuccess = useCallback(
-    (response: TImportResponse) => {
-      const toast = importToastFor(target, response);
-      showToast({
-        message: localize(toast.key, { 0: toast.count ?? 0 }),
-        status: toast.status,
-      });
-      setIsUploading(false);
-    },
-    [localize, showToast, target],
-  );
-
-  const handleError = useCallback(
-    (error: unknown) => {
-      logger.error('Import error:', error);
-      setIsUploading(false);
-
-      const isUnsupportedType = isUnsupportedImport(error);
-
-      showToast({
-        message: localize(
-          isUnsupportedType
-            ? 'com_ui_import_conversation_file_type_error'
-            : 'com_ui_import_conversation_error',
-        ),
-        status: NotificationSeverity.ERROR,
-      });
-    },
-    [localize, showToast],
-  );
-
-  const uploadFile = useUploadConversationsMutation({
-    onSuccess: handleSuccess,
-    onError: handleError,
-    onMutate: () => setIsUploading(true),
-  });
-
-  const handleFileUpload = useCallback(
-    async (file: File) => {
-      try {
-        const startupConfig = queryClient.getQueryData<TStartupConfig>(startupConfigKey(true));
-        const maxFileSize = startupConfig?.conversationImportMaxFileSize;
-        if (maxFileSize && file.size > maxFileSize) {
-          const size = (maxFileSize / (1024 * 1024)).toFixed(2);
-          showToast({
-            message: localize('com_error_files_upload_too_large', { 0: size }),
-            status: NotificationSeverity.ERROR,
-          });
-          setIsUploading(false);
-          return;
-        }
-
-        const formData = new FormData();
-        formData.append('target', target);
-        formData.append('file', file, encodeURIComponent(file.name || 'File'));
-        uploadFile.mutate(formData);
-      } catch (error) {
-        logger.error('File processing error:', error);
-        setIsUploading(false);
-        showToast({
-          message: localize('com_ui_import_conversation_upload_error'),
-          status: NotificationSeverity.ERROR,
-        });
-      }
-    },
-    [uploadFile, showToast, localize, queryClient, target],
-  );
 
   const handleFileChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       if (file) {
-        setIsUploading(true);
-        handleFileUpload(file);
+        importFile(file, chosenTarget);
       }
       event.target.value = '';
     },
-    [handleFileUpload],
+    [importFile, chosenTarget],
   );
 
   const handleImportClick = useCallback(() => {

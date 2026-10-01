@@ -3,11 +3,13 @@ import { Tabs, TabsList, TabsTrigger } from '@librechat/client';
 import type { ChatFilterStatus } from './chatFilters';
 import { chatFilterStatusAtom, setChatFilterStatusAtom } from './chatFilters';
 import { useLocalize } from '~/hooks';
+import ImportMenu from './ImportMenu';
 
 /**
  * Chats and Archived as two tabs over the one chat list, so archiving and
  * restoring are a tab away instead of inside the filter menu. Drives the same
- * status the filter menu does.
+ * status the filter menu does. Import sits beside them, where what it brings
+ * in will show up.
  */
 export default function StatusTabs() {
   const localize = useLocalize();
@@ -15,18 +17,25 @@ export default function StatusTabs() {
   const setStatus = useSetAtom(setChatFilterStatusAtom);
 
   return (
-    <Tabs value={status} onValueChange={(value) => setStatus(value as ChatFilterStatus)}>
-      <TabsList
-        aria-label={localize('com_ui_chat_list_status')}
-        className="grid w-full grid-cols-2 bg-surface-secondary p-1"
+    <div className="flex items-center gap-1.5">
+      <Tabs
+        value={status}
+        onValueChange={(value) => setStatus(value as ChatFilterStatus)}
+        className="min-w-0 flex-1"
       >
-        <TabsTrigger value="active" className="min-w-0">
-          {localize('com_ui_chats')}
-        </TabsTrigger>
-        <TabsTrigger value="archived" className="min-w-0">
-          {localize('com_ui_archived')}
-        </TabsTrigger>
-      </TabsList>
-    </Tabs>
+        <TabsList
+          aria-label={localize('com_ui_chat_list_status')}
+          className="grid w-full grid-cols-2 bg-surface-secondary p-1"
+        >
+          <TabsTrigger value="active" className="min-w-0">
+            {localize('com_ui_chats')}
+          </TabsTrigger>
+          <TabsTrigger value="archived" className="min-w-0">
+            {localize('com_ui_archived')}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+      <ImportMenu />
+    </div>
   );
 }

@@ -1718,6 +1718,7 @@
   "com_ui_import_conversation_error": "There was an error importing your conversations",
   "com_ui_import_conversation_file_type_error": "Unsupported import type",
   "com_ui_import_conversation_info": "Import conversations from a JSON file",
+  "com_ui_import_conversations": "Import conversations",
   "com_ui_import_conversation_success": "Conversations imported successfully",
   "com_ui_import_conversation_upload_error": "Error uploading file. Please try again.",
   "com_ui_import_target_label": "Import to",

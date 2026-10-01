@@ -155,6 +155,11 @@ jest.mock('~/components/Conversations/PinnedSection', () => {
   return { __esModule: true, default: PinnedSectionStub };
 });
 
+jest.mock('~/components/Conversations/ImportMenu', () => ({
+  __esModule: true,
+  default: () => <button type="button" data-testid="import-stub" />,
+}));
+
 jest.mock('~/components/Conversations/HubSection', () => ({
   __esModule: true,
   default: ({ query }: { query: string }) => <div data-testid="hub-stub" data-query={query} />,
