@@ -19,6 +19,7 @@ contextHub:
     allowNotes: true # let a connected client write notes back, not only read
     allowArchive: true # let a connected client archive a full conversation via archive_thread
     maxArchiveBytes: 6000000 # 1000-7000000 bytes of turn text per archived thread, default 6000000
+    allowChatImport: true # let a connected client open an archived conversation as a MindFerry chat via open_in_chat, default false
   git: # optional: also mirror the archive to a GitHub repo as Markdown
     enabled: true
     owner: your-github-username
@@ -100,6 +101,17 @@ UI. The optional `surface` says which client archived it — `chat` (claude.ai),
 export, or one archived before this existed) counts as `chat`. The Claude Code plugin archives
 every session this way automatically, so the whole session appears as one Claude Code conversation. Turning `contextHub.mcp.allowArchive` off removes the tool but leaves `append_note` and the
 read tools in place.
+
+## Importing by prompt from Claude.ai or Claude Code
+
+With `contextHub.mcp.allowChatImport` on, the MCP server also offers `open_in_chat`: given a thread
+id, it turns that archived conversation into an ordinary chat in the person's MindFerry chat list —
+the **Continue in chat** button, by prompt — and returns the chat's link (built from
+`DOMAIN_CLIENT`). It goes through the same importer, content filters and size limits as the button,
+and each call makes a new chat. So "import this chat into MindFerry" from Claude.ai becomes
+`archive_thread` followed by `open_in_chat`, and "open yesterday's Claude Code session in MindFerry"
+becomes `search_context` (with `surface: "code"`) followed by `open_in_chat`. The
+`mindferry-sync` skill below tells Claude to do exactly this when asked, in any language.
 
 ## Browsing the archive from MindFerry itself
 

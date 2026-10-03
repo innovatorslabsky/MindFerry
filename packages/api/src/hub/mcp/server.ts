@@ -7,6 +7,7 @@ import {
   CONTEXT_HUB_DEFAULT_MAX_ARCHIVE_BYTES,
 } from 'librechat-data-provider';
 import type { HubStore, HubNote, HubThreadSummary } from './store';
+import type { HubOpenInChat, HubOpenInChatResult } from './chat';
 import type { HubProvider } from '../thread';
 import { renderThreadMarkdown, renderThreadOutlineMarkdown } from '../render';
 import { HUB_PROVIDERS, HUB_SURFACES } from '../thread';
@@ -32,6 +33,8 @@ export interface HubMcpServerOptions {
   allowArchive?: boolean;
   /** Largest conversation `archive_thread` accepts, in UTF-8 bytes of turn text. */
   maxArchiveBytes?: number;
+  /** Opens an archived thread as a MindFerry chat. When absent, `open_in_chat` is not registered. */
+  openInChat?: HubOpenInChat;
   name?: string;
   version?: string;
 }
@@ -49,6 +52,25 @@ function formatNoteMatch(note: HubNote, query: string, snippetLength: number): s
   }
   lines.push(`  match: ${snippetAround(note.text, Math.max(at, 0), snippetLength)}`);
   return lines.join('\n');
+}
+
+function describeOpenedChat(id: string, result: HubOpenInChatResult): string {
+  switch (result.status) {
+    case 'opened':
+      return [
+        `Opened "${id}" as a MindFerry chat (${result.messageCount} messages).`,
+        `conversationId: ${result.conversationId}`,
+        result.url ? `link: ${result.url}` : undefined,
+      ]
+        .filter(Boolean)
+        .join('\n');
+    case 'not_found':
+      return `No archived conversation has id "${id}".`;
+    case 'empty':
+      return `"${id}" has no text a chat could continue from.`;
+    case 'refused':
+      return `MindFerry refused to open "${id}" as a chat: ${result.message}`;
+  }
 }
 
 function formatSummary(summary: HubThreadSummary): string {
@@ -74,6 +96,7 @@ export function createHubMcpServer(options: HubMcpServerOptions): McpServer {
     allowNotes = true,
     allowArchive = true,
     maxArchiveBytes = CONTEXT_HUB_DEFAULT_MAX_ARCHIVE_BYTES,
+    openInChat,
     name = 'mindferry',
     version = '1.0.0',
   } = options;
@@ -297,6 +320,34 @@ export function createHubMcpServer(options: HubMcpServerOptions): McpServer {
         }
         const summary = await store.archiveThread({ title, sourceId, surface, messages });
         return asText(`Archived thread ${summary.id} (${summary.messageCount} messages).`);
+      },
+    );
+  }
+
+  if (openInChat) {
+    server.registerTool(
+      'open_in_chat',
+      {
+        title: 'Open an archived conversation as a MindFerry chat',
+        description:
+          "Turn an archived conversation into an ordinary chat in the person's MindFerry chat " +
+          'list, so they can open it there and keep talking — the "Continue in chat" button, by ' +
+          'prompt. Pass the thread id archive_thread or search_context returned. Each call makes ' +
+          'a new chat, so call it once per conversation and only when the person asks for the ' +
+          'chat in MindFerry; the archived thread itself is not changed.',
+        inputSchema: {
+          id: z
+            .string()
+            .min(1)
+            .describe(
+              'Thread id from archive_thread or search_context, such as "mindferry:abc123"',
+            ),
+        },
+      },
+      async ({ id }) => {
+        const result = await openInChat(id);
+        const text = describeOpenedChat(id, result);
+        return result.status === 'opened' ? asText(text) : { isError: true, ...asText(text) };
       },
     );
   }

@@ -608,6 +608,9 @@ export const contextHubSchema = z
           .min(1000)
           .max(CONTEXT_HUB_MAX_ARCHIVE_BYTES)
           .default(CONTEXT_HUB_DEFAULT_MAX_ARCHIVE_BYTES),
+        /** Lets a connected client turn an archived conversation into a MindFerry chat
+         *  via `open_in_chat` — "Continue in chat" by prompt. Off by default. */
+        allowChatImport: z.boolean().default(false),
         semanticSearch: contextHubSemanticSearchSchema.optional(),
       })
       .default({}),

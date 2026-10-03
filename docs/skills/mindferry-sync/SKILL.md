@@ -1,6 +1,6 @@
 ---
 name: mindferry-sync
-description: Two-way context sync between Claude sessions through MindFerry. Use at the start of a session to catch up on relevant prior context, and at the end (or whenever the user asks to "save", "sync", or "remember this") to write a summary back, so a Claude.ai chat and a Claude Code session can pick up each other's work through MindFerry's shared archive and notes.
+description: Two-way context sync between Claude sessions through MindFerry. Use at the start of a session to catch up on relevant prior context, at the end (or whenever the user asks to "save", "sync", or "remember this") to write a summary back, and whenever the user asks to import, move or open a conversation in MindFerry ("import this chat into MindFerry", "đưa chat này vào MindFerry", "open yesterday's Claude Code session here"), so a Claude.ai chat, a Claude Code session and MindFerry's own chat list can pick up each other's work.
 ---
 
 # MindFerry Sync
@@ -8,7 +8,7 @@ description: Two-way context sync between Claude sessions through MindFerry. Use
 MindFerry is a context hub: it archives conversations and stores notes, then serves both back
 over MCP. Claude.ai and Claude Code don't share memory with each other directly — this skill is
 the manual bridge, using MindFerry's `search_context`, `get_thread_outline`, `get_thread`,
-`read_notes`, `append_note`, and `archive_thread` tools (named `search_context` etc., typically
+`read_notes`, `append_note`, `archive_thread`, and `open_in_chat` tools (named `search_context` etc., typically
 prefixed `mcp__mindferry__` or `mcp__MindFerry__` depending on the client).
 
 If none of those tools are available in this session, MindFerry isn't connected here — tell the
@@ -55,10 +55,33 @@ this for later":
    conversation's export menu instead — the UI-side equivalent of the same archive.
 4. Confirm to the user what you wrote and its title, so they know what the other session will see.
 
+## Importing a conversation by prompt
+
+When the user asks to import, move, copy or open a conversation in MindFerry — in any language,
+for example "import this chat into MindFerry", "đưa chat này qua MindFerry", "lưu nguyên văn rồi
+mở trong MindFerry" — do it without asking them to export a file:
+
+1. **This conversation:** call `archive_thread` with every turn verbatim, a stable `sourceId`
+   and `surface` (`"chat"` from Claude.ai, `"code"` from Claude Code). It returns the thread id
+   (`mindferry:<sourceId>`).
+2. **Another conversation already in the archive** (a Claude Code session the plugin archived, an
+   earlier Claude.ai chat): find it with `search_context` — pass `surface: "code"` or
+   `surface: "chat"` when the user names the client — and confirm the title and date with the user
+   if more than one fits.
+3. If the user wants it as a chat in MindFerry's own chat list (they said import into MindFerry,
+   open it in MindFerry, or continue it there), call `open_in_chat` with the thread id and give
+   them the link it returns. Each call makes a new chat, so call it once per conversation and do
+   not call it again on a later sync of the same conversation unless they ask. If the tool isn't
+   offered, the operator has `contextHub.mcp.allowChatImport` off: say the conversation is in
+   the archive and they can open it with Continue in chat from Chat History → Archived.
+4. If they want to keep working on it in *this* client instead, read it with `get_thread`
+   (outline first for a long one) and carry on from it.
+
 ## What this does not do
 
 - It does not run automatically — nothing polls MindFerry in the background. Sync happens because
-  this skill (or the user, by name) triggers a read or write in a given turn.
+  this skill (or the user, by name) triggers a read or write in a given turn. (The Claude Code
+  plugin is the exception: it archives every Claude Code session on its own.)
 - It does not merge or resolve conflicting notes. If two sessions both wrote about the same topic,
   `search_context` returns both; read both rather than trusting whichever comes back first.
 - It does not substitute for the full archive. Notes are a small, hand-written bridge — the

@@ -115,3 +115,20 @@ describe('createContextHubMcpHandler', () => {
     expect(res.status).toHaveBeenCalledWith(401);
   });
 });
+
+describe('buildOpenInChat', () => {
+  const methods = { getHubThread: jest.fn() };
+  const importConversation = jest.fn();
+  const req = { user: { id: 'user-a' } } as unknown as ServerRequest & { user: { id: string } };
+
+  it('is offered only when the operator allows it and an importer is supplied', async () => {
+    const { buildOpenInChat } = await import('./route');
+
+    expect(buildOpenInChat({ methods, importConversation }, undefined, req)).toBeUndefined();
+    expect(buildOpenInChat({ methods, importConversation }, false, req)).toBeUndefined();
+    expect(buildOpenInChat({ methods }, true, req)).toBeUndefined();
+    expect(buildOpenInChat({ methods, importConversation }, true, req)).toEqual(
+      expect.any(Function),
+    );
+  });
+});

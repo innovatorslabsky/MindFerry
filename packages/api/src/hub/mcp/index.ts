@@ -6,3 +6,4 @@ export * from './http';
 export * from './route';
 export * from './memory';
 export * from './server';
+export * from './chat';

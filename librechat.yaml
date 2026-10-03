@@ -14,6 +14,7 @@ contextHub:
     searchLimit: 20
     snippetLength: 400
     allowNotes: true
+    allowChatImport: true
 
 # FreeLLMAPI: a self-hosted proxy that aggregates free tiers from 20+ LLM
 # providers behind one OpenAI-compatible endpoint. See docs/freellmapi.md.

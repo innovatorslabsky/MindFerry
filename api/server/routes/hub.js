@@ -51,7 +51,11 @@ const apiKeyMiddleware = createRequireApiKeyAuth({
   isPrincipalActive: db.isAgentTriggerPrincipalActive,
 });
 
-const mcpHandler = createContextHubMcpHandler({ methods: db });
+const mcpHandler = createContextHubMcpHandler({
+  methods: db,
+  importConversation: importHubConversation,
+  clientOrigin: process.env.DOMAIN_CLIENT,
+});
 
 /**
  * `configMiddleware` runs after `apiKeyMiddleware` because it derives

@@ -4,11 +4,13 @@ import { extractEnvVariable } from 'librechat-data-provider';
 import type { ContextHubSemanticSearchConfig } from 'librechat-data-provider';
 import type { RequestHandler, Response } from 'express';
 import type { HubStoreMethods, HubSemanticSearchOptions } from './mongoStore';
+import type { CreateHubOpenInChatDeps, HubOpenInChat } from './chat';
 import type { ServerRequest } from '../../types/http';
 import { createOpenAICompatEmbeddingProvider } from './embeddings';
 import { contextHubRateLimitKey } from '../ratelimit';
 import { createHubMongoStore } from './mongoStore';
 import { isContextHubMcpEnabled } from '../config';
+import { createHubOpenInChat } from './chat';
 import { handleHubMcpRequest } from './http';
 
 export { isContextHubMcpEnabled };
@@ -36,6 +38,13 @@ export const contextHubMcpLimiter: RequestHandler = rateLimit({
 
 export interface CreateContextHubMcpHandlerDeps {
   methods: HubStoreMethods;
+  /**
+   * The app's conversation importer, which `open_in_chat` saves through. The
+   * tool is offered only when this is supplied and `contextHub.mcp.allowChatImport` is on.
+   */
+  importConversation?: CreateHubOpenInChatDeps['importConversation'];
+  /** The app's public origin, so `open_in_chat` can link to the chat it made. */
+  clientOrigin?: string;
 }
 
 /**
@@ -62,6 +71,24 @@ export function buildSemanticSearchOptions(
 }
 
 /**
+ * `open_in_chat`'s implementation for one request, or `undefined` — leaving
+ * the tool unregistered — unless the operator turned it on and the caller
+ * supplied an importer to save through.
+ */
+export function buildOpenInChat(
+  deps: Omit<CreateHubOpenInChatDeps, 'importConversation'> &
+    Pick<CreateContextHubMcpHandlerDeps, 'importConversation'>,
+  allowChatImport: boolean | undefined,
+  req: ServerRequest & { user: { id: string; role?: string } },
+): HubOpenInChat | undefined {
+  const { importConversation } = deps;
+  if (!allowChatImport || !importConversation) {
+    return undefined;
+  }
+  return createHubOpenInChat({ ...deps, importConversation }, req);
+}
+
+/**
  * Builds the Express handler for the hub's MCP endpoint. Everything that
  * decides *whether* and *how* to serve the request — the feature gate, the
  * per-user store, the tool configuration — lives here; the route file in
@@ -76,7 +103,7 @@ export function buildSemanticSearchOptions(
 export function createContextHubMcpHandler(
   deps: CreateContextHubMcpHandlerDeps,
 ): (req: ServerRequest, res: Response) => Promise<void> {
-  const { methods } = deps;
+  const { methods, importConversation, clientOrigin } = deps;
 
   return async (req, res) => {
     if (!isContextHubMcpEnabled(req.config)) {
@@ -101,6 +128,11 @@ export function createContextHubMcpHandler(
     const mcpConfig = req.config?.contextHub?.mcp;
     const semanticSearch = buildSemanticSearchOptions(mcpConfig?.semanticSearch);
     const store = createHubMongoStore({ methods, userId, semanticSearch });
+    const openInChat = buildOpenInChat(
+      { methods, importConversation, clientOrigin },
+      mcpConfig?.allowChatImport,
+      req as ServerRequest & { user: { id: string; role?: string } },
+    );
 
     try {
       await handleHubMcpRequest({
@@ -114,6 +146,7 @@ export function createContextHubMcpHandler(
           allowNotes: mcpConfig?.allowNotes,
           allowArchive: mcpConfig?.allowArchive,
           maxArchiveBytes: mcpConfig?.maxArchiveBytes,
+          openInChat,
         },
       });
     } catch (error) {

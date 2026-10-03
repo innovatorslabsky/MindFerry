@@ -107,6 +107,53 @@ describe('createHubMcpServer', () => {
     await close();
   });
 
+  it('offers open_in_chat only when the caller supplies a way to open chats', async () => {
+    const without = await connect();
+    expect((await without.client.listTools()).tools.map((tool) => tool.name)).not.toContain(
+      'open_in_chat',
+    );
+    await without.close();
+
+    const withChats = await connect({ openInChat: async () => ({ status: 'not_found' }) });
+    expect((await withChats.client.listTools()).tools.map((tool) => tool.name)).toContain(
+      'open_in_chat',
+    );
+    await withChats.close();
+  });
+
+  describe('open_in_chat', () => {
+    it('opens the thread it is given and reports the new chat with its link', async () => {
+      const openInChat = jest.fn(async () => ({
+        status: 'opened' as const,
+        conversationId: 'convo-1',
+        messageCount: 2,
+        url: 'https://mindferry.example.com/c/convo-1',
+      }));
+      const { client, close } = await connect({ openInChat });
+
+      const result = await call(client, 'open_in_chat', { id: 'claude:c1' });
+
+      expect(openInChat).toHaveBeenCalledWith('claude:c1');
+      expect(result.isError).toBeFalsy();
+      expect(textOf(result)).toContain('2 messages');
+      expect(textOf(result)).toContain('conversationId: convo-1');
+      expect(textOf(result)).toContain('link: https://mindferry.example.com/c/convo-1');
+      await close();
+    });
+
+    it('answers with an error for a thread it could not open', async () => {
+      const { client, close } = await connect({
+        openInChat: async () => ({ status: 'refused', message: 'too large' }),
+      });
+
+      const result = await call(client, 'open_in_chat', { id: 'claude:c1' });
+
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toContain('too large');
+      await close();
+    });
+  });
+
   describe('search_context', () => {
     it('lists a matching note separately, with the thread it is anchored to', async () => {
       const { client, store, close } = await connect();
