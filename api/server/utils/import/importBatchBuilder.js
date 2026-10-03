@@ -81,6 +81,8 @@ class ImportBatchBuilder {
     this.conversations = [];
     this.messages = [];
     this.retentionFields = undefined;
+    /** @type {Array<{ threadId: string, conversationId: string }>} */
+    this.threadLinks = [];
   }
 
   getRetentionFields() {
@@ -108,13 +110,17 @@ class ImportBatchBuilder {
   /**
    * Starts a new conversation in the batch.
    * @param {string} [endpoint=EModelEndpoint.openAI] - The endpoint for the conversation. Defaults to EModelEndpoint.openAI.
+   * @param {string} [threadId] - The MindFerry archive thread the same conversation is archived under.
    * @returns {void}
    */
-  startConversation(endpoint) {
+  startConversation(endpoint, threadId) {
     // we are simplifying by using a single model for the entire conversation
     this.endpoint = endpoint || EModelEndpoint.openAI;
     this.conversationId = uuidv4();
     this.lastMessageId = Constants.NO_PARENT;
+    if (threadId) {
+      this.threadLinks.push({ threadId, conversationId: this.conversationId });
+    }
   }
 
   /**

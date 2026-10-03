@@ -56,7 +56,12 @@ describe('importChatGptConvo', () => {
     const importer = getImporter(jsonData);
     await importer(jsonData, requestUserId, () => importBatchBuilder);
 
-    expect(importBatchBuilder.startConversation).toHaveBeenCalledWith(EModelEndpoint.openAI);
+    expect(importBatchBuilder.startConversation.mock.calls).toEqual(
+      jsonData.map((conv) => [EModelEndpoint.openAI, `chatgpt:${conv.conversation_id}`]),
+    );
+    expect(importBatchBuilder.threadLinks.map((link) => link.threadId)).toEqual(
+      jsonData.map((conv) => `chatgpt:${conv.conversation_id}`),
+    );
     expect(importBatchBuilder.saveMessage).toHaveBeenCalledTimes(expectedNumberOfMessages);
     expect(importBatchBuilder.finishConversation).toHaveBeenCalledTimes(jsonData.length);
     expect(importBatchBuilder.saveBatch).toHaveBeenCalled();
@@ -1719,7 +1724,10 @@ describe('importClaudeConvo', () => {
     const importer = getImporter(jsonData);
     await importer(jsonData, requestUserId, () => importBatchBuilder);
 
-    expect(importBatchBuilder.startConversation).toHaveBeenCalledWith(EModelEndpoint.anthropic);
+    expect(importBatchBuilder.startConversation).toHaveBeenCalledWith(
+      EModelEndpoint.anthropic,
+      'claude:conv-123',
+    );
     expect(importBatchBuilder.saveMessage).toHaveBeenCalledTimes(2);
     expect(importBatchBuilder.finishConversation).toHaveBeenCalledWith(
       'Test Conversation',

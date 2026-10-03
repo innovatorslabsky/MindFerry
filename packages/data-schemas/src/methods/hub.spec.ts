@@ -67,6 +67,25 @@ describe('upsertHubThread / getHubThread', () => {
     expect(stored?.messages[0].segments[0].text).toContain('sync context');
   });
 
+  it('records chats opened from a thread, keeps them across a re-archive, and lists them', async () => {
+    await methods.upsertHubThread(userA, thread());
+    await methods.upsertHubThread(userB, thread());
+
+    await methods.linkHubThreadChats(userA, [
+      { threadId: 'claude:c1', conversationId: 'chat-1' },
+      { threadId: 'claude:c1', conversationId: 'chat-1' },
+      { threadId: 'claude:missing', conversationId: 'chat-2' },
+    ]);
+    await methods.linkHubThreadChats(userA, [{ threadId: 'claude:c1', conversationId: 'chat-3' }]);
+    await methods.upsertHubThread(userA, thread({ title: 'Renamed' }));
+
+    const [mine] = await methods.listHubThreads(userA, 10);
+    const [theirs] = await methods.listHubThreads(userB, 10);
+    expect(mine.chatConversationIds).toEqual(['chat-1', 'chat-3']);
+    expect(theirs.chatConversationIds).toBeUndefined();
+    expect(await mongoose.models.HubThread.countDocuments({ id: 'claude:missing' })).toBe(0);
+  });
+
   it('re-archiving the same id upserts in place rather than duplicating', async () => {
     await methods.upsertHubThread(userA, thread());
     await methods.upsertHubThread(userA, thread({ title: 'Renamed' }));

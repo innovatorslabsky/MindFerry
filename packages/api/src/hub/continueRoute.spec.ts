@@ -54,16 +54,36 @@ const thread: HubThreadRecord = {
 
 describe('createContextHubContinueHandler', () => {
   const getHubThread = jest.fn();
+  const linkHubThreadChats = jest.fn();
   const importConversation = jest.fn();
   const handler = createContextHubContinueHandler({
-    methods: { getHubThread },
+    methods: { getHubThread, linkHubThreadChats },
     importConversation,
   });
   const res = () => fakeRes() as unknown as import('express').Response & ReturnType<typeof fakeRes>;
 
   beforeEach(() => {
     getHubThread.mockReset().mockResolvedValue(thread);
+    linkHubThreadChats.mockReset().mockResolvedValue(undefined);
     importConversation.mockReset().mockResolvedValue({ conversationId: 'new-convo' });
+  });
+
+  it('records the new chat against the thread it was opened from', async () => {
+    await handler(fakeReq(), res());
+
+    expect(linkHubThreadChats).toHaveBeenCalledWith('user-a', [
+      { threadId: 'mindferry:sess-1', conversationId: 'new-convo' },
+    ]);
+  });
+
+  it('still answers 201 with the new chat when recording the link fails', async () => {
+    linkHubThreadChats.mockRejectedValue(new Error('write failed'));
+    const response = res();
+
+    await handler(fakeReq(), response);
+
+    expect(response.status).toHaveBeenCalledWith(201);
+    expect(response.json).toHaveBeenCalledWith({ conversationId: 'new-convo', messageCount: 2 });
   });
 
   it('rejects with 404 when the hub is not enabled', async () => {

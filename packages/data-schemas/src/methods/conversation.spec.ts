@@ -2140,6 +2140,40 @@ describe('Conversation Operations', () => {
       expect(convoIds).not.toContain(expiredRetainedConvo.conversationId);
     });
 
+    it('finds visible chats by exact title, scoped to their owner', async () => {
+      const mine = await Conversation.create({
+        conversationId: uuidv4(),
+        user: 'user123',
+        title: 'PetVee plan',
+        endpoint: EModelEndpoint.openAI,
+      });
+      await Conversation.create({
+        conversationId: uuidv4(),
+        user: 'user123',
+        title: 'PetVee plan (draft)',
+        endpoint: EModelEndpoint.openAI,
+      });
+      await Conversation.create({
+        conversationId: uuidv4(),
+        user: 'other-user',
+        title: 'PetVee plan',
+        endpoint: EModelEndpoint.openAI,
+      });
+      await Conversation.create({
+        conversationId: uuidv4(),
+        user: 'user123',
+        title: 'PetVee plan',
+        endpoint: EModelEndpoint.openAI,
+        isTemporary: true,
+        expiredAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      });
+
+      expect(await methods.findConvosByTitles('user123', ['PetVee plan'])).toEqual([
+        { conversationId: mine.conversationId, title: 'PetVee plan' },
+      ]);
+      expect(await methods.findConvosByTitles('user123', [])).toEqual([]);
+    });
+
     it('should filter out temporary conversations in getConvosQueried', async () => {
       const newNonTemporaryConvo = await Conversation.create({
         conversationId: uuidv4(),

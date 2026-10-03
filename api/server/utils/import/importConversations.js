@@ -9,6 +9,7 @@ const maxFileSize = resolveImportMaxFileSize();
 /**
  * Job definition for importing a conversation.
  * @param {{ filepath: string, requestUserId: string, userRole?: string, interfaceConfig?: object, filters?: object, legacyPii?: object }} job
+ * @returns {Promise<Array<{ threadId: string, conversationId: string }>>} Which archive thread each new chat came from.
  */
 const importConversations = async (job) => {
   const { filepath, requestUserId, userRole, interfaceConfig, filters, legacyPii } = job;
@@ -25,16 +26,22 @@ const importConversations = async (job) => {
     const fileData = await fs.readFile(filepath, 'utf8');
     const jsonData = JSON.parse(fileData);
     const importer = getImporter(jsonData);
+    const builders = [];
     await importer(
       jsonData,
       requestUserId,
-      (userId) =>
-        legacyPii == null
-          ? createImportBatchBuilder(userId, interfaceConfig, filters)
-          : createImportBatchBuilder(userId, interfaceConfig, filters, legacyPii),
+      (userId) => {
+        const builder =
+          legacyPii == null
+            ? createImportBatchBuilder(userId, interfaceConfig, filters)
+            : createImportBatchBuilder(userId, interfaceConfig, filters, legacyPii);
+        builders.push(builder);
+        return builder;
+      },
       userRole,
     );
     logger.debug(`user: ${requestUserId} | Finished importing conversations`);
+    return builders.flatMap((builder) => builder.threadLinks ?? []);
   } catch (error) {
     logger.error(`user: ${requestUserId} | Failed to import conversation: `, error);
     throw error; // throw error all the way up so request does not return success

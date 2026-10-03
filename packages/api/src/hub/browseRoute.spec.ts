@@ -169,6 +169,83 @@ describe('createHubListThreadsHandler with excludeLive', () => {
   });
 });
 
+describe('createHubListThreadsHandler with excludeLive and linked chats', () => {
+  const threads = [
+    {
+      id: 'claude:opened',
+      provider: 'claude',
+      title: 'Opened as a chat',
+      chatConversationIds: ['chat-live'],
+    },
+    {
+      id: 'claude:chat-gone',
+      provider: 'claude',
+      title: 'Its chat was deleted',
+      chatConversationIds: ['chat-deleted'],
+    },
+    { id: 'claude:older', provider: 'claude', title: 'Opened before links existed' },
+    { id: 'mindferry:from-claude-ai', provider: 'mindferry', title: 'Archived by Claude.ai' },
+    { id: 'claude:never', provider: 'claude', title: 'Never opened' },
+  ];
+  const listHubThreads = jest.fn().mockResolvedValue(threads);
+  const searchHubThreads = jest.fn();
+  const linkHubThreadChats = jest.fn().mockResolvedValue(undefined);
+  const findLiveConversationIds = jest.fn(async (_userId: string, ids: string[]) =>
+    ids.filter((id) => id === 'chat-live'),
+  );
+  const findConvosByTitles = jest.fn(async (_userId: string, titles: string[]) =>
+    [
+      { conversationId: 'chat-older', title: 'Opened before links existed' },
+      { conversationId: 'chat-claude-ai', title: 'Archived by Claude.ai' },
+    ].filter((chat) => titles.includes(chat.title)),
+  );
+  const handler = createHubListThreadsHandler({
+    methods: { listHubThreads, searchHubThreads, linkHubThreadChats },
+    findLiveConversationIds,
+    findConvosByTitles,
+  });
+
+  beforeEach(() => {
+    linkHubThreadChats.mockClear();
+    findConvosByTitles.mockClear();
+  });
+
+  it('shows each conversation once: a thread whose chat exists is left out until that chat is gone', async () => {
+    const res = fakeRes();
+
+    await handler(fakeReq({ query: { excludeLive: 'true' } }), res as never);
+
+    expect(res.json.mock.calls[0][0].threads.map((t: { title: string }) => t.title)).toEqual([
+      'Its chat was deleted',
+      'Never opened',
+    ]);
+  });
+
+  it('matches a never-linked thread to a chat of the same title, and records the link', async () => {
+    await handler(fakeReq({ query: { excludeLive: 'true' } }), fakeRes() as never);
+
+    expect(findConvosByTitles).toHaveBeenCalledWith('user-a', [
+      'Opened before links existed',
+      'Archived by Claude.ai',
+      'Never opened',
+    ]);
+    expect(linkHubThreadChats).toHaveBeenCalledWith('user-a', [
+      { threadId: 'claude:older', conversationId: 'chat-older' },
+      { threadId: 'mindferry:from-claude-ai', conversationId: 'chat-claude-ai' },
+    ]);
+  });
+
+  it('still lists when recording a title match fails', async () => {
+    linkHubThreadChats.mockRejectedValueOnce(new Error('write failed'));
+    const res = fakeRes();
+
+    await handler(fakeReq({ query: { excludeLive: 'true' } }), res as never);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json.mock.calls[0][0].threads).toHaveLength(2);
+  });
+});
+
 describe('createHubGetThreadHandler', () => {
   const getHubThread = jest.fn();
   const handler = createHubGetThreadHandler({ methods: { getHubThread } });

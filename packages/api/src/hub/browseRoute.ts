@@ -1,4 +1,5 @@
 import { rateLimit } from 'express-rate-limit';
+import { logger } from '@librechat/data-schemas';
 import type { HubMethods } from '@librechat/data-schemas';
 import type { RequestHandler, Response } from 'express';
 import type { ServerRequest } from '../types/http';
@@ -63,40 +64,104 @@ function requireUserId(req: ServerRequest, res: Response): string | undefined {
 }
 
 export interface CreateHubListThreadsHandlerDeps {
-  methods: Pick<HubMethods, 'listHubThreads' | 'searchHubThreads'>;
+  methods: Pick<HubMethods, 'listHubThreads' | 'searchHubThreads'> &
+    Partial<Pick<HubMethods, 'linkHubThreadChats'>>;
   /**
    * Which of these conversation ids are still chats the user can open —
    * supplied by the caller, whose conversation store this module does not
-   * own. Used by `excludeLive` to leave out the archive copy of a chat that
-   * is still in the chat list, so it is not shown twice.
+   * own. Used by `excludeLive` to leave out a thread that is already a chat
+   * in the chat list, so it is not shown twice.
    */
   findLiveConversationIds?: (userId: string, conversationIds: string[]) => Promise<string[]>;
+  /**
+   * The user's chats titled exactly one of these, for threads opened as chats
+   * before chats were linked to the thread they came from. A match is linked
+   * from then on, so it keeps holding after the chat is renamed.
+   */
+  findConvosByTitles?: (
+    userId: string,
+    titles: string[],
+  ) => Promise<Array<{ conversationId: string; title: string }>>;
 }
 
 const MINDFERRY_PREFIX = 'mindferry:';
 
-async function withoutLiveChats<T extends { id: string; provider: string }>(
+type ListedThread = {
+  id: string;
+  provider: string;
+  title: string;
+  chatConversationIds?: string[];
+};
+
+/** The chats a thread already is: its own chat for a MindFerry chat, plus any opened from it. */
+function chatIdsOf(thread: ListedThread): string[] {
+  const own =
+    thread.provider === 'mindferry' && thread.id.startsWith(MINDFERRY_PREFIX)
+      ? [thread.id.slice(MINDFERRY_PREFIX.length)]
+      : [];
+  return [...own, ...(thread.chatConversationIds ?? [])];
+}
+
+/** Links threads never linked to a chat to a chat of the same title, and returns the ids so linked. */
+async function linkByTitle(
+  threads: ListedThread[],
+  userId: string,
+  deps: CreateHubListThreadsHandlerDeps,
+): Promise<Set<string>> {
+  const { findConvosByTitles, methods } = deps;
+  const unlinked = threads.filter((thread) => !thread.chatConversationIds?.length);
+  if (!findConvosByTitles || unlinked.length === 0) {
+    return new Set();
+  }
+  const chats = await findConvosByTitles(userId, [
+    ...new Set(unlinked.map((thread) => thread.title)),
+  ]);
+  const chatsByTitle = new Map<string, string>();
+  for (const chat of chats) {
+    chatsByTitle.set(chat.title, chat.conversationId);
+  }
+  const links = unlinked.flatMap((thread) => {
+    const conversationId = chatsByTitle.get(thread.title);
+    return conversationId ? [{ threadId: thread.id, conversationId }] : [];
+  });
+  if (links.length > 0 && methods.linkHubThreadChats) {
+    try {
+      await methods.linkHubThreadChats(userId, links);
+    } catch (error) {
+      logger.warn('[hubListThreads] Could not record chats matched by title:', error);
+    }
+  }
+  return new Set(links.map((link) => link.threadId));
+}
+
+async function withoutLiveChats<T extends ListedThread>(
   threads: T[],
   userId: string,
-  findLive: NonNullable<CreateHubListThreadsHandlerDeps['findLiveConversationIds']>,
+  deps: CreateHubListThreadsHandlerDeps & {
+    findLiveConversationIds: NonNullable<
+      CreateHubListThreadsHandlerDeps['findLiveConversationIds']
+    >;
+  },
 ): Promise<T[]> {
-  const chatIds = threads
-    .filter((thread) => thread.provider === 'mindferry' && thread.id.startsWith(MINDFERRY_PREFIX))
-    .map((thread) => thread.id.slice(MINDFERRY_PREFIX.length));
-  if (chatIds.length === 0) {
-    return threads;
-  }
-  const live = new Set(await findLive(userId, chatIds));
+  const chatIds = [...new Set(threads.flatMap(chatIdsOf))];
+  const [live, matchedByTitle] = await Promise.all([
+    chatIds.length > 0
+      ? deps.findLiveConversationIds(userId, chatIds).then((ids) => new Set(ids))
+      : Promise.resolve(new Set<string>()),
+    linkByTitle(threads, userId, deps),
+  ]);
   return threads.filter(
     (thread) =>
-      thread.provider !== 'mindferry' || !live.has(thread.id.slice(MINDFERRY_PREFIX.length)),
+      !matchedByTitle.has(thread.id) && !chatIdsOf(thread).some((chatId) => live.has(chatId)),
   );
 }
 
 /**
  * `GET /api/hub/threads?q=&limit=&surface=&excludeLive=` — a search term lists
  * matches, its absence lists recent threads; `surface` narrows to one client;
- * `excludeLive=true` drops MindFerry chats that are still in the chat list.
+ * `excludeLive=true` drops threads that already are a chat in the chat list —
+ * a MindFerry chat's own copy, or a thread opened or imported as a chat — so
+ * each conversation shows in one place.
  */
 export function createHubListThreadsHandler(
   deps: CreateHubListThreadsHandlerDeps,
@@ -118,7 +183,7 @@ export function createHubListThreadsHandler(
       ? await methods.searchHubThreads(userId, { query, limit, surface })
       : await methods.listHubThreads(userId, limit, surface);
     const threads = excludeLive
-      ? await withoutLiveChats(found, userId, findLiveConversationIds)
+      ? await withoutLiveChats(found, userId, { ...deps, findLiveConversationIds })
       : found;
 
     res.status(200).json({ threads });

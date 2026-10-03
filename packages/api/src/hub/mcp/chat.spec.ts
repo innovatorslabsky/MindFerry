@@ -41,13 +41,17 @@ function archive(records: HubThreadRecord[]) {
   );
 }
 
+const linkHubThreadChats = jest.fn().mockResolvedValue(undefined);
+
 describe('createHubOpenInChat', () => {
+  beforeEach(() => linkHubThreadChats.mockClear());
+
   it("imports the caller's thread as a chat and links to it", async () => {
     const imported: HubContinueImportParams[] = [];
     const getHubThread = archive([thread]);
     const openInChat = createHubOpenInChat(
       {
-        methods: { getHubThread },
+        methods: { getHubThread, linkHubThreadChats },
         importConversation: async (params) => {
           imported.push(params);
           return { conversationId: 'convo-1' };
@@ -66,6 +70,9 @@ describe('createHubOpenInChat', () => {
       url: 'https://mindferry.example.com/c/convo-1',
     });
     expect(getHubThread).toHaveBeenCalledWith('user-a', 'mindferry:sess-1');
+    expect(linkHubThreadChats).toHaveBeenCalledWith('user-a', [
+      { threadId: 'mindferry:sess-1', conversationId: 'convo-1' },
+    ]);
     expect(imported).toHaveLength(1);
     expect(imported[0].userId).toBe('user-a');
     expect(imported[0].userRole).toBe('USER');
@@ -80,7 +87,7 @@ describe('createHubOpenInChat', () => {
   it('leaves the link out when no origin is configured', async () => {
     const openInChat = createHubOpenInChat(
       {
-        methods: { getHubThread: archive([thread]) },
+        methods: { getHubThread: archive([thread]), linkHubThreadChats },
         importConversation: async () => ({ conversationId: 'convo-1' }),
       },
       req,
@@ -97,7 +104,7 @@ describe('createHubOpenInChat', () => {
   it('reports a thread the caller does not have, without importing', async () => {
     const importConversation = jest.fn();
     const openInChat = createHubOpenInChat(
-      { methods: { getHubThread: archive([thread]) }, importConversation },
+      { methods: { getHubThread: archive([thread]), linkHubThreadChats }, importConversation },
       req,
     );
 
@@ -112,7 +119,7 @@ describe('createHubOpenInChat', () => {
       messages: [{ ...thread.messages[0], role: 'system' }],
     };
     const openInChat = createHubOpenInChat(
-      { methods: { getHubThread: archive([silent]) }, importConversation },
+      { methods: { getHubThread: archive([silent]), linkHubThreadChats }, importConversation },
       req,
     );
 
@@ -123,7 +130,7 @@ describe('createHubOpenInChat', () => {
   it("reports the importer's refusal with its message", async () => {
     const openInChat = createHubOpenInChat(
       {
-        methods: { getHubThread: archive([thread]) },
+        methods: { getHubThread: archive([thread]), linkHubThreadChats },
         importConversation: async () => {
           throw new ConversationImportError('Conversation is too large to import', 413);
         },
@@ -137,10 +144,42 @@ describe('createHubOpenInChat', () => {
     });
   });
 
+  it('still reports the chat when recording the link fails', async () => {
+    linkHubThreadChats.mockRejectedValueOnce(new Error('write failed'));
+    const openInChat = createHubOpenInChat(
+      {
+        methods: { getHubThread: archive([thread]), linkHubThreadChats },
+        importConversation: async () => ({ conversationId: 'convo-1' }),
+      },
+      req,
+    );
+
+    expect(await openInChat('mindferry:sess-1')).toMatchObject({
+      status: 'opened',
+      conversationId: 'convo-1',
+    });
+  });
+
+  it('does not link a chat that was never made', async () => {
+    const openInChat = createHubOpenInChat(
+      {
+        methods: { getHubThread: archive([thread]), linkHubThreadChats },
+        importConversation: async () => {
+          throw new ConversationImportError('Conversation is too large to import', 413);
+        },
+      },
+      req,
+    );
+
+    await openInChat('mindferry:sess-1');
+
+    expect(linkHubThreadChats).not.toHaveBeenCalled();
+  });
+
   it('lets an unexpected failure propagate', async () => {
     const openInChat = createHubOpenInChat(
       {
-        methods: { getHubThread: archive([thread]) },
+        methods: { getHubThread: archive([thread]), linkHubThreadChats },
         importConversation: async () => {
           throw new Error('database down');
         },

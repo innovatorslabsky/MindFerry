@@ -70,10 +70,22 @@ function toSegments(message: ClaudeMessage): HubSegment[] {
   return segments;
 }
 
+function claudeSourceId(conversation: Pick<ClaudeConversation, 'uuid'>, index: number): string {
+  return conversation.uuid || `index-${index}`;
+}
+
+/** The hub thread id the conversation at `index` of a Claude.ai export is archived under. */
+export function claudeExportThreadId(
+  conversation: Pick<ClaudeConversation, 'uuid'>,
+  index: number,
+): string {
+  return hubThreadId('claude', claudeSourceId(conversation, index));
+}
+
 function toThread(conversation: ClaudeConversation, index: number): HubThread {
   const createdAt = toDate(conversation.created_at, new Date(0));
   const updatedAt = toDate(conversation.updated_at, createdAt);
-  const sourceId = conversation.uuid || `index-${index}`;
+  const sourceId = claudeSourceId(conversation, index);
 
   const messages: HubMessage[] = [];
   let parentId: string | null = null;

@@ -1,7 +1,7 @@
+import { claudeExportThreadId, createClaudeSource } from './claude';
 import { parseExport, UnknownExportError } from '../source';
 import { createDefaultChatSources } from './index';
 import { createChatGptSource } from './chatgpt';
-import { createClaudeSource } from './claude';
 
 /** Shaped after a real Claude account export (`conversations.json`). */
 const claudeExport = [
@@ -146,5 +146,23 @@ describe('parseExport', () => {
     expect(() => parseExport(createDefaultChatSources(), { version: 4 })).toThrow(
       UnknownExportError,
     );
+  });
+});
+
+describe('claudeExportThreadId', () => {
+  it('names the same thread the Claude.ai adapter archives each conversation under', () => {
+    const exported = [
+      { uuid: 'c-1', name: 'One', chat_messages: [] },
+      { name: 'No uuid', chat_messages: [] },
+    ];
+
+    const archived = createClaudeSource()
+      .parse(exported)
+      .map((thread) => thread.id);
+
+    expect(
+      exported.map((conversation, index) => claudeExportThreadId(conversation, index)),
+    ).toEqual(archived);
+    expect(archived).toEqual(['claude:c-1', 'claude:index-1']);
   });
 });

@@ -127,9 +127,13 @@ all chats" in Settings does not save to the archive.
 
 **Archived** shows, first, a **Claude.ai & Claude Code** section with the archive's conversations
 and notes from other clients (the browser described below, following the Chat History search),
-and then **MindFerry chats**, the chats you archived here. A MindFerry chat's archive copy is left
-out of the first section while the chat still exists (`GET /api/hub/threads?excludeLive=true`), so
-nothing is listed twice. Continue in chat on an entry opens it as a new chat and switches back to
+and then **MindFerry chats**, the chats you archived here. Each conversation shows in one place:
+a thread that already is a chat — a MindFerry chat's own archive copy, or a thread opened with
+Continue in chat, `open_in_chat` or an Import into both — is left out of the first section while
+that chat exists (`GET /api/hub/threads?excludeLive=true`). In Chats it lives in Chats; archive it
+and it shows under MindFerry chats; delete the chat and the thread comes back. Opening a thread as
+a chat records the chat on the thread; a thread opened before that was recorded is matched to a
+chat with exactly its title, once, and kept linked from then on. Continue in chat on an entry opens it as a new chat and switches back to
 Chats. The Settings → API Keys **Browse** button still opens the whole archive in a dialog.
 
 One **Import** in Settings → Data & Privacy takes an export for both destinations. With the hub

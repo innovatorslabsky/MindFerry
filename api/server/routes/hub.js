@@ -148,6 +148,7 @@ const listThreadsHandler = createHubListThreadsHandler({
     );
     return conversations.map((conversation) => conversation.conversationId);
   },
+  findConvosByTitles: db.findConvosByTitles,
 });
 const getThreadHandler = createHubGetThreadHandler({ methods: db });
 const listNotesHandler = createHubListNotesHandler({ methods: db });

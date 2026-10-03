@@ -12,6 +12,8 @@ const {
   orderMessageLineage,
   createChatGptLineage,
   linkChatGptCitations,
+  claudeExportThreadId,
+  chatGptExportThreadId,
 } = require('@librechat/api');
 const { getEndpointsConfig } = require('~/server/services/Config');
 const { createImportBatchBuilder } = require('./importBatchBuilder');
@@ -213,8 +215,11 @@ async function importClaudeConvo(
       userRole,
     });
 
-    for (const conv of jsonData) {
-      importBatchBuilder.startConversation(EModelEndpoint.anthropic);
+    for (const [index, conv] of jsonData.entries()) {
+      importBatchBuilder.startConversation(
+        EModelEndpoint.anthropic,
+        claudeExportThreadId(conv, index),
+      );
 
       let lastMessageId = Constants.NO_PARENT;
       let lastTimestamp = null;
@@ -418,8 +423,8 @@ async function importChatGptConvo(
       requestUserId,
       userRole,
     });
-    for (const conv of jsonData) {
-      processConversation(conv, importBatchBuilder, requestUserId, defaultModel);
+    for (const [index, conv] of jsonData.entries()) {
+      processConversation(conv, importBatchBuilder, requestUserId, defaultModel, index);
     }
     await importBatchBuilder.saveBatch();
   } catch (error) {
@@ -436,10 +441,11 @@ async function importChatGptConvo(
  * @param {ImportBatchBuilder} importBatchBuilder - The batch builder instance used to manage and batch conversation data.
  * @param {string} requestUserId - The ID of the user who initiated the import process.
  * @param {string} [defaultModel] - Resolved default model for the openAI endpoint.
+ * @param {number} [index] - The conversation's position in the export, for its archive thread id.
  * @returns {void}
  */
-function processConversation(conv, importBatchBuilder, requestUserId, defaultModel) {
-  importBatchBuilder.startConversation(EModelEndpoint.openAI);
+function processConversation(conv, importBatchBuilder, requestUserId, defaultModel, index = 0) {
+  importBatchBuilder.startConversation(EModelEndpoint.openAI, chatGptExportThreadId(conv, index));
 
   // Map all message IDs to new UUIDs
   const messageMap = new Map();

@@ -79,6 +79,45 @@ describe('importConversations database hardening', () => {
     expect(persisted.messages.every((message) => message.tenantId === tenantId)).toBe(true);
   });
 
+  it('returns which archive thread each chat of a Claude.ai export came from', async () => {
+    const filepath = path.join(tempDir, 'claude-export.json');
+    const owner = 'claude-import-user';
+    await fs.writeFile(
+      filepath,
+      JSON.stringify([
+        {
+          uuid: 'claude-conv-1',
+          name: 'PetVee plan',
+          created_at: '2026-10-03T07:00:00.000Z',
+          chat_messages: [
+            {
+              uuid: 'm1',
+              sender: 'human',
+              created_at: '2026-10-03T07:00:01.000Z',
+              content: [{ type: 'text', text: 'How do I find testers?' }],
+            },
+            {
+              uuid: 'm2',
+              sender: 'assistant',
+              created_at: '2026-10-03T07:00:02.000Z',
+              content: [{ type: 'text', text: 'Try student groups.' }],
+            },
+          ],
+        },
+      ]),
+    );
+
+    const links = await importConversations({ filepath, requestUserId: owner, userRole: 'USER' });
+
+    const conversations = await runAsSystem(() =>
+      mongoose.models.Conversation.find({ user: owner }).lean(),
+    );
+    expect(conversations).toHaveLength(1);
+    expect(links).toEqual([
+      { threadId: 'claude:claude-conv-1', conversationId: conversations[0].conversationId },
+    ]);
+  });
+
   it('rejects an oversized BSON record before persisting any part of a browser import', async () => {
     const filepath = path.join(tempDir, 'oversized-conversation.json');
     const owner = 'browser-import-user';

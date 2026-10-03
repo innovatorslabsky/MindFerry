@@ -347,6 +347,11 @@ export interface ConversationMethods {
     convoMap: Record<string, unknown>;
   }>;
   getConvo(user: string, conversationId: string): Promise<IConversation | null>;
+  /** The user's visible chats whose title is exactly one of `titles`, as `{ conversationId, title }`. */
+  findConvosByTitles(
+    user: string,
+    titles: string[],
+  ): Promise<Array<{ conversationId: string; title: string }>>;
   getSubagentThreadForParent(input: {
     user: string;
     parentConversationId: string;
@@ -3219,6 +3224,34 @@ export function createConversationMethods(
     }
   }
 
+  async function findConvosByTitles(
+    user: string,
+    titles: string[],
+  ): Promise<Array<{ conversationId: string; title: string }>> {
+    if (titles.length === 0) {
+      return [];
+    }
+    try {
+      const Conversation = mongoose.models.Conversation as Model<IConversation>;
+      const results = await Conversation.find(
+        {
+          $and: [
+            { user, title: { $in: titles } },
+            getVisibleConversationRetentionFilter(),
+            getHumanConversationFilter(),
+          ],
+        } as FilterQuery<IConversation>,
+        { conversationId: 1, title: 1 },
+      ).lean<Array<{ conversationId: string; title?: string | null }>>();
+      return results.flatMap((convo) =>
+        convo.title ? [{ conversationId: convo.conversationId, title: convo.title }] : [],
+      );
+    } catch (error) {
+      logger.error('[findConvosByTitles] Error finding conversations', error);
+      throw new Error('Error fetching conversations');
+    }
+  }
+
   /**
    * Gets conversation title, returning 'New Chat' as default.
    */
@@ -3587,6 +3620,7 @@ export function createConversationMethods(
     bulkSaveConvos,
     getConvosByCursor,
     getConvosQueried,
+    findConvosByTitles,
     getConvo,
     getSubagentThreadForParent,
     listSubagentThreadsForParent,

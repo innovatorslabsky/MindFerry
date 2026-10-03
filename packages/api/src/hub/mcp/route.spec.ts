@@ -80,6 +80,7 @@ describe('createContextHubMcpHandler', () => {
     listHubNotes: jest.fn(),
     searchHubNotes: jest.fn(),
     appendHubNote: jest.fn(),
+    linkHubThreadChats: jest.fn(),
   };
 
   function fakeRes() {
@@ -117,7 +118,7 @@ describe('createContextHubMcpHandler', () => {
 });
 
 describe('buildOpenInChat', () => {
-  const methods = { getHubThread: jest.fn() };
+  const methods = { getHubThread: jest.fn(), linkHubThreadChats: jest.fn() };
   const importConversation = jest.fn();
   const req = { user: { id: 'user-a' } } as unknown as ServerRequest & { user: { id: string } };
 

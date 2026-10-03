@@ -2,6 +2,7 @@ import { rateLimit } from 'express-rate-limit';
 import { logger } from '@librechat/data-schemas';
 import { extractEnvVariable } from 'librechat-data-provider';
 import type { ContextHubSemanticSearchConfig } from 'librechat-data-provider';
+import type { HubMethods } from '@librechat/data-schemas';
 import type { RequestHandler, Response } from 'express';
 import type { HubStoreMethods, HubSemanticSearchOptions } from './mongoStore';
 import type { CreateHubOpenInChatDeps, HubOpenInChat } from './chat';
@@ -37,7 +38,7 @@ export const contextHubMcpLimiter: RequestHandler = rateLimit({
 });
 
 export interface CreateContextHubMcpHandlerDeps {
-  methods: HubStoreMethods;
+  methods: HubStoreMethods & Pick<HubMethods, 'linkHubThreadChats'>;
   /**
    * The app's conversation importer, which `open_in_chat` saves through. The
    * tool is offered only when this is supplied and `contextHub.mcp.allowChatImport` is on.

@@ -8,12 +8,14 @@ import type {
   HubDataDeleteResult,
   HubThreadSearchQuery,
   HubThreadSearchResult,
+  HubThreadChatLink,
   HubOAuthClientInput,
   HubOAuthClientRecord,
 } from '~/types';
 import type { IHubThread, IHubMessage } from '~/schema/hubThread';
 import type { IHubOAuthClient } from '~/schema/hubOAuthClient';
 import type { IHubNote } from '~/schema/hubNote';
+import { tenantSafeBulkWrite } from '~/utils/tenantBulkWrite';
 import logger from '~/config/winston';
 
 export interface HubMethods {
@@ -39,6 +41,8 @@ export interface HubMethods {
   /** Best text match first; same term semantics as `searchHubThreads`. */
   searchHubNotes: (userId: string, query: string, limit: number) => Promise<HubNoteRecord[]>;
   deleteAllHubData: (userId: string) => Promise<HubDataDeleteResult>;
+  /** Records chats opened from the user's own threads; a link to a thread they do not have is ignored. */
+  linkHubThreadChats: (userId: string, links: HubThreadChatLink[]) => Promise<void>;
   /** Dynamic client registration (RFC 7591) is unauthenticated by design —
    *  no userId scoping, since a registered client belongs to the hub's OAuth
    *  server as a whole, not to whichever user's browser completes it. */
@@ -107,6 +111,9 @@ function toSearchResult(doc: IHubThread): HubThreadSearchResult {
     updatedAt: doc.updatedAt,
     messageCount: doc.messages.length,
     searchText: doc.searchText,
+    ...(doc.chatConversationIds?.length
+      ? { chatConversationIds: [...doc.chatConversationIds] }
+      : {}),
   };
 }
 
@@ -335,6 +342,28 @@ export function createHubMethods(mongoose: typeof import('mongoose')): HubMethod
     }
   }
 
+  async function linkHubThreadChats(userId: string, links: HubThreadChatLink[]): Promise<void> {
+    if (links.length === 0) {
+      return;
+    }
+    try {
+      const HubThread = mongoose.models.HubThread;
+      await tenantSafeBulkWrite(
+        HubThread,
+        links.map((link) => ({
+          updateOne: {
+            filter: { userId: toObjectId(userId), id: link.threadId },
+            update: { $addToSet: { chatConversationIds: link.conversationId } },
+          },
+        })),
+        { ordered: false },
+      );
+    } catch (error) {
+      logger.error('[linkHubThreadChats] Error linking chats to threads:', error);
+      throw error;
+    }
+  }
+
   async function deleteAllHubData(userId: string): Promise<HubDataDeleteResult> {
     try {
       const HubThread = mongoose.models.HubThread;
@@ -392,6 +421,7 @@ export function createHubMethods(mongoose: typeof import('mongoose')): HubMethod
     appendHubNote,
     deleteHubNote,
     deleteAllHubData,
+    linkHubThreadChats,
     registerHubOAuthClient,
     getHubOAuthClient,
   };

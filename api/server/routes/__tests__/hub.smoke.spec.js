@@ -34,6 +34,12 @@ describe('hub routes wiring', () => {
     expect(typeof require('~/models').deleteHubNote).toBe('function');
   });
 
+  it('gives the routes the chat-link methods the archive list and imports use', () => {
+    const db = require('~/models');
+    expect(typeof db.linkHubThreadChats).toBe('function');
+    expect(typeof db.findConvosByTitles).toBe('function');
+  });
+
   it('gives the note route a note reader from the app models', () => {
     expect(typeof require('~/models').getHubNote).toBe('function');
   });

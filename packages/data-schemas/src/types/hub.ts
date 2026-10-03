@@ -58,6 +58,14 @@ export interface HubThreadSearchResult {
   messageCount: number;
   /** Denormalized title + message text this row matched against. */
   searchText: string;
+  /** Chats opened from this thread; absent when none was ever linked. */
+  chatConversationIds?: string[];
+}
+
+/** A chat opened from an archived thread, to record against that thread. */
+export interface HubThreadChatLink {
+  threadId: string;
+  conversationId: string;
 }
 
 /**

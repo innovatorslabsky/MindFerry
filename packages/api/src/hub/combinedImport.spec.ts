@@ -79,14 +79,19 @@ function chatImporter() {
 
 function hubStore() {
   const threads: HubThreadRecord[] = [];
-  return {
+  const store = {
     threads,
+    links: [] as unknown[],
     methods: {
       upsertHubThread: jest.fn(async (_userId: string, thread: HubThreadRecord) => {
         threads.push(thread);
       }),
+      linkHubThreadChats: jest.fn(async (_userId: string, links: unknown[]) => {
+        store.links.push(...links);
+      }),
     },
   };
+  return store;
 }
 
 describe('parseImportTarget', () => {
@@ -122,6 +127,33 @@ describe('createCombinedImportHandler', () => {
       archive: { status: 'imported', threadCount: 1 },
     });
     expect(await fs.readdir(dir)).toEqual([]);
+  });
+
+  it('links each imported chat to its archive thread when both sides took the file', async () => {
+    const hub = hubStore();
+    const importChats = jest.fn(async (_req: ServerRequest, filepath: string) => {
+      await fs.unlink(filepath);
+      return [{ threadId: 'claude:claude-1', conversationId: 'chat-1' }];
+    });
+    const handler = createCombinedImportHandler({ methods: hub.methods, importChats });
+
+    await handler(makeReq(await upload(claudeExport), 'both'), fakeRes() as never);
+
+    expect(hub.threads.map((thread) => thread.id)).toEqual(['claude:claude-1']);
+    expect(hub.links).toEqual([{ threadId: 'claude:claude-1', conversationId: 'chat-1' }]);
+  });
+
+  it('links nothing when only the chats were imported', async () => {
+    const hub = hubStore();
+    const importChats = jest.fn(async (_req: ServerRequest, filepath: string) => {
+      await fs.unlink(filepath);
+      return [{ threadId: 'claude:claude-1', conversationId: 'chat-1' }];
+    });
+    const handler = createCombinedImportHandler({ methods: hub.methods, importChats });
+
+    await handler(makeReq(await upload(claudeExport), 'chats'), fakeRes() as never);
+
+    expect(hub.methods.linkHubThreadChats).not.toHaveBeenCalled();
   });
 
   it('keeps the old chats-only behavior when no target is sent', async () => {

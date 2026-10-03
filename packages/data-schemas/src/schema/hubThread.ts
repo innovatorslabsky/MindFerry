@@ -38,6 +38,8 @@ export interface IHubThread extends Document {
   searchText: string;
   /** When this row was last written, independent of the conversation's own timestamps. */
   syncedAt: Date;
+  /** Chats opened from this thread (Continue in chat, open_in_chat, an import into both). */
+  chatConversationIds?: string[];
   tenantId?: string;
 }
 
@@ -81,6 +83,7 @@ const hubThreadSchema: Schema<IHubThread> = new Schema(
     messages: { type: [hubMessageSchema], required: true, default: [] },
     searchText: { type: String, required: true, default: '' },
     syncedAt: { type: Date, required: true, default: Date.now },
+    chatConversationIds: { type: [String], default: undefined },
     tenantId: { type: String, index: true },
   },
   { minimize: false },

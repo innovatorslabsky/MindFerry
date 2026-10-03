@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import { logger } from '@librechat/data-schemas';
-import type { HubMethods } from '@librechat/data-schemas';
+import type { HubMethods, HubThreadChatLink } from '@librechat/data-schemas';
 import type { Response } from 'express';
 import type { ServerRequest } from '../types/http';
 import { runHubImportJob, HubImportFileTooLargeError } from './importJob';
@@ -30,14 +30,15 @@ export type ImportSideResult =
   | { status: 'failed' };
 
 export interface CreateCombinedImportHandlerDeps {
-  methods: Pick<HubMethods, 'upsertHubThread'>;
+  methods: Pick<HubMethods, 'upsertHubThread' | 'linkHubThreadChats'>;
   /**
    * Imports the file as ordinary chats through the app's own importer, which
    * lives in the legacy `/api` workspace — supplied by the caller. It deletes
    * the file when done and throws on failure, with `Unsupported import type`
-   * for a format it does not read.
+   * for a format it does not read. It may return which archive thread each new
+   * chat came from, so an import into both shows each conversation once.
    */
-  importChats: (req: ServerRequest, filepath: string) => Promise<void>;
+  importChats: (req: ServerRequest, filepath: string) => Promise<HubThreadChatLink[] | void>;
   /**
    * Recognizes an importer's refusal — a content-filter block or an oversized
    * record — whose status and body go back to the client as they are.
@@ -176,12 +177,20 @@ export function createCombinedImportHandler(
           return result.threadCount;
         }, isImportRefusal)
       : undefined;
+    let links: HubThreadChatLink[] = [];
     const chats = toChats
       ? await importSide(async () => {
-          await importChats(req, filepath);
+          links = (await importChats(req, filepath)) ?? [];
           return undefined;
         }, isImportRefusal)
       : undefined;
+    if (archive?.status === 'imported' && links.length > 0) {
+      try {
+        await methods.linkHubThreadChats(userId, links);
+      } catch (error) {
+        logger.warn('[combinedImport] Could not link imported chats to their threads:', error);
+      }
+    }
     await Promise.all([removeQuietly(filepath), removeQuietly(archiveFile)]);
 
     const results = [archive, chats].filter(

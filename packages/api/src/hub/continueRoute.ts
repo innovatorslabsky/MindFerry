@@ -16,7 +16,7 @@ export interface HubContinueImportParams {
 }
 
 export interface CreateContextHubContinueHandlerDeps {
-  methods: Pick<HubMethods, 'getHubThread'>;
+  methods: Pick<HubMethods, 'getHubThread' | 'linkHubThreadChats'>;
   /**
    * Saves the converted conversation through the app's own conversation
    * importer and returns the new conversation's id. Supplied by the caller —
@@ -49,6 +49,8 @@ type ContinueSource<T> = {
   convert: (record: T, target: HubContinueTarget) => HubContinueImport;
   notFound: { message: string; code: string };
   empty: { message: string; code: string };
+  /** Records the new chat against what it was opened from, so the archive can tell it is a chat now. */
+  link?: (userId: string, id: string, conversationId: string) => Promise<void>;
 };
 
 /**
@@ -101,6 +103,14 @@ function createContinueHandler<T>(
         payload,
         req,
       });
+      if (source.link) {
+        await source.link(userId, id, conversationId).catch((error: unknown) => {
+          logger.warn(
+            `[contextHubContinue] user: ${userId} | Could not link chat ${conversationId} to ${id}:`,
+            error,
+          );
+        });
+      }
       res.status(201).json({ conversationId, messageCount: payload.messages.length });
     } catch (error) {
       if (isContentFilterError(error) || isConversationImportError(error)) {
@@ -121,7 +131,8 @@ function createContinueHandler<T>(
  * the person can keep talking in. The thread is converted and handed to the
  * caller's importer, which applies the same content filters, size limits and
  * model defaulting as any other import — this only adds the conversion. Each
- * call makes a new conversation; the archived thread itself is never changed.
+ * call makes a new conversation, recorded on the thread so the archive can
+ * leave the thread out while that chat exists; its messages are never changed.
  */
 export function createContextHubContinueHandler(
   deps: CreateContextHubContinueHandlerDeps,
@@ -136,6 +147,8 @@ export function createContextHubContinueHandler(
         message: 'This conversation has no text a chat could continue from',
         code: 'empty_thread',
       },
+      link: (userId, threadId, conversationId) =>
+        deps.methods.linkHubThreadChats(userId, [{ threadId, conversationId }]),
     },
     deps.importConversation,
   );

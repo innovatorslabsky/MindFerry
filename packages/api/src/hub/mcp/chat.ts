@@ -16,7 +16,7 @@ export type HubOpenInChatResult =
 export type HubOpenInChat = (threadId: string) => Promise<HubOpenInChatResult>;
 
 export interface CreateHubOpenInChatDeps {
-  methods: Pick<HubMethods, 'getHubThread'>;
+  methods: Pick<HubMethods, 'getHubThread' | 'linkHubThreadChats'>;
   importConversation: CreateContextHubContinueHandlerDeps['importConversation'];
   /** The app's public origin; when set, the result carries a link to the new chat. */
   clientOrigin?: string;
@@ -70,6 +70,14 @@ export function createHubOpenInChat(
         payload,
         req,
       });
+      await deps.methods
+        .linkHubThreadChats(userId, [{ threadId, conversationId }])
+        .catch((error: unknown) => {
+          logger.warn(
+            `[hubOpenInChat] user: ${userId} | Could not link chat to ${threadId}:`,
+            error,
+          );
+        });
       return {
         status: 'opened',
         conversationId,

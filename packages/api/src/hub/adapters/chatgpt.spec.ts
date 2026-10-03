@@ -1,4 +1,4 @@
-import { createChatGptSource } from './chatgpt';
+import { chatGptExportThreadId, createChatGptSource } from './chatgpt';
 
 /**
  * Shaped after a real ChatGPT account export: a client-side root node with no
@@ -198,5 +198,24 @@ describe('createChatGptSource', () => {
     const [thread] = source.parse([{ title: 'No id', mapping: {} }]);
 
     expect(thread.id).toBe('chatgpt:index-0');
+  });
+});
+
+describe('chatGptExportThreadId', () => {
+  it('names the same thread the ChatGPT adapter archives each conversation under', () => {
+    const exported = [
+      { title: 'One', conversation_id: 'g-1', mapping: {} },
+      { title: 'Two', id: 'g-2', mapping: {} },
+      { title: 'Three', mapping: {} },
+    ];
+
+    const archived = createChatGptSource()
+      .parse(exported)
+      .map((thread) => thread.id);
+
+    expect(
+      exported.map((conversation, index) => chatGptExportThreadId(conversation, index)),
+    ).toEqual(archived);
+    expect(archived).toEqual(['chatgpt:g-1', 'chatgpt:g-2', 'chatgpt:index-2']);
   });
 });

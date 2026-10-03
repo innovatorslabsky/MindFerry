@@ -119,10 +119,25 @@ function toSegments(message: ChatGptHubMessage): HubSegment[] {
   return [{ kind: 'text', text: linkChatGptCitations(text, message.metadata?.citations ?? null) }];
 }
 
+function chatGptSourceId(
+  conversation: Pick<ChatGptConversation, 'conversation_id' | 'id'>,
+  index: number,
+): string {
+  return conversation.conversation_id || conversation.id || `index-${index}`;
+}
+
+/** The hub thread id the conversation at `index` of a ChatGPT export is archived under. */
+export function chatGptExportThreadId(
+  conversation: Pick<ChatGptConversation, 'conversation_id' | 'id'>,
+  index: number,
+): string {
+  return hubThreadId('chatgpt', chatGptSourceId(conversation, index));
+}
+
 function toThread(conversation: ChatGptConversation, index: number): HubThread {
   const createdAt = toDate(conversation.create_time, new Date(0));
   const updatedAt = toDate(conversation.update_time, createdAt);
-  const sourceId = conversation.conversation_id || conversation.id || `index-${index}`;
+  const sourceId = chatGptSourceId(conversation, index);
   const mapping = conversation.mapping ?? {};
 
   const messages: HubMessage[] = [];
