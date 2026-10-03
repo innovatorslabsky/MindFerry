@@ -999,6 +999,24 @@ export const useContinueHubNoteMutation = (
   );
 };
 
+/** Deletes one of the person's archive notes, then refreshes every note list. */
+export const useDeleteHubNoteMutation = (
+  options?: t.MutationOptions<void, { id: string }>,
+): UseMutationResult<void, unknown, { id: string }, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation(
+    [MutationKeys.deleteHubNote],
+    ({ id }: { id: string }) => dataService.deleteHubNote(id),
+    {
+      ...options,
+      onSuccess: (data, variables, context) => {
+        queryClient.invalidateQueries([QueryKeys.hubNotes]);
+        options?.onSuccess?.(data, variables, context);
+      },
+    },
+  );
+};
+
 export type SubmitHubOAuthConsentOptions = t.MutationOptions<
   t.THubOAuthConsentResponse,
   t.THubOAuthConsentRequest

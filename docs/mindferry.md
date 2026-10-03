@@ -160,7 +160,9 @@ search and source filter. A note shows only its title, date and a two-line previ
 it. An open note offers **Continue in chat** too (`POST /api/hub/notes/:id/continue`): it starts a
 new conversation whose first message is the note, from the assistant, so what you type next is a
 reply to it and the model reads the note as context. A note anchored to a conversation also offers
-**Open conversation**, which opens that archived thread.
+**Open conversation**, which opens that archived thread. An open note also offers **Delete note**, which asks first and then removes it
+(`DELETE /api/hub/notes/:id`, scoped to the signed-in person's own notes), so Claude.ai and Claude
+Code no longer read it.
 
 ## Two-way sync between Claude.ai and Claude Code
 

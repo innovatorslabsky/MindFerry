@@ -1015,6 +1015,10 @@ export function getHubThread(id: string): Promise<t.TGetHubThreadResponse> {
   return request.get(endpoints.hubThread(id));
 }
 
+export function deleteHubNote(id: string): Promise<void> {
+  return request.delete(endpoints.hubNote(id));
+}
+
 export function listHubNotes(threadId?: string): Promise<t.TListHubNotesResponse> {
   const suffix = threadId ? `?threadId=${encodeURIComponent(threadId)}` : '';
   return request.get(`${endpoints.hubNotes()}${suffix}`);

@@ -132,6 +132,7 @@ export enum MutationKeys {
   importHubExport = 'importHubExport',
   continueHubThread = 'continueHubThread',
   continueHubNote = 'continueHubNote',
+  deleteHubNote = 'deleteHubNote',
   submitHubOAuthConsent = 'submitHubOAuthConsent',
   fileUpload = 'fileUpload',
   fileDelete = 'fileDelete',

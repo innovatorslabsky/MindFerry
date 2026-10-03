@@ -309,6 +309,21 @@ describe('notes', () => {
     expect(await methods.getHubNote(userA, 'not-an-object-id')).toBeNull();
   });
 
+  it("deletes only the caller's own note", async () => {
+    const mine = await methods.appendHubNote(userA, { title: 'Old', text: 'stale' });
+    const kept = await methods.appendHubNote(userA, { title: 'Keep', text: 'fresh' });
+    const theirs = await methods.appendHubNote(userB, { title: 'Theirs', text: 'not yours' });
+
+    expect(await methods.deleteHubNote(userB, mine.id)).toBe(false);
+    expect(await methods.deleteHubNote(userA, theirs.id)).toBe(false);
+    expect(await methods.deleteHubNote(userA, 'not-an-object-id')).toBe(false);
+    expect(await methods.deleteHubNote(userA, mine.id)).toBe(true);
+    expect(await methods.deleteHubNote(userA, mine.id)).toBe(false);
+
+    expect((await methods.listHubNotes(userA)).map((n) => n.id)).toEqual([kept.id]);
+    expect(await methods.getHubNote(userB, theirs.id)).not.toBeNull();
+  });
+
   it('returns the most recent notes, oldest first, when limited', async () => {
     for (const title of ['one', 'two', 'three']) {
       await methods.appendHubNote(userA, { title, text: title });

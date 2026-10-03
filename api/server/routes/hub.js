@@ -11,6 +11,7 @@ const {
   createHubListThreadsHandler,
   createHubGetThreadHandler,
   createHubListNotesHandler,
+  createHubDeleteNoteHandler,
   contextHubMcpLimiter,
   contextHubImportLimiter,
   contextHubArchiveLimiter,
@@ -150,6 +151,7 @@ const listThreadsHandler = createHubListThreadsHandler({
 });
 const getThreadHandler = createHubGetThreadHandler({ methods: db });
 const listNotesHandler = createHubListNotesHandler({ methods: db });
+const deleteNoteHandler = createHubDeleteNoteHandler({ methods: db });
 
 router.get(
   '/threads',
@@ -183,6 +185,13 @@ router.post(
   continueHandler,
 );
 router.get('/notes', requireJwtAuth, configMiddleware, contextHubBrowseLimiter, listNotesHandler);
+router.delete(
+  '/notes/:id',
+  requireJwtAuth,
+  configMiddleware,
+  contextHubBrowseLimiter,
+  deleteNoteHandler,
+);
 
 /** "Continue in chat" for a note: a new conversation that starts from the note, through the same importer. */
 const noteContinueHandler = createContextHubNoteContinueHandler({

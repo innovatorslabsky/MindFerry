@@ -34,6 +34,8 @@ export interface HubMethods {
   /** One of the user's own notes; `null` when the id is malformed or names another user's note. */
   getHubNote: (userId: string, id: string) => Promise<HubNoteRecord | null>;
   appendHubNote: (userId: string, note: HubNoteInput) => Promise<HubNoteRecord>;
+  /** Deletes one of the user's own notes; `false` when the id is malformed or names no note of theirs. */
+  deleteHubNote: (userId: string, id: string) => Promise<boolean>;
   /** Best text match first; same term semantics as `searchHubThreads`. */
   searchHubNotes: (userId: string, query: string, limit: number) => Promise<HubNoteRecord[]>;
   deleteAllHubData: (userId: string) => Promise<HubDataDeleteResult>;
@@ -316,6 +318,23 @@ export function createHubMethods(mongoose: typeof import('mongoose')): HubMethod
     }
   }
 
+  async function deleteHubNote(userId: string, id: string): Promise<boolean> {
+    if (!Types.ObjectId.isValid(id)) {
+      return false;
+    }
+    try {
+      const HubNote = mongoose.models.HubNote;
+      const result = await HubNote.deleteOne({
+        _id: new Types.ObjectId(id),
+        userId: toObjectId(userId),
+      });
+      return (result.deletedCount ?? 0) > 0;
+    } catch (error) {
+      logger.error('[deleteHubNote] Error deleting note:', error);
+      throw error;
+    }
+  }
+
   async function deleteAllHubData(userId: string): Promise<HubDataDeleteResult> {
     try {
       const HubThread = mongoose.models.HubThread;
@@ -371,6 +390,7 @@ export function createHubMethods(mongoose: typeof import('mongoose')): HubMethod
     getHubNote,
     searchHubNotes,
     appendHubNote,
+    deleteHubNote,
     deleteAllHubData,
     registerHubOAuthClient,
     getHubOAuthClient,

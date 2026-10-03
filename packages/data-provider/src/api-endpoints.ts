@@ -177,6 +177,8 @@ export const hubThread = (id: string) => `${BASE_URL}/api/hub/threads/${encodeUR
 
 export const hubNotes = () => `${BASE_URL}/api/hub/notes`;
 
+export const hubNote = (id: string) => `${BASE_URL}/api/hub/notes/${encodeURIComponent(id)}`;
+
 export const continueHubThread = (id: string) =>
   `${BASE_URL}/api/hub/threads/${encodeURIComponent(id)}/continue`;
 

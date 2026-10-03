@@ -23,6 +23,17 @@ describe('hub routes wiring', () => {
     expect(route.stack.length).toBeGreaterThanOrEqual(5);
   });
 
+  it('registers deleting a note as an authenticated DELETE with a note deleter from the app models', () => {
+    const router = require('../hub');
+    const route = router.stack.find(
+      (layer) => layer.route?.path === '/notes/:id' && layer.route.methods.delete,
+    )?.route;
+
+    expect(route).toBeDefined();
+    expect(route.stack.length).toBeGreaterThanOrEqual(4);
+    expect(typeof require('~/models').deleteHubNote).toBe('function');
+  });
+
   it('gives the note route a note reader from the app models', () => {
     expect(typeof require('~/models').getHubNote).toBe('function');
   });

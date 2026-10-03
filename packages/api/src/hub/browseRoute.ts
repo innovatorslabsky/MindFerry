@@ -188,3 +188,41 @@ export function createHubListNotesHandler(
     res.status(200).json({ notes });
   };
 }
+
+export interface CreateHubDeleteNoteHandlerDeps {
+  methods: Pick<HubMethods, 'deleteHubNote'>;
+}
+
+type DeleteNoteRequest = ServerRequest & { params: { id?: string } };
+
+/** `DELETE /api/hub/notes/:id` — removes one of the caller's own notes. */
+export function createHubDeleteNoteHandler(
+  deps: CreateHubDeleteNoteHandlerDeps,
+): (req: DeleteNoteRequest, res: Response) => Promise<void> {
+  const { methods } = deps;
+
+  return async (req, res) => {
+    const userId = requireUserId(req, res);
+    if (!userId) {
+      return;
+    }
+
+    const id = req.params.id;
+    if (!id) {
+      res.status(400).json({
+        error: { message: 'A note id is required', type: 'invalid_request_error', code: 'no_id' },
+      });
+      return;
+    }
+
+    const deleted = await methods.deleteHubNote(userId, id);
+    if (!deleted) {
+      res.status(404).json({
+        error: { message: 'No note has that id', type: 'not_found', code: 'note_not_found' },
+      });
+      return;
+    }
+
+    res.status(204).end();
+  };
+}

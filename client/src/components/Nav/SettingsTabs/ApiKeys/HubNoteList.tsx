@@ -10,6 +10,7 @@ import {
 } from '@librechat/client';
 import type { THubNote, THubContinueRequest } from 'librechat-data-provider';
 import { useContinueHubNoteMutation } from '~/data-provider';
+import DeleteNoteButton from './DeleteNoteButton';
 import { NotificationSeverity } from '~/common';
 import { SURFACE_LABEL_KEYS } from './surface';
 import { useLocalize } from '~/hooks';
@@ -111,6 +112,7 @@ function NoteRow({ note, continueTarget, onContinued, onOpenThread }: NoteRowPro
                 {localize('com_ui_context_hub_browse_note_open_thread')}
               </Button>
             )}
+            <DeleteNoteButton note={note} />
           </div>
           <p className="whitespace-pre-wrap break-words text-sm text-text-primary">{note.text}</p>
         </CollapsibleContent>

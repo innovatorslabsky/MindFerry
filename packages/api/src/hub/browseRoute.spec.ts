@@ -3,12 +3,14 @@ import {
   createHubListThreadsHandler,
   createHubGetThreadHandler,
   createHubListNotesHandler,
+  createHubDeleteNoteHandler,
 } from './browseRoute';
 
 function fakeRes() {
   return {
     status: jest.fn().mockReturnThis(),
     json: jest.fn().mockReturnThis(),
+    end: jest.fn().mockReturnThis(),
   };
 }
 
@@ -241,5 +243,53 @@ describe('createHubListNotesHandler', () => {
     await handler(req, res as unknown as import('express').Response);
 
     expect(listHubNotes).toHaveBeenCalledWith('user-a', 'claude:c1');
+  });
+});
+
+describe('createHubDeleteNoteHandler', () => {
+  const notes = new Map([['note-1', 'user-a']]);
+  const deleteHubNote = jest.fn(async (userId: string, id: string) => {
+    if (notes.get(id) !== userId) {
+      return false;
+    }
+    notes.delete(id);
+    return true;
+  });
+  const handler = createHubDeleteNoteHandler({ methods: { deleteHubNote } });
+  const send = (req: ReturnType<typeof fakeReq>) => {
+    const res = fakeRes();
+    return handler(req, res as unknown as import('express').Response).then(() => res);
+  };
+
+  beforeEach(() => {
+    notes.set('note-1', 'user-a');
+    deleteHubNote.mockClear();
+  });
+
+  it("deletes the caller's note and answers 204", async () => {
+    const res = await send(fakeReq({ params: { id: 'note-1' } }));
+
+    expect(deleteHubNote).toHaveBeenCalledWith('user-a', 'note-1');
+    expect(res.status).toHaveBeenCalledWith(204);
+    expect(res.end).toHaveBeenCalled();
+    expect(notes.has('note-1')).toBe(false);
+  });
+
+  it("answers 404 for another user's note and leaves it in place", async () => {
+    const res = await send(fakeReq({ user: { id: 'user-b' }, params: { id: 'note-1' } }));
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(notes.get('note-1')).toBe('user-a');
+  });
+
+  it('rejects before deleting when the hub is off, no user was resolved, or no id was given', async () => {
+    expect(
+      (await send(fakeReq({ config: undefined, params: { id: 'note-1' } }))).status,
+    ).toHaveBeenCalledWith(404);
+    expect(
+      (await send(fakeReq({ user: undefined, params: { id: 'note-1' } }))).status,
+    ).toHaveBeenCalledWith(401);
+    expect((await send(fakeReq())).status).toHaveBeenCalledWith(400);
+    expect(deleteHubNote).not.toHaveBeenCalled();
   });
 });
