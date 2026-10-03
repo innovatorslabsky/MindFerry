@@ -138,4 +138,23 @@ describe('ImportConversations', () => {
     );
     expect(getByRole('button', { name: /Import/ })).not.toBeDisabled();
   });
+
+  it('says the upload failed when the file cannot be prepared for sending', async () => {
+    const append = jest.spyOn(FormData.prototype, 'append').mockImplementationOnce(() => {
+      throw new Error('unreadable');
+    });
+    const { container, getByRole } = render(<ImportConversations />);
+
+    chooseFile(container);
+
+    await waitFor(() =>
+      expect(mockShowToast).toHaveBeenCalledWith({
+        message: 'Error uploading file. Please try again.',
+        status: 'error',
+      }),
+    );
+    expect(mockImportFile).not.toHaveBeenCalled();
+    expect(getByRole('button', { name: /Import/ })).not.toBeDisabled();
+    append.mockRestore();
+  });
 });

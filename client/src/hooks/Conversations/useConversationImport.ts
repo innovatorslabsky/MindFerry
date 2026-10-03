@@ -46,9 +46,19 @@ export default function useConversationImport() {
         return;
       }
 
-      const formData = new FormData();
-      formData.append('target', target);
-      formData.append('file', file, encodeURIComponent(file.name || 'File'));
+      let formData: FormData;
+      try {
+        formData = new FormData();
+        formData.append('target', target);
+        formData.append('file', file, encodeURIComponent(file.name || 'File'));
+      } catch (error) {
+        logger.error('File processing error:', error);
+        showToast({
+          message: localize('com_ui_import_conversation_upload_error'),
+          status: NotificationSeverity.ERROR,
+        });
+        return;
+      }
       setIsUploading(true);
       uploadFile.mutate(formData, {
         onSuccess: (response) => {
