@@ -479,6 +479,100 @@ describe('createHubMcpServer', () => {
       await close();
     });
 
+    it('archives a long conversation sent in parts as one thread, and a resent part is safe', async () => {
+      const { client, store, close } = await connect();
+      const part = (startAt: number, texts: string[]) =>
+        call(client, 'archive_thread', {
+          title: 'Long chat',
+          sourceId: 'long',
+          surface: 'chat',
+          startAt,
+          messages: texts.map((text, index) => ({
+            role: (startAt + index) % 2 === 0 ? 'user' : 'assistant',
+            text,
+          })),
+        });
+
+      expect(textOf(await part(0, ['t0', 't1']))).toContain('2 messages');
+      expect(textOf(await part(2, ['t2', 't3']))).toContain('4 messages');
+      expect(textOf(await part(2, ['t2', 't3']))).toContain('4 messages');
+      expect(textOf(await part(4, ['t4']))).toContain('5 messages');
+
+      const thread = await store.getThread('mindferry:long');
+      expect(thread?.messages.map((message) => message.segments[0].text)).toEqual([
+        't0',
+        't1',
+        't2',
+        't3',
+        't4',
+      ]);
+      expect(thread?.messages.map((message) => message.parentId)).toEqual([
+        null,
+        'm1',
+        'm2',
+        'm3',
+        'm4',
+      ]);
+      expect(thread?.surface).toBe('chat');
+      await close();
+    });
+
+    it('refuses a part that would leave a gap, and keeps what was archived', async () => {
+      const { client, store, close } = await connect();
+      await call(client, 'archive_thread', {
+        title: 'Gappy',
+        sourceId: 'gap',
+        messages: [{ role: 'user', text: 'only turn' }],
+      });
+
+      const result = await call(client, 'archive_thread', {
+        title: 'Gappy',
+        sourceId: 'gap',
+        startAt: 3,
+        messages: [{ role: 'assistant', text: 'too far ahead' }],
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toContain('startAt: 1');
+      expect((await store.getThread('mindferry:gap'))?.messages).toHaveLength(1);
+      await close();
+    });
+
+    it('refuses a later part without a sourceId', async () => {
+      const { client, close } = await connect();
+
+      const result = await call(client, 'archive_thread', {
+        title: 'No id',
+        startAt: 2,
+        messages: [{ role: 'user', text: 'orphan part' }],
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toContain('sourceId');
+      await close();
+    });
+
+    it('applies the byte limit to the whole thread across parts', async () => {
+      const { client, store, close } = await connect({ maxArchiveBytes: 1000 });
+      await call(client, 'archive_thread', {
+        title: 'Growing',
+        sourceId: 'grow',
+        messages: [{ role: 'user', text: 'x'.repeat(600) }],
+      });
+
+      const result = await call(client, 'archive_thread', {
+        title: 'Growing',
+        sourceId: 'grow',
+        startAt: 1,
+        messages: [{ role: 'assistant', text: 'y'.repeat(600) }],
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toContain('1200 bytes');
+      expect((await store.getThread('mindferry:grow'))?.messages).toHaveLength(1);
+      await close();
+    });
+
     it('rejects a conversation over the configured byte limit with an actionable error', async () => {
       const { client, close } = await connect({ maxArchiveBytes: 1000 });
 

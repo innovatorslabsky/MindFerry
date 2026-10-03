@@ -93,7 +93,10 @@ MindFerry" archives one.
 *whole* conversation kept has `archive_thread` instead, the live-connector counterpart to "Save to
 MindFerry" and the file importer, neither of which it can reach. It takes a title and every turn
 verbatim (`{ role, text }`), and an optional `sourceId`: passing the same one again updates that
-thread instead of creating a duplicate, so a client can re-call it as a conversation grows.
+thread instead of creating a duplicate, so a client can re-call it as a conversation grows. A
+conversation too long for one call goes in parts under one `sourceId`: the first with `startAt: 0`,
+each next with `startAt` set to the number of turns already sent; earlier turns are kept, resending
+a part is safe, and `maxArchiveBytes` applies to the whole thread.
 Archived this way, threads carry `provider: "mindferry"`, same as one saved from this app's own
 UI. The optional `surface` says which client archived it — `chat` (claude.ai), `code` (Claude Code),
 `agent` or `other` — and Browse shows it next to the conversation and can filter by it;

@@ -11,6 +11,7 @@ import type { HubOpenInChat, HubOpenInChatResult } from './chat';
 import type { HubProvider } from '../thread';
 import { renderThreadMarkdown, renderThreadOutlineMarkdown } from '../render';
 import { HUB_PROVIDERS, HUB_SURFACES } from '../thread';
+import { HubArchiveInputError } from './store';
 import { snippetAround } from './snippet';
 
 /**
@@ -276,7 +277,9 @@ export function createHubMcpServer(options: HubMcpServerOptions): McpServer {
           'Archive this conversation into the hub verbatim, turn by turn — not a summary. ' +
           'Use append_note for a short summary instead; use this when the user wants the ' +
           'conversation itself kept, the way "Save to MindFerry" keeps one from this app\'s own UI. ' +
-          'Pass the same sourceId again later to update this thread instead of creating a new one.',
+          'Pass the same sourceId again later to update this thread instead of creating a new one. ' +
+          'A conversation too long for one call goes in parts under one sourceId: the first ' +
+          'part with startAt 0, each next part with startAt set to the number of turns sent so far.',
         inputSchema: {
           title: z.string().min(1).describe('A short, descriptive title for the conversation'),
           surface: z
@@ -303,9 +306,19 @@ export function createHubMcpServer(options: HubMcpServerOptions): McpServer {
             .min(1)
             .max(2000)
             .describe('Every turn, in order, verbatim — not a summary or excerpt'),
+          startAt: z
+            .number()
+            .int()
+            .min(0)
+            .optional()
+            .describe(
+              'For a conversation sent in parts: the index of the first turn in messages (0 for ' +
+                'the first part). The turns before it are kept from earlier parts. Needs the same ' +
+                'sourceId on every part. Omit to send the whole conversation in this call.',
+            ),
         },
       },
-      async ({ title, sourceId, surface, messages }) => {
+      async ({ title, sourceId, surface, messages, startAt }) => {
         const bytes = messages.reduce(
           (total, message) => total + Buffer.byteLength(message.text),
           0,
@@ -318,8 +331,28 @@ export function createHubMcpServer(options: HubMcpServerOptions): McpServer {
             ),
           };
         }
-        const summary = await store.archiveThread({ title, sourceId, surface, messages });
-        return asText(`Archived thread ${summary.id} (${summary.messageCount} messages).`);
+        if (startAt !== undefined && startAt > 0 && !sourceId) {
+          return {
+            isError: true,
+            ...asText('A part after the first needs the sourceId the first part used.'),
+          };
+        }
+        try {
+          const summary = await store.archiveThread({
+            title,
+            sourceId,
+            surface,
+            messages,
+            startAt,
+            maxBytes: maxArchiveBytes,
+          });
+          return asText(`Archived thread ${summary.id} (${summary.messageCount} messages).`);
+        } catch (error) {
+          if (error instanceof HubArchiveInputError) {
+            return { isError: true, ...asText(error.message) };
+          }
+          throw error;
+        }
       },
     );
   }

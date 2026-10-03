@@ -43,17 +43,34 @@ this for later":
    re-reading everything here.
 2. Give the note a short, greppable title (a project name, a persona name, a feature name) — the
    read side finds notes by keyword, so an untitled or vaguely-titled note is effectively lost.
-3. If the conversation itself is worth keeping verbatim, not just its summary, call
-   `archive_thread` with the title and every turn so far (`{ role, text }`) — this is a second,
-   separate write from the note. Pass a stable `sourceId` (e.g. this session's own conversation
-   id) if you might call it again later in the same conversation, so it updates the existing
-   thread instead of creating a duplicate. Also pass `surface`: `"chat"` from Claude.ai,
-   `"code"` from Claude Code, so the person can tell where each conversation came from when they
-   browse the archive. `append_note` is still the right tool for the short
-   bridging summary; `archive_thread` is for keeping the transcript itself. If `archive_thread`
-   isn't available (the operator disabled it), tell the user to use "Save to MindFerry" from the
-   conversation's export menu instead — the UI-side equivalent of the same archive.
+3. When the user asks to save, keep, store, import or "lưu" *the chat* or *the conversation*
+   (not only a summary, decision or idea), they want the whole transcript, so also archive it as
+   described in "Archiving the whole conversation" below. Do not stop at the note. If
+   `archive_thread` isn't available (the operator disabled it), say so and tell them to use the
+   app's own export instead (Claude.ai: Settings → Privacy → Export data, then Import in MindFerry).
 4. Confirm to the user what you wrote and its title, so they know what the other session will see.
+
+## Archiving the whole conversation
+
+`archive_thread` is how the full chat gets into MindFerry by prompt — the same content an exported
+JSON file carries, sent through the connector instead of a file.
+
+1. Send every turn of this conversation, oldest first, each `{ role, text }` exactly as written —
+   the user's messages and your replies, not a paraphrase, summary or excerpt. Leave out tool
+   calls and their raw output, but keep your text around them.
+2. Pass a stable `sourceId` for this conversation (reuse it every time you archive this same
+   conversation, so it updates one thread), a descriptive `title`, and `surface`: `"chat"` from
+   Claude.ai, `"code"` from Claude Code. Getting `surface` right is what lets the person tell
+   where a conversation came from.
+3. A long conversation will not fit in one call. Send it in parts of about 20 turns: the first
+   with `startAt: 0`, each next one with `startAt` set to the number of turns already sent and the
+   same `sourceId`, until the last turn is in. Resending a part is safe. Check the message count
+   in each reply matches what you sent.
+4. You can only send what is still in your context. If earlier parts of this conversation were
+   summarized away and you no longer have their exact text, say so plainly — do not reconstruct
+   or invent turns — and tell the user the faithful copy is the app's own export (Claude.ai:
+   Settings → Privacy → Export data), which the Import button in MindFerry takes.
+5. Tell the user the thread id and how many turns were archived.
 
 ## Importing a conversation by prompt
 
@@ -61,9 +78,8 @@ When the user asks to import, move, copy or open a conversation in MindFerry —
 for example "import this chat into MindFerry", "đưa chat này qua MindFerry", "lưu nguyên văn rồi
 mở trong MindFerry" — do it without asking them to export a file:
 
-1. **This conversation:** call `archive_thread` with every turn verbatim, a stable `sourceId`
-   and `surface` (`"chat"` from Claude.ai, `"code"` from Claude Code). It returns the thread id
-   (`mindferry:<sourceId>`).
+1. **This conversation:** archive it as in "Archiving the whole conversation" above. The reply
+   gives the thread id (`mindferry:<sourceId>`).
 2. **Another conversation already in the archive** (a Claude Code session the plugin archived, an
    earlier Claude.ai chat): find it with `search_context` — pass `surface: "code"` or
    `surface: "chat"` when the user names the client — and confirm the title and date with the user

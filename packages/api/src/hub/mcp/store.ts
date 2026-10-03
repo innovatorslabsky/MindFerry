@@ -61,6 +61,23 @@ export interface HubArchiveThreadInput {
   /** Which client is archiving it; kept from the earlier archive when omitted on an update. */
   surface?: HubSurface;
   messages: HubArchiveMessageInput[];
+  /**
+   * Where `messages` start in the conversation, counting turns from 0. Omitted,
+   * they are the whole conversation. Set, the thread keeps its turns before
+   * that point and these replace the rest — how a conversation too long for one
+   * call is archived in parts under one `sourceId`. Sending a part again is safe.
+   */
+  startAt?: number;
+  /** Largest thread the archive keeps, in UTF-8 bytes of turn text, counting earlier parts. */
+  maxBytes?: number;
+}
+
+/** An `archiveThread` input the store refuses, with a message the client can act on. */
+export class HubArchiveInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'HubArchiveInputError';
+  }
 }
 
 export interface HubStore {
@@ -89,8 +106,18 @@ export function buildThreadFromArchiveInput(
   previous?: HubThread,
 ): HubThread {
   const sourceId = input.sourceId?.trim() || randomUUID();
-  let parentId: string | null = null;
-  const messages: HubMessage[] = input.messages.map((message, index) => {
+  const startAt = input.startAt ?? 0;
+  const kept = previous?.messages.slice(0, startAt) ?? [];
+  if (kept.length < startAt) {
+    throw new HubArchiveInputError(
+      `This part starts at turn ${startAt}, but the archived thread has only ${kept.length} turns. ` +
+        `Send the earlier turns first, or pass startAt: ${kept.length}.`,
+    );
+  }
+
+  let parentId: string | null = kept.length > 0 ? kept[kept.length - 1].id : null;
+  const added: HubMessage[] = input.messages.map((message, offset) => {
+    const index = startAt + offset;
     const id = `m${index + 1}`;
     const earlier = previous?.messages[index];
     const unchanged =
@@ -108,6 +135,20 @@ export function buildThreadFromArchiveInput(
     parentId = id;
     return converted;
   });
+  const messages = [...kept, ...added];
+
+  if (input.maxBytes !== undefined) {
+    const bytes = messages.reduce(
+      (total, message) =>
+        total + message.segments.reduce((sum, segment) => sum + Buffer.byteLength(segment.text), 0),
+      0,
+    );
+    if (bytes > input.maxBytes) {
+      throw new HubArchiveInputError(
+        `With this part the thread would be ${bytes} bytes, over the ${input.maxBytes}-byte limit for one archived thread. Archive the rest as a new thread with a different sourceId.`,
+      );
+    }
+  }
 
   return {
     id: hubThreadId('mindferry', sourceId),
