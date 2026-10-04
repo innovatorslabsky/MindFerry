@@ -91,6 +91,9 @@ function renderMenu(ui: React.ReactElement) {
   };
 }
 
+/** The Windows CI runner can take over a second to settle a menu selection into the move request. */
+const SLOW_RUNNER = { timeout: 3000 };
+
 describe('CodeWorkspaceMenu', () => {
   test('explains a failed reconciliation and retries without permitting workspace changes', async () => {
     const store = createStore();
@@ -632,7 +635,7 @@ describe('CodeWorkspaceMenu', () => {
         await screen.findByRole('menuitem', { name: 'com_ui_code_workspace_recover' }),
       );
 
-      await waitFor(() => expect(setConversation).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(setConversation).toHaveBeenCalledTimes(1), SLOW_RUNNER);
       expect(moveSpy).toHaveBeenCalledWith({
         conversationId: 'existing',
         from: [missing, kept],
@@ -690,7 +693,7 @@ describe('CodeWorkspaceMenu', () => {
       await userEvent.click(
         await screen.findByRole('menuitem', { name: 'com_ui_code_workspace_recover' }),
       );
-      await waitFor(() => expect(setConversation).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(setConversation).toHaveBeenCalledTimes(1), SLOW_RUNNER);
       expect(moveSpy).toHaveBeenCalledTimes(2);
       expect(rememberSelection).toHaveBeenCalledTimes(1);
     });
@@ -730,7 +733,7 @@ describe('CodeWorkspaceMenu', () => {
       await waitFor(() => expect(screen.getByTestId('code-workspace-move')).toBeDisabled());
       expect(setConversation).not.toHaveBeenCalled();
       finish?.();
-      await waitFor(() => expect(setConversation).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(setConversation).toHaveBeenCalledTimes(1), SLOW_RUNNER);
       expect(screen.getByTestId('code-workspace-move')).not.toBeDisabled();
     });
 
@@ -789,7 +792,7 @@ describe('CodeWorkspaceMenu', () => {
       );
       await userEvent.click(await confirmItem());
 
-      await waitFor(() => expect(setConversation).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(setConversation).toHaveBeenCalledTimes(1), SLOW_RUNNER);
       expect(moveSpy).toHaveBeenCalledTimes(1);
       expect(moveSpy).toHaveBeenCalledWith({
         conversationId: 'existing',
@@ -902,7 +905,7 @@ describe('CodeWorkspaceMenu', () => {
       expect(screen.getByText('com_ui_code_workspace_move_info_removed')).toBeInTheDocument();
       await userEvent.click(await confirmItem());
 
-      await waitFor(() => expect(setConversation).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(setConversation).toHaveBeenCalledTimes(1), SLOW_RUNNER);
       expect(moveSpy).toHaveBeenCalledWith({
         conversationId: 'existing',
         from: [mac, moved],
