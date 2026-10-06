@@ -16,6 +16,30 @@ contextHub:
     allowNotes: true
     allowChatImport: true
 
+# Weekly Review (docs/notion-weekly-review.md): a scheduled agent reads the
+# archive through MindFerry's own MCP endpoint and writes the digest to Notion.
+# Scheduled runs are unattended, so both servers use static credentials
+# (env vars), never browser-only OAuth.
+interface:
+  schedules:
+    use: true
+    create: true
+    maxPerUser: 5
+
+mcpServers:
+  mindferry-hub:
+    type: streamable-http
+    url: '${DOMAIN_SERVER}/api/hub/mcp'
+    headers:
+      Authorization: 'Bearer ${MINDFERRY_AGENT_API_KEY}'
+    timeout: 60000
+  notion:
+    type: stdio
+    command: npx
+    args: ['-y', '@notionhq/notion-mcp-server']
+    env:
+      NOTION_TOKEN: '${NOTION_TOKEN}'
+
 # FreeLLMAPI: a self-hosted proxy that aggregates free tiers from 20+ LLM
 # providers behind one OpenAI-compatible endpoint. See docs/freellmapi.md.
 endpoints:
