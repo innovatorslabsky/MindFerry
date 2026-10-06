@@ -10,8 +10,9 @@ a Notion MCP server. No application code is involved.
 ## Cost
 
 One run per week reads about 3K tokens of search snippets plus a small Notion lookup and writes
-about 2K, roughly 7K tokens per run and 30K per month. Pointing the agent at the FreeLLMAPI endpoint
-([freellmapi.md](freellmapi.md)) puts that inside free-tier limits. The prompt below only uses the
+about 2K, roughly 7K tokens per run and 30K per month. On Claude Haiku that is a few cents a month.
+A deployment that also runs FreeLLMAPI ([freellmapi.md](freellmapi.md)) can point the agent at it
+instead and stay inside free-tier limits; the Railway deployment does not run it. The prompt below only uses the
 first search tier and reaches for `get_thread_outline` / `get_thread` with `messageIds` when a
 thread needs a closer look, so a long thread is never read whole.
 
@@ -33,8 +34,8 @@ thread needs a closer look, so a long thread is never read whole.
    The `notion` server is `@notionhq/notion-mcp-server`, started with `npx` (present in the
    `node:24-alpine` image). It reads `NOTION_TOKEN` (checked against v2.5.2) and exposes the Notion
    API as tools, so the first run downloads the package.
-4. **Agent.** Create an agent, enable both MCP servers, choose the FreeLLMAPI endpoint and a small
-   model such as `gemini-2.5-flash`, and paste the instructions below.
+4. **Agent.** Create an agent, enable both MCP servers, choose a small model (Claude Haiku on the
+   Anthropic endpoint, or `gemini-2.5-flash` through FreeLLMAPI where it runs), and paste the instructions below.
 5. **Schedule.** Create a scheduled chat on that agent, weekly, Monday morning.
 
 Scheduled runs have no browser session. If the Notion secret is wrong or missing the occurrence
