@@ -26,7 +26,13 @@ thread needs a closer look, so a long thread is never read whole.
    `MINDFERRY_AGENT_API_KEY`.
 3. **Config.** `librechat.yaml` in this repo already declares the `mindferry-hub` and `notion`
    servers and enables schedules. `DOMAIN_SERVER` must be set (see [mindferry.md](mindferry.md)).
-   Without Redis, also set `SCHEDULES_SINGLE_PROCESS=true`.
+   Without Redis, also set `SCHEDULES_SINGLE_PROCESS=true`. On Railway, set `NOTION_TOKEN`,
+   `MINDFERRY_AGENT_API_KEY` and `SCHEDULES_SINGLE_PROCESS` as service variables; the compose files
+   read them from `.env` through `env_file`.
+
+   The `notion` server is `@notionhq/notion-mcp-server`, started with `npx` (present in the
+   `node:24-alpine` image). It reads `NOTION_TOKEN` (checked against v2.5.2) and exposes the Notion
+   API as tools, so the first run downloads the package.
 4. **Agent.** Create an agent, enable both MCP servers, choose the FreeLLMAPI endpoint and a small
    model such as `gemini-2.5-flash`, and paste the instructions below.
 5. **Schedule.** Create a scheduled chat on that agent, weekly, Monday morning.
@@ -43,8 +49,9 @@ stop early when a step finds nothing.
 
 1. Compute the ISO week label for the previous Monday–Sunday, for example 2026-W41, and that
    Monday's date.
-2. Search Notion's "MindFerry Weekly Review" database for a row whose Week equals that label.
-   If one exists, update it instead of creating another.
+2. Query the Notion data source "MindFerry Weekly Review" (database id
+   2a7eb145-6aa0-4e0d-a2eb-98768c4d22fa, data source id dceb2cfd-de1b-4486-bc80-c4d06af66f74)
+   for a row whose Week equals that label. If one exists, update it instead of creating another.
 3. Call mindferry-hub search_context several times with short queries that cover the week's
    topics (limit 20, no more than 5 calls). Keep only threads whose `updated` falls inside the
    week. Do not call get_thread on a whole thread. When a snippet is not enough, call

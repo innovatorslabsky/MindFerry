@@ -220,6 +220,12 @@ tiers of increasing cost: search (which threads), outline (which messages
 in one thread), full text (only the messages worth reading) — so a client
 never has to choose between "a snippet" and "the entire conversation."
 
+## Notion weekly review
+
+A scheduled agent summarizes the week's archived conversations into a Notion database, with the
+source thread ids on every row. It needs no code, only configuration. See
+[docs/notion-weekly-review.md](notion-weekly-review.md).
+
 ## Slack bridge
 
 Send a Slack channel's messages to a MindFerry agent, and post its reply back —
