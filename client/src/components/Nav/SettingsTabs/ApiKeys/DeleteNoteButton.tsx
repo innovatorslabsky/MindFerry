@@ -40,7 +40,7 @@ export default function DeleteNoteButton({ note }: { note: Pick<THubNote, 'id' |
         <Button
           variant="ghost"
           size="sm"
-          className="gap-1.5 text-text-destructive"
+          className="text-text-destructive gap-1.5"
           disabled={deleteMutation.isLoading}
         >
           {deleteMutation.isLoading ? (

@@ -59,7 +59,7 @@ export default function MindFerryConnect() {
   if (!isAuthenticated) {
     return (
       <div
-        className="flex min-h-screen items-center justify-center bg-surface-secondary"
+        className="bg-surface-secondary flex min-h-screen items-center justify-center"
         aria-live="polite"
         role="status"
       >
@@ -69,24 +69,24 @@ export default function MindFerryConnect() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface-secondary p-8">
-      <div className="w-full max-w-md rounded-xl bg-surface-primary p-8 shadow-lg">
-        <h1 className="mb-4 text-xl font-bold text-text-primary">
+    <div className="bg-surface-secondary flex min-h-screen items-center justify-center p-8">
+      <div className="bg-surface-primary w-full max-w-md rounded-xl p-8 shadow-lg">
+        <h1 className="text-text-primary mb-4 text-xl font-bold">
           {localize('com_ui_mindferry_connect_title')}
         </h1>
 
         {!requestIsValid ? (
-          <p className="text-sm text-status-error">
+          <p className="text-status-error text-sm">
             {localize('com_ui_mindferry_connect_invalid')}
           </p>
         ) : (
           <>
-            <p className="mb-6 text-sm text-text-secondary">
+            <p className="text-text-secondary mb-6 text-sm">
               <strong className="text-text-primary">{redirectHost}</strong>{' '}
               {localize('com_ui_mindferry_connect_description')}
             </p>
             {consentMutation.isError ? (
-              <p className="mb-4 text-sm text-status-error">
+              <p className="text-status-error mb-4 text-sm">
                 {localize('com_ui_mindferry_connect_error')}
               </p>
             ) : null}

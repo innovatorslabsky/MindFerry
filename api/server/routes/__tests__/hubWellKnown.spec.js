@@ -47,9 +47,7 @@ describe('hub well-known routes', () => {
   });
 
   it('serves the same protected-resource metadata when the client inserts the resource path per RFC 9728', async () => {
-    const response = await request(app).get(
-      '/.well-known/oauth-protected-resource/api/hub/mcp',
-    );
+    const response = await request(app).get('/.well-known/oauth-protected-resource/api/hub/mcp');
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
@@ -69,9 +67,7 @@ describe('hub well-known routes', () => {
   });
 
   it('serves the same authorization-server metadata with an inserted resource path', async () => {
-    const response = await request(app).get(
-      '/.well-known/oauth-authorization-server/api/hub/mcp',
-    );
+    const response = await request(app).get('/.well-known/oauth-authorization-server/api/hub/mcp');
 
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({

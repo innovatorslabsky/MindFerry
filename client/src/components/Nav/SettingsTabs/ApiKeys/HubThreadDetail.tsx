@@ -75,46 +75,46 @@ export default function HubThreadDetail({
       </div>
       {isLoading && (
         <div className="flex items-center justify-center py-12">
-          <Spinner className="h-6 w-6 text-text-secondary" />
+          <Spinner className="text-text-secondary h-6 w-6" />
         </div>
       )}
       {isError && (
-        <p className="py-6 text-center text-sm text-text-secondary">
+        <p className="text-text-secondary py-6 text-center text-sm">
           {localize('com_ui_context_hub_browse_thread_load_error')}
         </p>
       )}
       {thread != null && (
-        <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-border-light">
-          <div className="border-b border-border-light px-4 py-3">
-            <h3 className="text-sm font-medium text-text-primary">{thread.title}</h3>
-            <p className="text-xs text-text-secondary">
+        <div className="border-border-light min-h-0 flex-1 overflow-y-auto rounded-xl border">
+          <div className="border-border-light border-b px-4 py-3">
+            <h3 className="text-text-primary text-sm font-medium">{thread.title}</h3>
+            <p className="text-text-secondary text-xs">
               {localize(SURFACE_LABEL_KEYS[surfaceOf(thread.surface)])} · {thread.provider} ·{' '}
               {new Date(thread.updatedAt).toLocaleString()}
             </p>
           </div>
           {notes.length > 0 && (
-            <div className="border-b border-border-light px-4 py-3">
-              <h4 className="mb-1 text-xs font-medium uppercase text-text-secondary">
+            <div className="border-border-light border-b px-4 py-3">
+              <h4 className="text-text-secondary mb-1 text-xs font-medium uppercase">
                 {localize('com_ui_context_hub_browse_thread_notes_heading')}
               </h4>
               <ul className="space-y-2">
                 {notes.map((note) => (
                   <li key={note.id}>
-                    <p className="text-sm font-medium text-text-primary">{note.title}</p>
-                    <p className="whitespace-pre-wrap text-sm text-text-primary">{note.text}</p>
+                    <p className="text-text-primary text-sm font-medium">{note.title}</p>
+                    <p className="text-text-primary text-sm whitespace-pre-wrap">{note.text}</p>
                   </li>
                 ))}
               </ul>
             </div>
           )}
-          <div className="divide-y divide-border-light">
+          <div className="divide-border-light divide-y">
             {thread.messages.map((message) => (
               <div key={message.id} className="px-4 py-3">
-                <p className="mb-1 text-xs font-medium uppercase text-text-secondary">
+                <p className="text-text-secondary mb-1 text-xs font-medium uppercase">
                   {message.role}
                 </p>
                 {message.segments.map((segment, index) => (
-                  <p key={index} className="whitespace-pre-wrap text-sm text-text-primary">
+                  <p key={index} className="text-text-primary text-sm whitespace-pre-wrap">
                     {segment.text}
                   </p>
                 ))}
