@@ -20,11 +20,11 @@ describe('chatFilterCountAtom', () => {
     expect(store.get(chatFilterCountAtom)).toBe(1);
   });
 
-  it('adds the archived view to the bookmark group', () => {
+  it('leaves the archived view out, since the Chats and Archived tabs already show it', () => {
     const store = createStore();
     store.set(chatFilterTagsAtom, ['work', 'travel']);
     store.set(chatFilterStatusAtom, 'archived');
-    expect(store.get(chatFilterCountAtom)).toBe(2);
+    expect(store.get(chatFilterCountAtom)).toBe(1);
   });
 });
 
