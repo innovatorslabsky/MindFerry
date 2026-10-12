@@ -28,9 +28,9 @@ import { chatFacetParamsAtom, useFreshLocalDay } from '~/components/Conversation
 import ProjectsSection from '~/components/Conversations/ProjectsSection';
 import ChatFilterMenu from '~/components/Conversations/ChatFilterMenu';
 import PinnedSection from '~/components/Conversations/PinnedSection';
+import ProjectNamesProvider from '~/Providers/ProjectNamesContext';
 import StatusTabs from '~/components/Conversations/StatusTabs';
 import HubSection from '~/components/Conversations/HubSection';
-import ProjectNamesProvider from '~/Providers/ProjectNamesContext';
 import useDrawerViewport from '~/hooks/Nav/useDrawerViewport';
 import useSidebarToggle from '~/hooks/Nav/useSidebarToggle';
 import { Conversations } from '~/components/Conversations';
@@ -237,7 +237,7 @@ const ConversationsSection = memo(() => {
             <SearchBar isSmallScreen={isSmallScreen} />
           </div>
         )}
-        <div className="px-3 pb-1 pt-2">
+        <div className="px-3 pt-2 pb-1">
           <StatusTabs />
         </div>
         <div className="relative flex min-h-0 flex-1 flex-col">

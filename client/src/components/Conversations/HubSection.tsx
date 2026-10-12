@@ -36,7 +36,7 @@ const HubSection = memo(({ query, toggleNav }: HubSectionProps) => {
           className={cn(buttonVariants({ variant: 'section-header' }), 'group min-w-0 flex-1')}
           aria-expanded={isExpanded}
         >
-          <span className="select-none truncate">{localize('com_ui_context_hub_other_apps')}</span>
+          <span className="truncate select-none">{localize('com_ui_context_hub_other_apps')}</span>
           <ChevronDown
             className={cn(
               'h-3 w-3 shrink-0 transition-transform duration-200 motion-reduce:transition-none',

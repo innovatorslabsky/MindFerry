@@ -56,19 +56,19 @@ function NoteRow({ note, continueTarget, onContinued, onOpenThread }: NoteRowPro
         <CollapsibleTrigger
           aria-labelledby={titleId}
           aria-describedby={detailsId}
-          className="flex w-full items-start gap-2 px-4 py-3 text-left hover:bg-surface-secondary"
+          className="hover:bg-surface-secondary flex w-full items-start gap-2 px-4 py-3 text-left"
         >
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span id={titleId} className="text-sm font-medium text-text-primary">
+            <span id={titleId} className="text-text-primary text-sm font-medium">
               {note.title}
             </span>
             <span id={detailsId} className="flex flex-col gap-0.5">
-              <span className="text-xs text-text-secondary">
+              <span className="text-text-secondary text-xs">
                 {new Date(note.createdAt).toLocaleString()}
                 {note.surface != null ? ` · ${localize(SURFACE_LABEL_KEYS[note.surface])}` : ''}
               </span>
               {!open && (
-                <span className="line-clamp-2 break-words text-xs text-text-tertiary">
+                <span className="text-text-tertiary line-clamp-2 text-xs break-words">
                   {note.text}
                 </span>
               )}
@@ -76,7 +76,7 @@ function NoteRow({ note, continueTarget, onContinued, onOpenThread }: NoteRowPro
           </span>
           <ChevronDown
             className={cn(
-              'mt-0.5 h-4 w-4 shrink-0 text-text-secondary transition-transform motion-reduce:transition-none',
+              'text-text-secondary mt-0.5 h-4 w-4 shrink-0 transition-transform motion-reduce:transition-none',
               open && 'rotate-180',
             )}
             aria-hidden="true"
@@ -84,7 +84,7 @@ function NoteRow({ note, continueTarget, onContinued, onOpenThread }: NoteRowPro
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-3 px-4 pb-3">
           {note.sessionTag != null && (
-            <p className="break-words text-xs text-text-secondary">{note.sessionTag}</p>
+            <p className="text-text-secondary text-xs break-words">{note.sessionTag}</p>
           )}
           <div className="flex flex-wrap gap-2">
             <Button
@@ -114,7 +114,7 @@ function NoteRow({ note, continueTarget, onContinued, onOpenThread }: NoteRowPro
             )}
             <DeleteNoteButton note={note} />
           </div>
-          <p className="whitespace-pre-wrap break-words text-sm text-text-primary">{note.text}</p>
+          <p className="text-text-primary text-sm break-words whitespace-pre-wrap">{note.text}</p>
         </CollapsibleContent>
       </Collapsible>
     </li>
@@ -146,20 +146,20 @@ export default function HubNoteList({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-10">
-        <Spinner className="h-6 w-6 text-text-secondary" />
+        <Spinner className="text-text-secondary h-6 w-6" />
       </div>
     );
   }
   if (isError) {
     return (
-      <p className="py-6 text-center text-sm text-text-secondary">
+      <p className="text-text-secondary py-6 text-center text-sm">
         {localize('com_ui_context_hub_browse_notes_load_error')}
       </p>
     );
   }
   if (notes.length === 0) {
     return (
-      <p className="py-6 text-center text-sm text-text-secondary">
+      <p className="text-text-secondary py-6 text-center text-sm">
         {localize(
           query
             ? 'com_ui_context_hub_browse_empty_search'
@@ -170,7 +170,7 @@ export default function HubNoteList({
   }
 
   return (
-    <ul className="divide-y divide-border-light overflow-hidden rounded-xl border border-border-light">
+    <ul className="divide-border-light border-border-light divide-y overflow-hidden rounded-xl border">
       {notes.map((note) => (
         <NoteRow
           key={note.id}

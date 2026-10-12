@@ -25,7 +25,7 @@ export default function StatusTabs() {
       >
         <TabsList
           aria-label={localize('com_ui_chat_list_status')}
-          className="grid w-full grid-cols-2 bg-surface-secondary p-1"
+          className="bg-surface-secondary grid w-full grid-cols-2 p-1"
         >
           <TabsTrigger value="active" className="min-w-0">
             {localize('com_ui_chats')}
