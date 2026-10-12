@@ -46,15 +46,16 @@ export function createMCPDirectoryHandler({
     const parsed = mcpDirectorySchema.safeParse(request.config?.config?.mcpDirectory ?? {});
     const config = parsed.success ? parsed.data : undefined;
     if (!config?.enabled) {
-      return sendError(res, 404, 'not_found', 'The MCP directory is not enabled');
+      sendError(res, 404, 'not_found', 'The MCP directory is not enabled');
+      return;
     }
     try {
-      return res.json(await service.query(config, parseParams(request.query)));
+      res.json(await service.query(config, parseParams(request.query)));
     } catch (error) {
       logger.warn('[MCPDirectory] Listing unavailable', error);
       const message =
         error instanceof MCPDirectoryUnavailableError ? error.message : 'Directory unavailable';
-      return sendError(res, 502, 'directory_unavailable', message);
+      sendError(res, 502, 'directory_unavailable', message);
     }
   };
 }

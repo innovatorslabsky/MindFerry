@@ -1,5 +1,5 @@
-import type { Request, Response } from 'express';
 import type { MCPDirectoryResponse } from 'librechat-data-provider';
+import type { Request, Response } from 'express';
 import type { MCPDirectoryService } from './service';
 import { MCPDirectoryUnavailableError } from './service';
 import { createMCPDirectoryHandler } from './route';
@@ -12,7 +12,7 @@ const listing: MCPDirectoryResponse = {
   fetchedAt: '2026-10-12T00:00:00.000Z',
 };
 
-function run(
+async function run(
   service: MCPDirectoryService,
   options: { directory?: Record<string, unknown>; query?: Record<string, string> } = {},
 ) {
@@ -24,7 +24,8 @@ function run(
     query: options.query ?? {},
     config: { config: { mcpDirectory: options.directory } },
   } as unknown as Request;
-  return createMCPDirectoryHandler({ service })(req, res, jest.fn()).then(() => res);
+  await createMCPDirectoryHandler({ service })(req, res, jest.fn());
+  return res;
 }
 
 describe('createMCPDirectoryHandler', () => {

@@ -1,8 +1,8 @@
 import axios, { AxiosError } from 'axios';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import type { AxiosResponse } from 'axios';
 import type { MCPDirectoryResponse } from 'librechat-data-provider';
+import type { AxiosResponse } from 'axios';
 import MCPDirectoryList from './MCPDirectoryList';
 
 jest.mock('~/hooks', () => ({

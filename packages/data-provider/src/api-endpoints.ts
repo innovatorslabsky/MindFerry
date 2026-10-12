@@ -1,6 +1,6 @@
+import type { MCPDirectoryParams } from './types/mcpDirectory';
 import type { StartupConfigContext } from './config';
 import type { AssistantsEndpoint } from './schemas';
-import type { MCPDirectoryParams } from './types/mcpDirectory';
 import { ResourceType } from './accessPermissions';
 import * as q from './types/queries';
 

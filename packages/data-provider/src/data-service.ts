@@ -7,6 +7,7 @@ import type {
   TTraceRecordDetail,
 } from './types/traces';
 import type { TInsightsAccessResponse, TInsightsParams, TInsightsResponse } from './types/insights';
+import type { MCPDirectoryParams, MCPDirectoryResponse } from './types/mcpDirectory';
 import type { TFileConfig } from './file-config';
 import type * as tl from './types/tools';
 import type * as t from './types';
@@ -14,7 +15,6 @@ import * as permissions from './accessPermissions';
 import * as endpoints from './api-endpoints';
 import { uploadEventStream } from './upload';
 import * as mcp from './types/mcpServers';
-import type { MCPDirectoryParams, MCPDirectoryResponse } from './types/mcpDirectory';
 import * as qt from './types/queuedTurns';
 import * as sch from './types/schedules';
 import * as a from './types/assistants';

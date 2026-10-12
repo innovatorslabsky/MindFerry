@@ -11,26 +11,26 @@ const PAGE_SIZE = 30;
 function DirectoryEntry({ entry }: { entry: MCPDirectoryEntry }) {
   const localize = useLocalize();
   return (
-    <li className="rounded-lg border border-border-light p-3">
+    <li className="border-border-light rounded-lg border p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium text-text-primary">{entry.name}</span>
-        <span className="text-xs text-text-tertiary">{entry.categoryName}</span>
+        <span className="text-text-primary text-sm font-medium">{entry.name}</span>
+        <span className="text-text-tertiary text-xs">{entry.categoryName}</span>
         {entry.official && (
-          <span className="text-xs text-text-tertiary">{localize('com_ui_mcp_official')}</span>
+          <span className="text-text-tertiary text-xs">{localize('com_ui_mcp_official')}</span>
         )}
         {entry.scopes.includes('cloud') && (
-          <span className="text-xs text-text-tertiary">{localize('com_ui_mcp_cloud_hosted')}</span>
+          <span className="text-text-tertiary text-xs">{localize('com_ui_mcp_cloud_hosted')}</span>
         )}
         {entry.scopes.includes('local') && (
-          <span className="text-xs text-text-tertiary">{localize('com_ui_mcp_self_hosted')}</span>
+          <span className="text-text-tertiary text-xs">{localize('com_ui_mcp_self_hosted')}</span>
         )}
       </div>
-      {entry.description && <p className="mt-1 text-xs text-text-secondary">{entry.description}</p>}
+      {entry.description && <p className="text-text-secondary mt-1 text-xs">{entry.description}</p>}
       <a
         href={entry.repoUrl}
         target="_blank"
         rel="noreferrer"
-        className="mt-1 inline-block text-xs text-text-secondary underline"
+        className="text-text-secondary mt-1 inline-block text-xs underline"
       >
         {localize('com_ui_learn_more')}
       </a>
@@ -64,8 +64,8 @@ export default function MCPDirectoryList() {
 
   return (
     <section aria-label={localize('com_ui_mcp_directory')} className="mt-4 flex flex-col gap-2">
-      <h3 className="text-sm font-medium text-text-primary">{localize('com_ui_mcp_directory')}</h3>
-      <p className="text-xs text-text-secondary">{localize('com_ui_mcp_directory_description')}</p>
+      <h3 className="text-text-primary text-sm font-medium">{localize('com_ui_mcp_directory')}</h3>
+      <p className="text-text-secondary text-xs">{localize('com_ui_mcp_directory_description')}</p>
       <FilterInput
         inputId="mcp-directory-filter"
         label={localize('com_ui_mcp_directory_search')}
@@ -73,22 +73,22 @@ export default function MCPDirectoryList() {
         onChange={(e) => setSearch(e.target.value)}
       />
       {isLoading && (
-        <div role="status" className="flex items-center gap-2 text-xs text-text-secondary">
+        <div role="status" className="text-text-secondary flex items-center gap-2 text-xs">
           <Spinner className="size-4" aria-hidden="true" />
           {localize('com_ui_loading')}
         </div>
       )}
       {isError && (
-        <p role="alert" className="text-xs text-text-secondary">
+        <p role="alert" className="text-text-secondary text-xs">
           {localize('com_ui_mcp_directory_error')}
         </p>
       )}
       {!isLoading && !isError && entries.length === 0 && (
-        <p className="text-xs text-text-secondary">{localize('com_ui_mcp_directory_empty')}</p>
+        <p className="text-text-secondary text-xs">{localize('com_ui_mcp_directory_empty')}</p>
       )}
       {entries.length > 0 && (
         <>
-          <p aria-live="polite" className="text-xs text-text-tertiary">
+          <p aria-live="polite" className="text-text-tertiary text-xs">
             {localize('com_ui_mcp_directory_count', { 0: entries.length, 1: total })}
           </p>
           <ul className="flex max-h-80 flex-col gap-2 overflow-y-auto">
@@ -114,7 +114,7 @@ export default function MCPDirectoryList() {
           href={sourceUrl}
           target="_blank"
           rel="noreferrer"
-          className="text-xs text-text-tertiary underline"
+          className="text-text-tertiary text-xs underline"
         >
           {localize('com_ui_mcp_directory_source')}
         </a>
