@@ -61,7 +61,8 @@ create an account — it is single-user, so keep it off the public internet. The
 ## How it connects
 
 The `docker-compose.freellmapi.yml` override adds a `freellmapi` service to the
-stack and wires it into MindFerry's Docker network. `librechat.yaml` references
+stack, wires it into MindFerry's Docker network, and sets `FREELLMAPI_BASE_URL` on
+the `api` container to `http://freellmapi:3001/v1`. `librechat.yaml` references
 it as a custom endpoint:
 
 ```yaml
@@ -69,7 +70,7 @@ endpoints:
   custom:
     - name: 'FreeLLMAPI'
       apiKey: '${FREELLMAPI_KEY}'
-      baseURL: 'http://freellmapi:3001/v1'
+      baseURL: '${FREELLMAPI_BASE_URL}'
       models:
         default:
           - 'gemini-2.5-flash'
@@ -110,33 +111,31 @@ selection in MindFerry's model picker.
 ## Running FreeLLMAPI separately
 
 If FreeLLMAPI already runs on another machine or port, skip the Docker override and
-point `librechat.yaml` at it directly:
+set where MindFerry should reach it. `librechat.yaml` reads the address from
+`FREELLMAPI_BASE_URL`, so no file edit is needed:
 
-```yaml
-endpoints:
-  custom:
-    - name: 'FreeLLMAPI'
-      apiKey: '${FREELLMAPI_KEY}'
-      baseURL: 'http://your-freellmapi-host:3001/v1'
-      models:
-        default: []
-        fetch: true
-      titleConvo: true
-      titleModel: 'gemini-2.5-flash'
-      modelDisplayLabel: 'FreeLLMAPI'
+```bash
+FREELLMAPI_BASE_URL=http://your-freellmapi-host:3001/v1
+FREELLMAPI_KEY=<the unified key from that instance's dashboard>
 ```
-
-Set `FREELLMAPI_KEY` in `.env` to the unified API key shown by that FreeLLMAPI
-instance's dashboard.
 
 ## Hosted deployments (Railway and similar)
 
 `docker-compose.freellmapi.yml` only wires the `freellmapi` hostname inside a local
 Docker network. On a platform deploy, run FreeLLMAPI as its own service (image
 `ghcr.io/tashfeenahmed/freellmapi:latest`, `PORT=3001`, a persistent volume at
-`/app/server/data`, and its own `ENCRYPTION_KEY`), keep it on the private network
-rather than giving it a public domain, and point `baseURL` at that service's
-internal address. Set `FREELLMAPI_KEY` on the MindFerry service as above.
+`/app/server/data`, and its own `ENCRYPTION_KEY`) and keep it on the private network
+rather than giving it a public domain. On the MindFerry service set:
+
+```bash
+FREELLMAPI_BASE_URL=http://${{freellmapi.RAILWAY_PRIVATE_DOMAIN}}:3001/v1   # Railway reference variable
+FREELLMAPI_KEY=<the unified key from FreeLLMAPI's dashboard>
+```
+
+FreeLLMAPI prints a one-time first-run setup code in its deploy log (`First-run setup
+code: …`). Creating the first account from another device needs that code, so open the
+dashboard only briefly, create the account, copy the unified key from the Keys page,
+add your provider keys, and close the public domain again.
 
 FreeLLMAPI's own README describes the project as personal-use, single-user software.
 If MindFerry serves other people, the free-tier terms of each upstream provider
