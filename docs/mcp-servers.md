@@ -22,6 +22,30 @@ yourself for anything self-hosted, since that's unique to your own instance.
 
 Each entry notes whether it needs a paid API key (💳) or runs free/self-hosted (🏠).
 
+## Full directory
+
+The same dialog can also search the whole awesome-mcp-servers listing, not just the
+short list above. It is off by default because it makes an outbound request; enable it
+in `librechat.yaml`:
+
+```yaml
+mcpDirectory:
+  enabled: true
+  # All optional, shown with their defaults:
+  # sourceUrl: https://raw.githubusercontent.com/punkpeye/awesome-mcp-servers/main/README.md
+  # cacheTtlMs: 86400000   # re-fetch at most once a day
+  # fetchTimeoutMs: 10000
+  # maxSourceBytes: 5242880
+```
+
+The server downloads the README, parses it into entries (name, description, category,
+cloud/local/embedded scope, official marker) and serves them to the dialog with search
+and paging. If a refresh fails it keeps serving the last good copy. `sourceUrl` accepts
+any listing in the same format, such as a fork. Entries link to their repository; the
+listing carries no endpoint URL, so one-click "Use this" stays on the curated list above.
+The directory is the work of the awesome-mcp-servers contributors (MIT licensed); the
+dialog links back to its source.
+
 ## Memory & knowledge graphs
 
 These overlap conceptually with MindFerry's own [context hub](mindferry.md) — most

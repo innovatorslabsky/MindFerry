@@ -19,6 +19,11 @@ jest.mock('@librechat/client', () => ({
   OGDialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
+jest.mock('./MCPDirectoryList', () => ({
+  __esModule: true,
+  default: () => <div data-testid="mcp-directory-list" />,
+}));
+
 const mockMCPServerDialog = jest.fn();
 jest.mock('./MCPServerDialog', () => ({
   __esModule: true,

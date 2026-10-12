@@ -9,6 +9,7 @@ import {
 import type { MCPServerFormData } from './MCPServerDialog/hooks/useMCPServerForm';
 import type { CuratedServer } from './curatedServers';
 import { curatedServers } from './curatedServers';
+import MCPDirectoryList from './MCPDirectoryList';
 import MCPServerDialog from './MCPServerDialog';
 import { useLocalize } from '~/hooks';
 
@@ -87,6 +88,7 @@ export default function CuratedServerBrowser({ open, onOpenChange }: CuratedServ
               </li>
             ))}
           </ul>
+          <MCPDirectoryList />
         </OGDialogContent>
       </OGDialog>
 

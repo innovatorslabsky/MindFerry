@@ -41,6 +41,7 @@ export * from './types/content';
 export * from './types/tools';
 export * from './types/files';
 export * from './types/mcpServers';
+export * from './types/mcpDirectory';
 export * from './types/mutations';
 export * from './types/queries';
 export * from './types/schedules';

@@ -16,6 +16,12 @@ contextHub:
     allowNotes: true
     allowChatImport: true
 
+# MCP directory: a searchable view of the awesome-mcp-servers listing in the
+# "Browse curated servers" dialog. Off unless enabled; fetched at most once per
+# cacheTtlMs. See docs/mcp-servers.md.
+mcpDirectory:
+  enabled: true
+
 # FreeLLMAPI: a self-hosted proxy that aggregates free tiers from 20+ LLM
 # providers behind one OpenAI-compatible endpoint. See docs/freellmapi.md.
 endpoints:

@@ -85,6 +85,7 @@ export enum QueryKeys {
   /* MCP Servers */
   mcpServers = 'mcpServers',
   mcpServer = 'mcpServer',
+  mcpDirectory = 'mcpDirectory',
   /* Active Jobs */
   activeJobs = 'activeJobs',
   /** A running chat's sidebar row, for chats no loaded conversation list holds. */

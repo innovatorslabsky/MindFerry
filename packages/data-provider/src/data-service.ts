@@ -8,6 +8,7 @@ import type {
 } from './types/traces';
 import type { TInsightsAccessResponse, TInsightsParams, TInsightsResponse } from './types/insights';
 import type { ScheduleMCPConsentView, ConfirmScheduleMCPConsent } from './types/scheduleConsent';
+import type { MCPDirectoryParams, MCPDirectoryResponse } from './types/mcpDirectory';
 import type { TFileConfig } from './file-config';
 import type * as tl from './types/tools';
 import type * as t from './types';
@@ -834,6 +835,12 @@ export const deleteAgentAction = async ({
  */
 export const getMCPServers = async (): Promise<mcp.MCPServersListResponse> => {
   return request.get(endpoints.mcp.servers);
+};
+
+export const getMCPDirectory = async (
+  params: MCPDirectoryParams,
+): Promise<MCPDirectoryResponse> => {
+  return request.get(endpoints.mcpDirectory(params));
 };
 
 /**
