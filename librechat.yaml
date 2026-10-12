@@ -28,7 +28,7 @@ endpoints:
   custom:
     - name: 'FreeLLMAPI'
       apiKey: '${FREELLMAPI_KEY}'
-      baseURL: 'http://freellmapi:3001/v1'
+      baseURL: '${FREELLMAPI_BASE_URL}'
       models:
         default:
           - 'gemini-2.5-flash'

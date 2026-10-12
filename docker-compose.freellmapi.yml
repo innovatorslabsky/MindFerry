@@ -13,6 +13,8 @@
 
 services:
   api:
+    environment:
+      FREELLMAPI_BASE_URL: http://freellmapi:3001/v1
     volumes:
       - type: bind
         source: ./librechat.yaml
