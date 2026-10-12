@@ -880,6 +880,11 @@
       "count": 5
     }
   },
+  "client/src/components/Conversations/ImportMenu.tsx": {
+    "shadcn/require-static-classes": {
+      "count": 1
+    }
+  },
   "client/src/components/Conversations/Pages.tsx": {
     "shadcn/require-static-classes": {
       "count": 2
@@ -898,6 +903,11 @@
   "client/src/components/Conversations/RenameForm.tsx": {
     "shadcn/no-restyle": {
       "count": 12
+    }
+  },
+  "client/src/components/Conversations/StatusTabs.tsx": {
+    "shadcn/no-restyle": {
+      "count": 2
     }
   },
   "client/src/components/Conversations/UnpinButton.tsx": {
@@ -1086,6 +1096,11 @@
       "count": 3
     }
   },
+  "client/src/components/MindFerry/Connect.tsx": {
+    "shadcn/no-restyle": {
+      "count": 1
+    }
+  },
   "client/src/components/Nav/AccountSettings.tsx": {
     "shadcn/no-inline-styles": {
       "count": 3
@@ -1165,6 +1180,36 @@
   "client/src/components/Nav/SettingsTabs/ApiKeys/ApiKeys.tsx": {
     "shadcn/no-restyle": {
       "count": 6
+    }
+  },
+  "client/src/components/Nav/SettingsTabs/ApiKeys/BrowseHubDialog.tsx": {
+    "shadcn/no-restyle": {
+      "count": 1
+    }
+  },
+  "client/src/components/Nav/SettingsTabs/ApiKeys/ContextHubEndpoint.tsx": {
+    "shadcn/no-restyle": {
+      "count": 2
+    }
+  },
+  "client/src/components/Nav/SettingsTabs/ApiKeys/DeleteNoteButton.tsx": {
+    "shadcn/no-restyle": {
+      "count": 2
+    }
+  },
+  "client/src/components/Nav/SettingsTabs/ApiKeys/HubArchiveBrowser.tsx": {
+    "shadcn/no-restyle": {
+      "count": 8
+    }
+  },
+  "client/src/components/Nav/SettingsTabs/ApiKeys/HubNoteList.tsx": {
+    "shadcn/no-restyle": {
+      "count": 10
+    }
+  },
+  "client/src/components/Nav/SettingsTabs/ApiKeys/HubThreadDetail.tsx": {
+    "shadcn/no-restyle": {
+      "count": 3
     }
   },
   "client/src/components/Nav/SettingsTabs/ApiKeys/List.tsx": {
