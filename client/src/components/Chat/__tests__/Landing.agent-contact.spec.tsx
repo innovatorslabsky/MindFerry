@@ -184,6 +184,43 @@ describe('Landing agent contact', () => {
   });
 });
 
+describe('Landing icon', () => {
+  beforeEach(() => {
+    mockConversation = null;
+    mockAgentsMap = undefined;
+    mockAssistantMap = undefined;
+  });
+
+  it('shows the MindFerry boat for a plain endpoint instead of the provider icon', () => {
+    mockConversation = { endpoint: 'anthropic' };
+
+    const { container } = renderLanding();
+
+    expect(container.querySelector('img[src="assets/logo.svg"]')).toBeInTheDocument();
+    expect(screen.queryByTestId('convo-icon')).not.toBeInTheDocument();
+  });
+
+  it('keeps the entity icon for an agent', () => {
+    mockConversation = { endpoint: 'agents', agent_id: 'agent-1' };
+    mockAgentsMap = { 'agent-1': { id: 'agent-1', name: 'Portal Remote Agent' } };
+
+    const { container } = renderLanding();
+
+    expect(screen.getByTestId('convo-icon')).toBeInTheDocument();
+    expect(container.querySelector('img[src="assets/logo.svg"]')).not.toBeInTheDocument();
+  });
+
+  it('keeps the entity icon for an assistant', () => {
+    mockConversation = { endpoint: 'assistants', assistant_id: 'assistant-1' };
+    mockAssistantMap = { 'assistant-1': { id: 'assistant-1', name: 'Assistant' } };
+
+    const { container } = renderLanding();
+
+    expect(screen.getByTestId('convo-icon')).toBeInTheDocument();
+    expect(container.querySelector('img[src="assets/logo.svg"]')).not.toBeInTheDocument();
+  });
+});
+
 describe('Landing temporary chat empty state', () => {
   beforeEach(() => {
     mockConversation = null;
@@ -225,10 +262,10 @@ describe('Landing temporary chat empty state', () => {
   });
 
   it('keeps the normal greeting when temporary chat is off', () => {
-    renderLanding();
+    const { container } = renderLanding();
 
     expect(screen.getByText('Welcome')).toBeInTheDocument();
     expect(screen.queryByText('Temporary Chat')).not.toBeInTheDocument();
-    expect(screen.getByTestId('convo-icon')).toBeInTheDocument();
+    expect(container.querySelector('img[src="assets/logo.svg"]')).toBeInTheDocument();
   });
 });

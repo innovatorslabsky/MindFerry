@@ -1,5 +1,4 @@
 import React, { useMemo, useCallback } from 'react';
-import { Feather } from 'lucide-react';
 import { Sparkles, ProviderIcon } from '@librechat/client';
 import { useGetModelsQuery } from 'librechat-data-provider/react-query';
 import {
@@ -22,6 +21,7 @@ import type { Endpoint } from '~/common';
 import { useHasAccess, useShowMarketplace } from '~/hooks';
 import { resolveProviderIcon } from './useProviderIcon';
 import { useGetEndpointsQuery } from '~/data-provider';
+import Boat from '~/components/MindFerry/Boat';
 import { mapEndpoints } from '~/utils';
 
 const defaultInterface = getConfigDefaults().interface;
@@ -35,7 +35,7 @@ const createEndpointIcon = (
   { provider, imageURL }: ProviderIconResolution,
 ): React.ReactNode => {
   if (endpoint === EModelEndpoint.agents) {
-    return React.createElement(Feather, { size: artSize, className: artClassName });
+    return React.createElement(Boat, { className: artClassName });
   }
 
   if (endpoint === EModelEndpoint.assistants || endpoint === EModelEndpoint.azureAssistants) {

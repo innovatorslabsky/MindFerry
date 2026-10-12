@@ -11,6 +11,7 @@ import { useLocalize, useAuthContext, useGreeting } from '~/hooks';
 import { useChatSettings } from '~/Providers/ChatSettingsContext';
 import AgentContact from '~/components/Agents/AgentContact';
 import ConvoIcon from '~/components/Endpoints/ConvoIcon';
+import Boat from '~/components/MindFerry/Boat';
 
 const containerClassName =
   'shadow-stroke relative flex h-full items-center justify-center rounded-full bg-presentation text-text-primary dark:after:shadow-none ';
@@ -77,6 +78,7 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
     [conversation?.spec, startupConfig],
   );
 
+  const showBoat = !isAgent && !isAssistant && modelSpec?.iconURL == null;
   const brandedSpecLabel = modelSpec?.showOnLanding ? modelSpec.label : '';
   const brandedSpecDescription = (modelSpec?.showOnLanding && modelSpec.description) || '';
   const name = isTemporary ? '' : (entity?.name ?? brandedSpecLabel);
@@ -143,11 +145,17 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
           className={`flex ${textHasMultipleLines ? 'flex-col' : 'flex-col md:flex-row'} items-center justify-center gap-2`}
         >
           <div className={`relative size-10 justify-center ${textHasMultipleLines ? 'mb-2' : ''}`}>
-            {isTemporary ? (
+            {isTemporary && (
               <div className={containerClassName}>
                 <HatGlasses className="text-text-primary h-2/3 w-2/3" aria-hidden="true" />
               </div>
-            ) : (
+            )}
+            {!isTemporary && showBoat && (
+              <div className={containerClassName}>
+                <Boat className="h-full w-full" />
+              </div>
+            )}
+            {!isTemporary && !showBoat && (
               <ConvoIcon
                 agentsMap={agentsMap}
                 assistantMap={assistantMap}
