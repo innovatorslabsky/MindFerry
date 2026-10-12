@@ -40,8 +40,6 @@ Add these variables to your `.env`:
 ```bash
 # FreeLLMAPI
 FREELLMAPI_ENCRYPTION_KEY=<the-64-char-hex-key-you-just-generated>
-FREELLMAPI_KEY=freellmapi-mindferry  # any string — this is the unified API key
-                                      # MindFerry sends to FreeLLMAPI
 ```
 
 Start everything:
@@ -50,9 +48,15 @@ Start everything:
 docker compose up -d
 ```
 
-FreeLLMAPI's dashboard is at `http://localhost:3001` — use it to add your free API
-keys from providers like Groq, Google AI Studio, Mistral, Cerebras, and others. Each
-key you add widens the pool of models and rate-limit headroom available to MindFerry.
+FreeLLMAPI's dashboard is at `http://localhost:3001`. The first visit asks you to
+create an account — it is single-user, so keep it off the public internet. Then:
+
+1. Copy the **unified API key** FreeLLMAPI generated for you (`freellmapi-…`; it is
+   created by FreeLLMAPI, you cannot choose it) and add it to `.env` as
+   `FREELLMAPI_KEY=<that key>`. Restart MindFerry so it picks the value up.
+2. Add your free API keys from providers like Groq, Google AI Studio, Mistral,
+   Cerebras, and others. Each key you add widens the pool of models and rate-limit
+   headroom available to MindFerry.
 
 ## How it connects
 
@@ -122,8 +126,21 @@ endpoints:
       modelDisplayLabel: 'FreeLLMAPI'
 ```
 
-Set `FREELLMAPI_KEY` in `.env` to whatever unified API key you configured on that
-FreeLLMAPI instance.
+Set `FREELLMAPI_KEY` in `.env` to the unified API key shown by that FreeLLMAPI
+instance's dashboard.
+
+## Hosted deployments (Railway and similar)
+
+`docker-compose.freellmapi.yml` only wires the `freellmapi` hostname inside a local
+Docker network. On a platform deploy, run FreeLLMAPI as its own service (image
+`ghcr.io/tashfeenahmed/freellmapi:latest`, `PORT=3001`, a persistent volume at
+`/app/server/data`, and its own `ENCRYPTION_KEY`), keep it on the private network
+rather than giving it a public domain, and point `baseURL` at that service's
+internal address. Set `FREELLMAPI_KEY` on the MindFerry service as above.
+
+FreeLLMAPI's own README describes the project as personal-use, single-user software.
+If MindFerry serves other people, the free-tier terms of each upstream provider
+still apply to the traffic you route through it.
 
 ## Architecture
 

@@ -1,5 +1,6 @@
 import type { StartupConfigContext } from './config';
 import type { AssistantsEndpoint } from './schemas';
+import type { MCPDirectoryParams } from './types/mcpDirectory';
 import { ResourceType } from './accessPermissions';
 import * as q from './types/queries';
 
@@ -374,6 +375,17 @@ export const mcp = {
 };
 
 export const mcpServer = (serverName: string) => `${BASE_URL}/api/mcp/servers/${serverName}`;
+
+export const mcpDirectory = (params: MCPDirectoryParams = {}) => {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') {
+      query.set(key, String(value));
+    }
+  });
+  const search = query.toString();
+  return `${BASE_URL}/api/mcp/directory${search ? `?${search}` : ''}`;
+};
 
 export const revertAgentVersion = (agent_id: string) => `${agents({ path: `${agent_id}/revert` })}`;
 

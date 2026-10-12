@@ -33,6 +33,9 @@ const {
   readMCPRecoveryGenerationAround,
   prepareMCPAuthorizationMutation,
   persistMCPAuthorizationTransaction,
+  fetchTextWithLimit,
+  createMCPDirectoryHandler,
+  createMCPDirectoryService,
 } = require('@librechat/api');
 const {
   createMCPServerController,
@@ -105,6 +108,16 @@ const checkMCPCreate = generateCheckAccess({
   permissions: [Permissions.USE, Permissions.CREATE],
   getRoleByName: db.getRoleByName,
 });
+
+router.get(
+  '/directory',
+  requireJwtAuth,
+  configMiddleware,
+  checkMCPCreate,
+  createMCPDirectoryHandler({
+    service: createMCPDirectoryService({ fetchText: fetchTextWithLimit }),
+  }),
+);
 
 /**
  * Get all MCP tools available to the user

@@ -618,6 +618,34 @@ export const contextHubSchema = z
   })
   .optional();
 
+export const MCP_DIRECTORY_DEFAULT_SOURCE_URL =
+  'https://raw.githubusercontent.com/punkpeye/awesome-mcp-servers/main/README.md';
+
+export const mcpDirectorySchema = z
+  .object({
+    /** Off by default: a directory is a new outbound fetch, so an operator opts in. */
+    enabled: z.boolean().default(false),
+    /** Markdown listing in the awesome-mcp-servers format. */
+    sourceUrl: z.string().url().default(MCP_DIRECTORY_DEFAULT_SOURCE_URL),
+    cacheTtlMs: z
+      .number()
+      .int()
+      .min(60_000)
+      .max(7 * 24 * 60 * 60_000)
+      .default(24 * 60 * 60_000),
+    fetchTimeoutMs: z.number().int().min(1_000).max(60_000).default(10_000),
+    /** Largest listing, in bytes, the server will download and parse. */
+    maxSourceBytes: z
+      .number()
+      .int()
+      .min(100_000)
+      .max(20 * 1024 * 1024)
+      .default(5 * 1024 * 1024),
+  })
+  .optional();
+
+export type MCPDirectoryConfig = z.infer<typeof mcpDirectorySchema>;
+
 export type ContextHubConfig = z.infer<typeof contextHubSchema>;
 export type ContextHubGitTargetConfig = z.infer<typeof contextHubGitTargetSchema>;
 export type ContextHubSemanticSearchConfig = z.infer<typeof contextHubSemanticSearchSchema>;
@@ -3207,6 +3235,7 @@ export const configSchema = z.object({
   summarization: summarizationConfigSchema.optional(),
   skillSync: skillSyncConfigSchema,
   contextHub: contextHubSchema,
+  mcpDirectory: mcpDirectorySchema,
   channels: channelsSchema,
   secureImageLinks: z.boolean().optional(),
   imageOutputType: z.nativeEnum(EImageOutputType).default(EImageOutputType.PNG),

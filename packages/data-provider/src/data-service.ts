@@ -14,6 +14,7 @@ import * as permissions from './accessPermissions';
 import * as endpoints from './api-endpoints';
 import { uploadEventStream } from './upload';
 import * as mcp from './types/mcpServers';
+import type { MCPDirectoryParams, MCPDirectoryResponse } from './types/mcpDirectory';
 import * as qt from './types/queuedTurns';
 import * as sch from './types/schedules';
 import * as a from './types/assistants';
@@ -817,6 +818,12 @@ export const deleteAgentAction = async ({
  */
 export const getMCPServers = async (): Promise<mcp.MCPServersListResponse> => {
   return request.get(endpoints.mcp.servers);
+};
+
+export const getMCPDirectory = async (
+  params: MCPDirectoryParams,
+): Promise<MCPDirectoryResponse> => {
+  return request.get(endpoints.mcpDirectory(params));
 };
 
 /**

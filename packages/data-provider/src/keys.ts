@@ -78,6 +78,7 @@ export enum QueryKeys {
   /* MCP Servers */
   mcpServers = 'mcpServers',
   mcpServer = 'mcpServer',
+  mcpDirectory = 'mcpDirectory',
   /* Active Jobs */
   activeJobs = 'activeJobs',
   /* Agent API Keys */

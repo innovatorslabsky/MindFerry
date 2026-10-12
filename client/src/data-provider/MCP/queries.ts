@@ -1,5 +1,10 @@
 import { QueryKeys, dataService } from 'librechat-data-provider';
-import { useQuery, UseQueryOptions, QueryObserverResult } from '@tanstack/react-query';
+import {
+  useQuery,
+  useInfiniteQuery,
+  UseQueryOptions,
+  QueryObserverResult,
+} from '@tanstack/react-query';
 import type * as t from 'librechat-data-provider';
 
 /**
@@ -16,6 +21,27 @@ export const useMCPServersQuery = <TData = t.MCPServersListResponse>(
       refetchOnWindowFocus: true,
       refetchOnReconnect: false,
       refetchOnMount: true,
+      retry: false,
+      ...config,
+    },
+  );
+};
+
+/**
+ * Cursor-paginated search over the operator-enabled MCP directory. A 404 means the
+ * directory is switched off, so it is never retried.
+ */
+export const useMCPDirectoryQuery = (
+  params: Omit<t.MCPDirectoryParams, 'cursor'>,
+  config?: { enabled?: boolean },
+) => {
+  return useInfiniteQuery<t.MCPDirectoryResponse>(
+    [QueryKeys.mcpDirectory, params],
+    ({ pageParam }) => dataService.getMCPDirectory({ ...params, cursor: pageParam }),
+    {
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      staleTime: 10 * 60 * 1000,
+      refetchOnWindowFocus: false,
       retry: false,
       ...config,
     },
