@@ -45,30 +45,30 @@ export default function CuratedServerBrowser({ open, onOpenChange }: CuratedServ
           <OGDialogHeader>
             <OGDialogTitle>{localize('com_ui_browse_curated_mcp_servers')}</OGDialogTitle>
           </OGDialogHeader>
-          <p className="text-sm text-text-secondary">
+          <p className="text-text-secondary text-sm">
             {localize('com_ui_browse_curated_mcp_servers_description')}
           </p>
           <ul className="mt-2 flex flex-col gap-2">
             {curatedServers.map((server) => (
               <li
                 key={server.id}
-                className="flex items-start gap-3 rounded-lg border border-border-light p-3"
+                className="border-border-light flex items-start gap-3 rounded-lg border p-3"
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-text-primary">{server.title}</span>
-                    <span className="text-xs text-text-tertiary">
+                    <span className="text-text-primary text-sm font-medium">{server.title}</span>
+                    <span className="text-text-tertiary text-xs">
                       {server.selfHosted
                         ? localize('com_ui_mcp_self_hosted')
                         : localize('com_ui_mcp_cloud_hosted')}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-text-secondary">{server.description}</p>
+                  <p className="text-text-secondary mt-1 text-xs">{server.description}</p>
                   <a
                     href={server.learnMoreUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="mt-1 inline-block text-xs text-text-secondary underline"
+                    className="text-text-secondary mt-1 inline-block text-xs underline"
                   >
                     {localize('com_ui_learn_more')}
                   </a>

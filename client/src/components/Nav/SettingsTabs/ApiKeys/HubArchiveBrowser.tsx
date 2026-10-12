@@ -34,16 +34,16 @@ function ThreadRow({ thread, onSelect }: { thread: THubThreadSummary; onSelect: 
       <button
         type="button"
         onClick={onSelect}
-        className="flex w-full flex-col gap-0.5 px-4 py-3 text-left hover:bg-surface-secondary"
+        className="hover:bg-surface-secondary flex w-full flex-col gap-0.5 px-4 py-3 text-left"
       >
-        <span className="text-sm font-medium text-text-primary">{thread.title}</span>
-        <span className="text-xs text-text-secondary">
+        <span className="text-text-primary text-sm font-medium">{thread.title}</span>
+        <span className="text-text-secondary text-xs">
           {localize(SURFACE_LABEL_KEYS[surfaceOf(thread.surface)])} · {thread.provider} ·{' '}
           {new Date(thread.updatedAt).toLocaleString()} ·{' '}
           {localize('com_ui_context_hub_browse_message_count', { 0: thread.messageCount })}
         </span>
         {thread.snippet != null && (
-          <span className="line-clamp-2 text-xs text-text-tertiary">{thread.snippet}</span>
+          <span className="text-text-tertiary line-clamp-2 text-xs">{thread.snippet}</span>
         )}
       </button>
     </li>
@@ -63,13 +63,13 @@ function ThreadsSection({ query, threadsQuery, onSelect }: ThreadsSectionProps) 
   if (threadsQuery.isLoading) {
     return (
       <div className="flex items-center justify-center py-10">
-        <Spinner className="h-6 w-6 text-text-secondary" />
+        <Spinner className="text-text-secondary h-6 w-6" />
       </div>
     );
   }
   if (threadsQuery.isError) {
     return (
-      <p className="py-6 text-center text-sm text-text-secondary">
+      <p className="text-text-secondary py-6 text-center text-sm">
         {localize('com_ui_context_hub_browse_load_error')}
       </p>
     );
@@ -78,7 +78,7 @@ function ThreadsSection({ query, threadsQuery, onSelect }: ThreadsSectionProps) 
   const threads = threadsQuery.data?.threads ?? [];
   if (threads.length === 0) {
     return (
-      <p className="py-6 text-center text-sm text-text-secondary">
+      <p className="text-text-secondary py-6 text-center text-sm">
         {localize(
           query
             ? 'com_ui_context_hub_browse_empty_search'
@@ -89,7 +89,7 @@ function ThreadsSection({ query, threadsQuery, onSelect }: ThreadsSectionProps) 
   }
 
   return (
-    <ul className="divide-y divide-border-light overflow-hidden rounded-xl border border-border-light">
+    <ul className="divide-border-light border-border-light divide-y overflow-hidden rounded-xl border">
       {threads.map((thread) => (
         <ThreadRow key={thread.id} thread={thread} onSelect={() => onSelect(thread.id)} />
       ))}
@@ -189,7 +189,7 @@ export default function HubArchiveBrowser({
       {hostQuery === undefined && (
         <div className="relative">
           <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary"
+            className="text-text-secondary pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
             aria-hidden="true"
           />
           <Input
@@ -235,7 +235,7 @@ export default function HubArchiveBrowser({
       >
         <TabsList
           aria-label={localize('com_ui_context_hub_browse_tabs_label')}
-          className="grid w-full grid-cols-2 bg-surface-secondary p-1"
+          className="bg-surface-secondary grid w-full grid-cols-2 p-1"
         >
           <TabsTrigger value="chats" className="min-w-0">
             {localize('com_ui_context_hub_browse_tab_chats', { 0: threadCount })}
