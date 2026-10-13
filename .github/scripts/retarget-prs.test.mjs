@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const scriptsDir = dirname(fileURLToPath(import.meta.url));
 const script = join(scriptsDir, 'retarget-prs.sh');
 
-function runRetarget(t, prs, overrides = {}) {
+function runRetarget(t, prs, overrides = {}, expectedStatus = 0) {
   const scratch = mkdtempSync(join(scriptsDir, '.retarget-prs-test-'));
   t.after(() => rmSync(scratch, { recursive: true, force: true }));
   const callsPath = join(scratch, 'calls');
@@ -19,6 +19,9 @@ function runRetarget(t, prs, overrides = {}) {
 set -euo pipefail
 printf '%s\\n' "$*" >> "$CALLS_PATH"
 case "$1:$2" in
+  api:*/branches/*)
+    if [ -n "\${FAKE_BRANCH_ERROR:-}" ]; then echo "$FAKE_BRANCH_ERROR" >&2; exit 1; fi
+    printf '%s\\n' '{}' ;;
   api:*/pulls/*) cat "$FIXTURE_DIR/\${2##*/}.json" ;;
   api:*/comments) printf '%s\\n' '[]' ;;
   'pr:edit') exit 0 ;;
@@ -54,7 +57,7 @@ esac
       ...overrides,
     },
   });
-  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(result.status, expectedStatus, `${result.stdout}\n${result.stderr}`);
   return {
     output: result.stdout,
     calls: readFileSync(callsPath, 'utf8').trim().split('\n'),
@@ -100,5 +103,25 @@ test('a dry run cannot propose retargeting canary', (t) => {
     { RELEASE_BASE: 'canary', DRY_RUN: 'true' },
   );
   assert.match(output, /would_retarget=0 skipped=1/);
+  assert.deepEqual(writes(calls), []);
+});
+
+test('a repository without the target branch is left alone instead of failing', (t) => {
+  const { output, calls } = runRetarget(
+    t,
+    { 106: { base: 'main' } },
+    { FAKE_BRANCH_ERROR: 'gh: Not Found (HTTP 404)' },
+  );
+  assert.match(output, /does not exist/);
+  assert.deepEqual(writes(calls), []);
+});
+
+test('a failing branch lookup that is not a 404 still fails the run', (t) => {
+  const { calls } = runRetarget(
+    t,
+    { 107: { base: 'main' } },
+    { FAKE_BRANCH_ERROR: 'gh: Bad credentials (HTTP 401)' },
+    1,
+  );
   assert.deepEqual(writes(calls), []);
 });

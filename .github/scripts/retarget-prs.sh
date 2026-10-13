@@ -56,6 +56,20 @@ Maintainers: apply the \`$KEEP_LABEL\` label and restore the base branch if this
 BODY
 }
 
+# A repository without the development branch has nothing to retarget onto, and `gh pr edit`
+# would fail for every pull request. Only a definite 404 counts as "missing": any other lookup
+# error still fails the run rather than silently skipping the work.
+if ! branch_lookup="$(gh api "repos/$REPO/branches/$TARGET_BASE" 2>&1)"; then
+  if grep -qE 'HTTP 404|Not Found' <<<"$branch_lookup"; then
+    summary="Target branch \`$TARGET_BASE\` does not exist in \`$REPO\` — nothing to retarget onto, no pull request was modified."
+    echo "$summary"
+    [ -z "${GITHUB_STEP_SUMMARY:-}" ] || echo "$summary" >> "$GITHUB_STEP_SUMMARY"
+    exit 0
+  fi
+  echo "FAILED to look up branch $TARGET_BASE: $branch_lookup" >&2
+  exit 1
+fi
+
 matched=0
 skipped=0
 failed=0
