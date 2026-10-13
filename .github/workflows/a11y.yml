@@ -29,7 +29,21 @@ jobs:
     
     steps:
       - uses: actions/checkout@v5
-      - uses: dequelabs/axe-linter-action@v2
+      # The linter is a hosted Deque service and needs an API key. Secrets cannot be read in a
+      # job-level `if`, so detect the key here and skip cleanly instead of failing every PR.
+      - name: Check for axe Linter API key
+        id: key
+        env:
+          AXE_LINTER_API_KEY: ${{ secrets.AXE_LINTER_API_KEY }}
+        run: |
+          if [ -n "$AXE_LINTER_API_KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::AXE_LINTER_API_KEY is not configured; skipping the accessibility lint."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: dequelabs/axe-linter-action@v2.0.0
+        if: steps.key.outputs.present == 'true'
         with:
           api_key: ${{ secrets.AXE_LINTER_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
