@@ -6,6 +6,8 @@ import { createHubMcpServer } from '../../hub/mcp/server';
 import { createFakeLibraryMethods } from './helpers/fakeLibraryMethods';
 import { createAnchor } from '../anchor/textQuote';
 import { createLibraryService } from '../service';
+import { epub3 } from './helpers/epubFixture';
+import { makePdf } from './helpers/pdfFixture';
 
 const para = (s: string) => `<p>${Array.from({ length: 10 }, () => s).join(' ')}</p>`;
 const page = (title: string, s: string) =>
@@ -136,5 +138,54 @@ describe('library MCP tools', () => {
     expect(textOf(await call(client, 'list_highlights', { documentId: 'other' }))).toBe(
       'No highlights found.',
     );
+  });
+
+  describe('books', () => {
+    const PDF = makePdf({
+      title: 'A Test Paper',
+      outline: [{ title: 'Intro', page: 0 }],
+      pages: [
+        [
+          [72, 720, 'Hello brave new world'],
+          [72, 700, 'second line of the page'],
+        ],
+        [[72, 720, 'Page two on spaced repetition']],
+      ],
+    });
+
+    it('shows the contents of a book first, then reads one page of it', async () => {
+      const { client, service } = await connect();
+      const saved = await service.saveUpload('u1', PDF);
+      const contents = textOf(await call(client, 'get_document', { id: saved.document.id }));
+      expect(contents).toContain('2 pages, numbered from 0');
+      expect(contents).toContain('Intro (page 0)');
+      expect(contents).not.toContain('third party');
+
+      const page = textOf(await call(client, 'get_document', { id: saved.document.id, unit: 1 }));
+      expect(page).toContain('third party');
+      expect(page).toContain('spaced repetition');
+    });
+
+    it('reads a PDF page as reflowed text, and an EPUB chapter as its text', async () => {
+      const { client, service } = await connect();
+      const pdf = await service.saveUpload('u1', PDF);
+      const first = textOf(await call(client, 'get_document', { id: pdf.document.id, unit: 0 }));
+      expect(first).toContain('world second line');
+      const epub = await service.saveUpload('u1', epub3());
+      const chapter = textOf(await call(client, 'get_document', { id: epub.document.id, unit: 0 }));
+      expect(chapter).toContain('Alpha beta gamma');
+    });
+
+    it('says so for a unit that does not exist, and for another user\u2019s book', async () => {
+      const { client, service } = await connect();
+      const mine = await service.saveUpload('u1', PDF);
+      expect(
+        textOf(await call(client, 'get_document', { id: mine.document.id, unit: 9 })),
+      ).toContain('has no page 9; it has 2');
+      const theirs = await service.saveUpload('u2', PDF);
+      expect(
+        textOf(await call(client, 'get_document', { id: theirs.document.id, unit: 0 })),
+      ).toContain('No saved article');
+    });
   });
 });

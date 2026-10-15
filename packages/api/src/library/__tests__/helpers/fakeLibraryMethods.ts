@@ -1,9 +1,11 @@
 import type {
+  LibraryBookInput,
   LibraryDocumentInput,
   LibraryDocumentRecord,
   LibraryHighlightRecord,
   LibraryMethods,
   LibraryProgressRecord,
+  LibraryUnitRecord,
 } from '@librechat/data-schemas';
 
 /** In-memory stand-in for the data-schemas library methods, keyed by user so isolation is testable. */
@@ -13,6 +15,7 @@ export function createFakeLibraryMethods() {
   const documents = new Map<string, LibraryDocumentRecord & { userId: string }>();
   const highlights = new Map<string, LibraryHighlightRecord & { userId: string }>();
   const progress = new Map<string, LibraryProgressRecord & { userId: string }>();
+  const units = new Map<string, LibraryUnitRecord & { userId: string }>();
 
   const methods: LibraryMethods = {
     async saveLibraryDocument(userId, input: LibraryDocumentInput) {
@@ -30,6 +33,9 @@ export function createFakeLibraryMethods() {
         ...input,
         userId,
         id: nextId(),
+        kind: input.kind ?? 'article',
+        unitCount: input.unitCount ?? 0,
+        toc: input.toc ?? [],
         location: input.location ?? 'inbox',
         tags: [],
         createdAt: now,
@@ -37,6 +43,43 @@ export function createFakeLibraryMethods() {
       } as LibraryDocumentRecord & { userId: string };
       documents.set(document.id, document);
       return { document: { ...document }, created: true, contentChanged: false };
+    },
+    async saveLibraryBook(userId, input: LibraryBookInput) {
+      const { units: incoming, ...rest } = input;
+      const saved = await methods.saveLibraryDocument(userId, {
+        ...rest,
+        unitCount: incoming.length,
+      });
+      if (saved.created || saved.contentChanged) {
+        for (const key of [...units.keys()]) {
+          if (key.startsWith(`${saved.document.id}:`)) units.delete(key);
+        }
+        for (const unit of incoming) {
+          units.set(`${saved.document.id}:${unit.index}`, {
+            ...unit,
+            userId,
+            documentId: saved.document.id,
+            contentHtml: unit.contentHtml ?? '',
+          });
+        }
+      }
+      return saved;
+    },
+    async listLibraryUnits(userId, documentId) {
+      return [...units.values()]
+        .filter((u) => u.userId === userId && u.documentId === documentId)
+        .sort((a, b) => a.index - b.index)
+        .map(({ index, kind, title, wordCount, contentHash }) => ({
+          index,
+          kind,
+          title,
+          wordCount,
+          contentHash,
+        }));
+    },
+    async getLibraryUnit(userId, documentId, index) {
+      const unit = units.get(`${documentId}:${index}`);
+      return unit && unit.userId === userId ? { ...unit } : null;
     },
     async getLibraryDocument(userId, id) {
       const doc = documents.get(id);
@@ -125,15 +168,22 @@ export function createFakeLibraryMethods() {
       const p = progress.get(`${userId}:${documentId}`);
       return p ? { ...p } : null;
     },
-    async setLibraryProgress(userId, documentId, textOffset, contentHash) {
+    async setLibraryProgress(userId, documentId, textOffset, contentHash, unitIndex) {
       const doc = documents.get(documentId);
       if (!doc || doc.userId !== userId) return null;
-      const record = { userId, documentId, textOffset, contentHash, updatedAt: new Date() };
+      const record = {
+        userId,
+        documentId,
+        textOffset,
+        contentHash,
+        ...(unitIndex === undefined ? {} : { unitIndex }),
+        updatedAt: new Date(),
+      };
       progress.set(`${userId}:${documentId}`, record);
       return { ...record };
     },
     async deleteAllLibraryData() {
-      return { documents: 0, highlights: 0, progress: 0 };
+      return { documents: 0, highlights: 0, progress: 0, units: 0 };
     },
   };
   return { methods, documents, highlights, progress };

@@ -26,6 +26,7 @@ import { createHubThreadModel } from './hubThread';
 import { createLibraryDocumentModel } from './libraryDocument';
 import { createLibraryHighlightModel } from './libraryHighlight';
 import { createLibraryProgressModel } from './libraryProgress';
+import { createLibraryUnitModel } from './libraryUnit';
 import { createMCPServerModel } from './mcpServer';
 import { createAssistantModel } from './assistant';
 import { createSkillFileModel } from './skillFile';
@@ -76,6 +77,7 @@ export function createModels(mongoose: typeof import('mongoose')): {
   LibraryDocument: ReturnType<typeof createLibraryDocumentModel>;
   LibraryHighlight: ReturnType<typeof createLibraryHighlightModel>;
   LibraryProgress: ReturnType<typeof createLibraryProgressModel>;
+  LibraryUnit: ReturnType<typeof createLibraryUnitModel>;
   AgentCategory: ReturnType<typeof createAgentCategoryModel>;
   MCPServer: ReturnType<typeof createMCPServerModel>;
   Role: ReturnType<typeof createRoleModel>;
@@ -133,6 +135,7 @@ export function createModels(mongoose: typeof import('mongoose')): {
     LibraryDocument: createLibraryDocumentModel(mongoose),
     LibraryHighlight: createLibraryHighlightModel(mongoose),
     LibraryProgress: createLibraryProgressModel(mongoose),
+    LibraryUnit: createLibraryUnitModel(mongoose),
     AgentCategory: createAgentCategoryModel(mongoose),
     MCPServer: createMCPServerModel(mongoose),
     Role: createRoleModel(mongoose),

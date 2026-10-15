@@ -15,5 +15,6 @@ export {
   libraryBrowseLimiter,
   librarySaveLimiter,
   LIBRARY_MAX_HTML_CHARS,
+  LIBRARY_MAX_UPLOAD_BYTES,
 } from './routes';
 export type { LibraryHandlers } from './routes';

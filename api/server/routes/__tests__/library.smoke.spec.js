@@ -14,6 +14,8 @@ describe('library routes wiring', () => {
     ['/documents/:id', 'get'],
     ['/documents/:id', 'patch'],
     ['/documents/:id', 'delete'],
+    ['/documents/:id/units/:index', 'get'],
+    ['/feeds/preview', 'post'],
     ['/documents/:id/progress', 'put'],
     ['/highlights', 'post'],
     ['/highlights/:id', 'patch'],
@@ -25,10 +27,20 @@ describe('library routes wiring', () => {
     expect(route.stack.length).toBe(4);
   });
 
+  it('registers the upload behind auth, config, a rate limit and the file parser', () => {
+    const route = find('/uploads', 'post');
+    expect(route).toBeDefined();
+    // requireJwtAuth, configMiddleware, limiter, upload parser, handler
+    expect(route.stack.length).toBe(5);
+  });
+
   it('gives the routes every method the service calls from the app models', () => {
     const db = require('~/models');
     for (const name of [
       'saveLibraryDocument',
+      'saveLibraryBook',
+      'listLibraryUnits',
+      'getLibraryUnit',
       'getLibraryDocument',
       'listLibraryDocuments',
       'searchLibraryDocuments',

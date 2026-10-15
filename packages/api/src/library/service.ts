@@ -10,14 +10,23 @@ import type {
   LibraryMethods,
   LibraryProgressRecord,
   LibraryReanchor,
+  LibraryUnitRecord,
+  LibraryUnitSummary,
 } from '@librechat/data-schemas';
 import type { DocumentDraft } from './ingest/saveDocument';
 import { createAnchor, resolveAnchor } from './anchor/textQuote';
+import type { FeedFetchResult } from './feed/fetchFeed';
 import { saveHtml, saveUrl } from './ingest/saveDocument';
+import { ingestUpload } from './ingest/upload';
+import { subscribeToUrl } from './feed/fetchFeed';
+import { uploadToBook } from './book';
 
 type Methods = Pick<
   LibraryMethods,
   | 'saveLibraryDocument'
+  | 'saveLibraryBook'
+  | 'listLibraryUnits'
+  | 'getLibraryUnit'
   | 'getLibraryDocument'
   | 'listLibraryDocuments'
   | 'searchLibraryDocuments'
@@ -37,6 +46,8 @@ export interface LibraryServiceDeps {
   /** Injected so tests (and a future isolated worker) can replace the network path. */
   saveUrl?: typeof saveUrl;
   saveHtml?: typeof saveHtml;
+  ingestUpload?: typeof ingestUpload;
+  subscribeToUrl?: typeof subscribeToUrl;
 }
 
 export interface SaveResult {
@@ -44,6 +55,27 @@ export interface SaveResult {
   created: boolean;
   /** Only meaningful when the page was saved before and its text changed. */
   reanchored: { kept: number; orphaned: number };
+}
+
+export interface UploadResult {
+  document: LibraryDocumentSummary;
+  created: boolean;
+}
+
+/** What a feed holds, for the person to choose from. Nothing is stored. */
+export interface FeedPreview {
+  title: string;
+  siteUrl: string | null;
+  feedUrl: string;
+  description: string | null;
+  items: Array<{
+    guid: string;
+    url: string | null;
+    title: string;
+    author: string | null;
+    publishedAt: string | null;
+    summary: string | null;
+  }>;
 }
 
 export type CreateHighlightOutcome =
@@ -67,6 +99,15 @@ export interface LibraryService {
     html: string,
     location?: LibraryLocationValue,
   ) => Promise<SaveResult>;
+  /** A PDF or EPUB the person uploaded. The type is decided from the bytes, not the file name. */
+  saveUpload: (
+    userId: string,
+    bytes: Uint8Array,
+    location?: LibraryLocationValue,
+  ) => Promise<UploadResult>;
+  previewFeed: (url: string) => Promise<FeedPreview>;
+  listUnits: (userId: string, documentId: string) => Promise<LibraryUnitSummary[]>;
+  getUnit: (userId: string, documentId: string, index: number) => Promise<LibraryUnitRecord | null>;
   list: (userId: string, query: LibraryListQuery) => Promise<LibraryDocumentSummary[]>;
   search: (userId: string, query: string, limit: number) => Promise<LibraryDocumentSummary[]>;
   get: (userId: string, id: string) => Promise<LibraryDocumentRecord | null>;
@@ -96,7 +137,15 @@ export interface LibraryService {
     userId: string,
     documentId: string,
     textOffset: number,
+    unitIndex?: number,
   ) => Promise<LibraryProgressRecord | null>;
+}
+
+function stripTags(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function toSummary(doc: LibraryDocumentRecord): LibraryDocumentSummary {
@@ -107,6 +156,8 @@ function toSummary(doc: LibraryDocumentRecord): LibraryDocumentSummary {
 export function createLibraryService({ methods, ...injected }: LibraryServiceDeps): LibraryService {
   const fetchUrl = injected.saveUrl ?? saveUrl;
   const fromHtml = injected.saveHtml ?? saveHtml;
+  const readUpload = injected.ingestUpload ?? ingestUpload;
+  const readFeed = injected.subscribeToUrl ?? subscribeToUrl;
 
   async function persist(
     userId: string,
@@ -173,6 +224,47 @@ export function createLibraryService({ methods, ...injected }: LibraryServiceDep
       return persist(userId, fromHtml(url, html), location);
     },
 
+    async saveUpload(
+      userId: string,
+      bytes: Uint8Array,
+      location?: LibraryLocationValue,
+    ): Promise<UploadResult> {
+      const book = uploadToBook(bytes, await readUpload(bytes), new Date());
+      const saved = await methods.saveLibraryBook(userId, { ...book, location });
+      return { document: toSummary(saved.document), created: saved.created };
+    },
+
+    async previewFeed(url: string): Promise<FeedPreview> {
+      const result: FeedFetchResult = await readFeed(url);
+      const feed = result.feed;
+      if (!feed) {
+        throw new Error('The feed did not return any content');
+      }
+      return {
+        title: feed.title,
+        siteUrl: feed.siteUrl,
+        feedUrl: feed.feedUrl,
+        description: feed.description,
+        items: feed.items.map((item) => ({
+          guid: item.guid,
+          url: item.url,
+          title: item.title,
+          author: item.author,
+          publishedAt: item.publishedAt,
+          // Feed summaries are sanitized HTML; the list only needs the words.
+          summary: item.summaryHtml ? stripTags(item.summaryHtml).slice(0, 400) : null,
+        })),
+      };
+    },
+
+    listUnits(userId: string, documentId: string) {
+      return methods.listLibraryUnits(userId, documentId);
+    },
+
+    getUnit(userId: string, documentId: string, index: number) {
+      return methods.getLibraryUnit(userId, documentId, index);
+    },
+
     list(userId: string, query: LibraryListQuery) {
       return methods.listLibraryDocuments(userId, query);
     },
@@ -199,10 +291,23 @@ export function createLibraryService({ methods, ...injected }: LibraryServiceDep
     ): Promise<CreateHighlightOutcome> {
       const document = await methods.getLibraryDocument(userId, input.documentId);
       if (!document) return { status: 'not_found' };
-      if (input.unit) return { status: 'mismatch' };
-      if (input.contentHash !== document.contentHash) return { status: 'stale' };
+      // An article is one text; a book anchors per chapter or page, so the unit decides which text
+      // and which hash the selection is checked against. A mismatch in kind is a malformed request.
+      const isBook = document.kind !== 'article';
+      if (isBook !== (input.unit !== undefined)) return { status: 'mismatch' };
+      let text = document.text;
+      let currentHash = document.contentHash;
+      if (input.unit) {
+        const wanted = document.kind === 'pdf' ? 'page' : 'chapter';
+        if (input.unit.kind !== wanted) return { status: 'mismatch' };
+        const unit = await methods.getLibraryUnit(userId, input.documentId, input.unit.index);
+        if (!unit) return { status: 'mismatch' };
+        text = unit.text;
+        currentHash = unit.contentHash;
+      }
+      if (input.contentHash !== currentHash) return { status: 'stale' };
       const { start, end, exact } = input.anchor;
-      if (end > document.text.length || document.text.slice(start, end) !== exact) {
+      if (end > text.length || text.slice(start, end) !== exact) {
         return { status: 'mismatch' };
       }
       const highlight = await methods.createLibraryHighlight(userId, input);
@@ -225,11 +330,21 @@ export function createLibraryService({ methods, ...injected }: LibraryServiceDep
       return methods.getLibraryProgress(userId, documentId);
     },
 
-    async setProgress(userId: string, documentId: string, textOffset: number) {
+    async setProgress(userId: string, documentId: string, textOffset: number, unitIndex?: number) {
       const document = await methods.getLibraryDocument(userId, documentId);
       if (!document) return null;
-      const offset = Math.min(Math.max(0, Math.trunc(textOffset)), document.text.length);
-      return methods.setLibraryProgress(userId, documentId, offset, document.contentHash);
+      const isBook = document.kind !== 'article';
+      if (isBook !== (unitIndex !== undefined)) return null;
+      let text = document.text;
+      let hash = document.contentHash;
+      if (unitIndex !== undefined) {
+        const unit = await methods.getLibraryUnit(userId, documentId, unitIndex);
+        if (!unit) return null;
+        text = unit.text;
+        hash = unit.contentHash;
+      }
+      const offset = Math.min(Math.max(0, Math.trunc(textOffset)), text.length);
+      return methods.setLibraryProgress(userId, documentId, offset, hash, unitIndex);
     },
   };
 }

@@ -4,6 +4,8 @@ export interface ILibraryProgress extends Document {
   userId: Types.ObjectId;
   documentId: Types.ObjectId;
   /** A text offset, not a scroll pixel, so it survives resizes, font changes and device switches. */
+  /** Chapter or page the offset is in; absent for an article. */
+  unitIndex?: number;
   textOffset: number;
   contentHash: string;
   updatedAt: Date;
@@ -18,6 +20,7 @@ const libraryProgressSchema: Schema<ILibraryProgress> = new Schema(
       ref: 'LibraryDocument',
       required: true,
     },
+    unitIndex: { type: Number, min: 0 },
     textOffset: { type: Number, required: true, min: 0 },
     contentHash: { type: String, required: true },
     tenantId: { type: String, index: true },

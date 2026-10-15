@@ -1,9 +1,10 @@
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import type { LibraryDocumentInput, LibraryHighlightInput } from '~/types';
+import type { LibraryBookInput, LibraryDocumentInput, LibraryHighlightInput } from '~/types';
 import libraryDocumentSchema from '~/schema/libraryDocument';
 import libraryHighlightSchema from '~/schema/libraryHighlight';
 import libraryProgressSchema from '~/schema/libraryProgress';
+import libraryUnitSchema from '~/schema/libraryUnit';
 import { createLibraryMethods, type LibraryMethods } from './library';
 
 let mongoServer: MongoMemoryServer;
@@ -44,6 +45,9 @@ beforeAll(async () => {
   }
   if (!mongoose.models.LibraryProgress) {
     mongoose.model('LibraryProgress', libraryProgressSchema);
+  }
+  if (!mongoose.models.LibraryUnit) {
+    mongoose.model('LibraryUnit', libraryUnitSchema);
   }
   methods = createLibraryMethods(mongoose);
   await mongoose.connect(mongoServer.getUri());
@@ -245,8 +249,181 @@ describe('deletion', () => {
       documents: 1,
       highlights: 1,
       progress: 1,
+      units: 0,
     });
     expect(await methods.listLibraryDocuments(userB, { limit: 10 })).toHaveLength(1);
     expect(await methods.listLibraryHighlights(userB)).toHaveLength(1);
+  });
+});
+
+const book = (overrides: Partial<LibraryBookInput> = {}): LibraryBookInput => ({
+  ...doc({
+    urlKey: 'book1',
+    normalizedUrl: 'upload://book1',
+    title: 'A short book',
+    contentHtml: '',
+    text: 'Chapter one text. Chapter two text.',
+    contentHash: HASH,
+  }),
+  kind: 'epub',
+  toc: [
+    { title: 'One', depth: 0, unitIndex: 0 },
+    { title: 'Two', depth: 0, unitIndex: 1, fragment: 'part' },
+  ],
+  units: [
+    {
+      index: 0,
+      kind: 'chapter',
+      title: 'One',
+      contentHtml: '<p>Chapter one text.</p>',
+      text: 'Chapter one text.',
+      wordCount: 3,
+      contentHash: 'c'.repeat(64),
+    },
+    {
+      index: 1,
+      kind: 'chapter',
+      title: 'Two',
+      contentHtml: '<p>Chapter two text.</p>',
+      text: 'Chapter two text.',
+      wordCount: 3,
+      contentHash: 'd'.repeat(64),
+    },
+  ],
+  ...overrides,
+});
+
+describe('books (EPUB and PDF)', () => {
+  it('stores the document with its table of contents and units, listed without text', async () => {
+    const saved = await methods.saveLibraryBook(userA, book());
+    expect(saved.created).toBe(true);
+    expect(saved.document).toMatchObject({ kind: 'epub', unitCount: 2 });
+    expect(saved.document.toc).toEqual([
+      { title: 'One', depth: 0, unitIndex: 0 },
+      { title: 'Two', depth: 0, unitIndex: 1, fragment: 'part' },
+    ]);
+    const units = await methods.listLibraryUnits(userA, saved.document.id);
+    expect(units.map((u) => u.title)).toEqual(['One', 'Two']);
+    expect(units[0]).not.toHaveProperty('text');
+    expect(units[0]).not.toHaveProperty('contentHtml');
+  });
+
+  it('reads one unit with its text, and nothing for a bad index or another user', async () => {
+    const { document } = await methods.saveLibraryBook(userA, book());
+    const unit = await methods.getLibraryUnit(userA, document.id, 1);
+    expect(unit).toMatchObject({
+      text: 'Chapter two text.',
+      contentHtml: '<p>Chapter two text.</p>',
+    });
+    expect(await methods.getLibraryUnit(userA, document.id, 9)).toBeNull();
+    expect(await methods.getLibraryUnit(userA, document.id, -1)).toBeNull();
+    expect(await methods.getLibraryUnit(userA, document.id, 1.5)).toBeNull();
+    expect(await methods.getLibraryUnit(userB, document.id, 1)).toBeNull();
+    expect(await methods.listLibraryUnits(userB, document.id)).toEqual([]);
+    expect(await methods.getLibraryUnit(userA, 'nope', 0)).toBeNull();
+  });
+
+  it('keeps PDF pages with both the anchor text and the readable text', async () => {
+    const { document } = await methods.saveLibraryBook(
+      userA,
+      book({
+        urlKey: 'pdf1',
+        kind: 'pdf',
+        needsOcr: false,
+        truncated: true,
+        units: [
+          {
+            index: 0,
+            kind: 'page',
+            text: 'exact anchor text',
+            readableText: 'exact anchor text, reflowed',
+            wordCount: 3,
+            contentHash: 'e'.repeat(64),
+          },
+        ],
+      }),
+    );
+    expect(document).toMatchObject({ kind: 'pdf', unitCount: 1, truncated: true, needsOcr: false });
+    const page = await methods.getLibraryUnit(userA, document.id, 0);
+    expect(page).toMatchObject({
+      kind: 'page',
+      text: 'exact anchor text',
+      readableText: 'exact anchor text, reflowed',
+      contentHtml: '',
+    });
+  });
+
+  it('does not rewrite units when the same book is saved again, but repairs a partial save', async () => {
+    const first = await methods.saveLibraryBook(userA, book());
+    const again = await methods.saveLibraryBook(userA, book());
+    expect(again.created).toBe(false);
+    expect(again.document.id).toBe(first.document.id);
+    expect(await mongoose.models.LibraryUnit.countDocuments({})).toBe(2);
+
+    await mongoose.models.LibraryUnit.deleteOne({ index: 1 });
+    await methods.saveLibraryBook(userA, book());
+    expect(await mongoose.models.LibraryUnit.countDocuments({})).toBe(2);
+  });
+
+  it('replaces the units when the content changed', async () => {
+    const { document } = await methods.saveLibraryBook(userA, book());
+    const revised = book({
+      contentHash: HASH2,
+      units: [
+        {
+          index: 0,
+          kind: 'chapter',
+          title: 'Only',
+          contentHtml: '<p>Rewritten.</p>',
+          text: 'Rewritten.',
+          wordCount: 1,
+          contentHash: 'f'.repeat(64),
+        },
+      ],
+    });
+    const result = await methods.saveLibraryBook(userA, revised);
+    expect(result.contentChanged).toBe(true);
+    expect(result.document.unitCount).toBe(1);
+    expect((await methods.listLibraryUnits(userA, document.id)).map((u) => u.title)).toEqual([
+      'Only',
+    ]);
+  });
+
+  it('lists a book among documents without its text, and finds it by title', async () => {
+    await methods.saveLibraryBook(userA, book());
+    const listed = await methods.listLibraryDocuments(userA, { limit: 10 });
+    expect(listed[0]).toMatchObject({ kind: 'epub', unitCount: 2 });
+    expect(listed[0]).not.toHaveProperty('text');
+    expect((await methods.searchLibraryDocuments(userA, 'short book', 10)).length).toBe(1);
+  });
+
+  it('remembers which unit the reader was in, and clears it for a plain article', async () => {
+    const { document } = await methods.saveLibraryBook(userA, book());
+    const inUnit = await methods.setLibraryProgress(userA, document.id, 4, 'd'.repeat(64), 1);
+    expect(inUnit).toMatchObject({ unitIndex: 1, textOffset: 4 });
+    const article = await methods.saveLibraryDocument(userA, doc());
+    await methods.setLibraryProgress(userA, article.document.id, 4, HASH, 3);
+    const cleared = await methods.setLibraryProgress(userA, article.document.id, 9, HASH);
+    expect(cleared).toMatchObject({ textOffset: 9 });
+    expect(cleared).not.toHaveProperty('unitIndex');
+  });
+
+  it('deleting a book removes its units, highlights and progress, and only its own', async () => {
+    const a = await methods.saveLibraryBook(userA, book());
+    const b = await methods.saveLibraryBook(userB, book());
+    expect(await methods.deleteLibraryDocument(userB, a.document.id)).toBe(false);
+    expect(await methods.deleteLibraryDocument(userA, a.document.id)).toBe(true);
+    expect(await mongoose.models.LibraryUnit.countDocuments({})).toBe(2);
+    expect(await methods.listLibraryUnits(userB, b.document.id)).toHaveLength(2);
+    expect(await methods.deleteAllLibraryData(userB)).toMatchObject({ documents: 1, units: 2 });
+  });
+
+  it('accepts a highlight carrying a unit coordinate on a book', async () => {
+    const { document } = await methods.saveLibraryBook(userA, book());
+    const created = await methods.createLibraryHighlight(
+      userA,
+      highlight(document.id, { unit: { kind: 'chapter', index: 1 } }),
+    );
+    expect(created?.unit).toEqual({ kind: 'chapter', index: 1 });
   });
 });

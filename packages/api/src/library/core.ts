@@ -6,3 +6,8 @@ export * from './ingest/saveDocument';
 export * from './anchor/textQuote';
 export * from './anchor/domOffsets';
 export * from './types';
+export * from './pdf/parsePdf';
+export * from './epub/parseEpub';
+export * from './feed/parseFeed';
+export * from './feed/fetchFeed';
+export * from './ingest/upload';

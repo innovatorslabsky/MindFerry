@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { LibraryDocumentSummary, LibraryHighlightRecord } from '@librechat/data-schemas';
+import type {
+  LibraryDocumentRecord,
+  LibraryDocumentSummary,
+  LibraryHighlightRecord,
+} from '@librechat/data-schemas';
 import type { LibraryService } from './service';
 
 /**
@@ -9,7 +13,10 @@ import type { LibraryService } from './service';
  * tool that saves, edits or deletes: an assistant reads the library, the person curates it.
  */
 
-export type LibraryMcpService = Pick<LibraryService, 'search' | 'get' | 'listHighlights'>;
+export type LibraryMcpService = Pick<
+  LibraryService,
+  'search' | 'get' | 'getUnit' | 'listHighlights'
+>;
 
 export const LIBRARY_MCP_DEFAULT_LIMIT = 10;
 export const LIBRARY_MCP_MAX_LIMIT = 25;
@@ -34,6 +41,29 @@ function formatDocument(doc: LibraryDocumentSummary): string {
   ].filter(Boolean);
   lines.push(`  ${meta.join(' · ')}`);
   return lines.join('\n');
+}
+
+function formatContents(doc: LibraryDocumentRecord, unitName: string): string {
+  const entries = doc.toc.length
+    ? doc.toc.map(
+        (entry) =>
+          `${'  '.repeat(entry.depth)}- ${entry.title}${
+            entry.unitIndex === undefined ? '' : ` (${unitName} ${entry.unitIndex})`
+          }`,
+      )
+    : [`(no table of contents)`];
+  const scanned = doc.needsOcr
+    ? '\nThis PDF has almost no text (probably scanned images), so there is little to read.'
+    : '';
+  return [
+    formatDocument(doc),
+    `  ${doc.unitCount} ${unitName}s, numbered from 0${doc.truncated ? ' (the book was cut short)' : ''}`,
+    scanned,
+    `Pass unit to read one ${unitName}. Contents:`,
+    ...entries,
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function formatHighlight(highlight: LibraryHighlightRecord): string {
@@ -84,6 +114,14 @@ export function registerLibraryMcpTools(
         'Read the plain text of one saved article. Long articles are returned in pages: when the result says more remains, call again with the offset it gives. Pass the document id search_library returned.',
       inputSchema: {
         id: z.string().min(1).describe('Document id from search_library'),
+        unit: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe(
+            'For a book (EPUB or PDF): the chapter or page number to read, counting from 0. Omit it to see the contents.',
+          ),
         offset: z.number().int().min(0).optional().describe('Character to start reading from'),
         maxChars: z
           .number()
@@ -94,19 +132,36 @@ export function registerLibraryMcpTools(
           .describe(`Most characters to return; default ${LIBRARY_MCP_DEFAULT_CHARS}`),
       },
     },
-    async ({ id, offset, maxChars }) => {
+    async ({ id, unit, offset, maxChars }) => {
       const doc = await service.get(userId, id);
       if (!doc) {
         return asText(`No saved article has id "${id}".`);
       }
-      const start = Math.min(offset ?? 0, doc.text.length);
-      const end = Math.min(start + (maxChars ?? LIBRARY_MCP_DEFAULT_CHARS), doc.text.length);
-      const header = [formatDocument(doc), `  characters: ${doc.text.length}`].join('\n');
+      let body = doc.text;
+      let where = '';
+      if (doc.kind !== 'article') {
+        const unitName = doc.kind === 'pdf' ? 'page' : 'chapter';
+        if (unit === undefined) {
+          return asText(formatContents(doc, unitName));
+        }
+        const record = await service.getUnit(userId, id, unit);
+        if (!record) {
+          return asText(
+            `"${doc.title}" has no ${unitName} ${unit}; it has ${doc.unitCount} (numbered from 0).`,
+          );
+        }
+        // A PDF page is read as reflowed text; its exact text is only the highlight coordinate space.
+        body = record.readableText ?? record.text;
+        where = ` · ${unitName} ${unit}`;
+      }
+      const start = Math.min(offset ?? 0, body.length);
+      const end = Math.min(start + (maxChars ?? LIBRARY_MCP_DEFAULT_CHARS), body.length);
+      const header = [formatDocument(doc), `  characters${where}: ${body.length}`].join('\n');
       const more =
-        end < doc.text.length
-          ? `\n\n[Showing characters ${start}-${end} of ${doc.text.length}. Call again with offset ${end} for the rest.]`
+        end < body.length
+          ? `\n\n[Showing characters ${start}-${end} of ${body.length}. Call again with offset ${end} for the rest.]`
           : '';
-      return asText(`${header}\n\n${UNTRUSTED_NOTICE}\n\n${doc.text.slice(start, end)}${more}`);
+      return asText(`${header}\n\n${UNTRUSTED_NOTICE}\n\n${body.slice(start, end)}${more}`);
     },
   );
 

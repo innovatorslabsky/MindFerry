@@ -6,6 +6,10 @@ import type { ServerRequest } from '../types/http';
 import type { LibraryService } from './service';
 import { contextHubRateLimitKey } from '../hub/ratelimit';
 import { NotReadableError } from './ingest/extract';
+import { UnsupportedUploadError } from './ingest/upload';
+import { EpubDrmError, EpubError } from './epub/parseEpub';
+import { PdfEncryptedError, PdfError } from './pdf/parsePdf';
+import { FeedParseError } from './feed/parseFeed';
 import { FetchError, TooLargeError, UnsafeUrlError } from './net/safeFetch';
 import { createHighlightSchema, LOCATIONS } from './types';
 import { isLibraryEnabled } from './config';
@@ -69,7 +73,16 @@ const patchHighlightSchema = z
     message: 'Nothing to update',
   });
 
-const progressBodySchema = z.object({ textOffset: z.number().int().nonnegative() });
+const progressBodySchema = z.object({
+  textOffset: z.number().int().nonnegative(),
+  /** The chapter or page the offset is in; required for a book, refused for an article. */
+  unitIndex: z.number().int().nonnegative().optional(),
+});
+
+const feedBodySchema = z.object({ url: z.string().url().max(2048) });
+
+/** Largest upload accepted; also the ceiling the route's multer instance is configured with. */
+export const LIBRARY_MAX_UPLOAD_BYTES: number = 50 * 1024 * 1024;
 
 function fail(res: Response, status: number, code: string, message: string): void {
   res.status(status).json({ error: { message, type: code, code } });
@@ -124,8 +137,47 @@ function saveFailure(res: Response, error: unknown): void {
 
 type Handler = (req: ServerRequest, res: Response) => Promise<void>;
 
+type UploadedRequest = ServerRequest & { file?: { buffer?: Uint8Array; size?: number } };
+
+function uploadFailure(res: Response, error: unknown): void {
+  if (error instanceof UnsupportedUploadError) {
+    return fail(res, 415, 'unsupported_file', error.message);
+  }
+  if (error instanceof PdfEncryptedError) {
+    return fail(res, 422, 'encrypted', 'This PDF needs a password, which MindFerry cannot use');
+  }
+  if (error instanceof EpubDrmError) {
+    return fail(res, 422, 'drm', 'This EPUB is protected by DRM and cannot be read');
+  }
+  if (error instanceof PdfError || error instanceof EpubError) {
+    return fail(res, 422, 'unreadable_file', error.message);
+  }
+  logger.error('[library] Unexpected error reading an upload:', error);
+  return fail(res, 500, 'internal_error', 'Could not read the file');
+}
+
+function feedFailure(res: Response, error: unknown): void {
+  if (error instanceof UnsafeUrlError) {
+    return fail(res, 400, 'unsafe_url', error.message);
+  }
+  if (error instanceof FeedParseError) {
+    return fail(res, 422, 'not_a_feed', error.message);
+  }
+  if (error instanceof TooLargeError) {
+    return fail(res, 413, 'too_large', 'The feed is too large');
+  }
+  if (error instanceof FetchError) {
+    return fail(res, 502, 'fetch_failed', error.message);
+  }
+  logger.error('[library] Unexpected error reading a feed:', error);
+  return fail(res, 500, 'internal_error', 'Could not read the feed');
+}
+
 export interface LibraryHandlers {
   save: Handler;
+  upload: Handler;
+  previewFeed: Handler;
+  getUnit: Handler;
   list: Handler;
   get: Handler;
   patch: Handler;
@@ -150,6 +202,35 @@ export function createLibraryHandlers({ service }: { service: LibraryService }):
       res.status(result.created ? 201 : 200).json(result);
     } catch (error) {
       saveFailure(res, error);
+    }
+  };
+
+  const upload: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const bytes = (req as UploadedRequest).file?.buffer;
+    if (!bytes || bytes.length === 0) {
+      return fail(res, 400, 'invalid_request', 'A file is required');
+    }
+    const requested = (req.body as { location?: unknown } | undefined)?.location;
+    const location = LOCATIONS.find((value) => value === requested);
+    try {
+      const result = await service.saveUpload(userId, bytes, location);
+      res.status(result.created ? 201 : 200).json(result);
+    } catch (error) {
+      uploadFailure(res, error);
+    }
+  };
+
+  const previewFeed: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const body = feedBodySchema.safeParse(req.body);
+    if (!body.success) return fail(res, 400, 'invalid_request', 'A valid url is required');
+    try {
+      res.status(200).json({ feed: await service.previewFeed(body.data.url) });
+    } catch (error) {
+      feedFailure(res, error);
     }
   };
 
@@ -181,7 +262,27 @@ export function createLibraryHandlers({ service }: { service: LibraryService }):
       service.getProgress(userId, id),
     ]);
     if (!document) return fail(res, 404, 'not_found', 'Document not found');
-    res.status(200).json({ document, highlights, progress });
+    if (document.kind === 'article') {
+      res.status(200).json({ document, highlights, progress });
+      return;
+    }
+    // A book's text is read a chapter or page at a time, not shipped whole with its listing.
+    const { text: _text, contentHtml: _html, ...summary } = document;
+    const units = await service.listUnits(userId, id);
+    res.status(200).json({ document: summary, units, highlights, progress });
+  };
+
+  const getUnit: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const documentId = param(req, 'id');
+    const index = Number(param(req, 'index'));
+    const unit = await service.getUnit(userId, documentId, index);
+    if (!unit) return fail(res, 404, 'not_found', 'Chapter or page not found');
+    const highlights = (await service.listHighlights(userId, documentId)).filter(
+      (highlight) => highlight.unit?.index === index,
+    );
+    res.status(200).json({ unit, highlights });
   };
 
   const patch: Handler = async (req, res) => {
@@ -245,13 +346,21 @@ export function createLibraryHandlers({ service }: { service: LibraryService }):
     const body = progressBodySchema.safeParse(req.body);
     if (!body.success)
       return fail(res, 400, 'invalid_request', 'textOffset must be a whole number');
-    const progress = await service.setProgress(userId, param(req, 'id'), body.data.textOffset);
-    if (!progress) return fail(res, 404, 'not_found', 'Document not found');
+    const progress = await service.setProgress(
+      userId,
+      param(req, 'id'),
+      body.data.textOffset,
+      body.data.unitIndex,
+    );
+    if (!progress) return fail(res, 404, 'not_found', 'Document or position not found');
     res.status(200).json({ progress });
   };
 
   return {
     save,
+    upload,
+    previewFeed,
+    getUnit,
     list,
     get,
     patch,
