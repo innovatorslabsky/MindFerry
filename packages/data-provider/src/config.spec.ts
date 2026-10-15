@@ -2879,3 +2879,20 @@ describe('GitHub comparison configuration', () => {
     ).toBe(false);
   });
 });
+
+describe('contextHub.library', () => {
+  it('is off unless an operator turns it on, whatever the rest of contextHub says', () => {
+    expect(contextHubSchema.parse({ enabled: true })?.library).toEqual({ enabled: false });
+    expect(contextHubSchema.parse({ library: {} })?.library.enabled).toBe(false);
+  });
+
+  it('can be enabled independently of the hub', () => {
+    const result = contextHubSchema.parse({ library: { enabled: true } });
+    expect(result?.enabled).toBe(false);
+    expect(result?.library.enabled).toBe(true);
+  });
+
+  it('rejects a non-boolean flag', () => {
+    expect(contextHubSchema.safeParse({ library: { enabled: 'yes' } }).success).toBe(false);
+  });
+});

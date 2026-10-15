@@ -681,6 +681,15 @@ export const contextHubSchema = z
       })
       .default({}),
     git: contextHubGitTargetSchema.optional(),
+    /**
+     * The reading library: save articles by URL, highlight them, resume where you left off. Off by
+     * default because it makes the server fetch URLs on a user's behalf and store third-party text.
+     */
+    library: z
+      .object({
+        enabled: z.boolean().default(false),
+      })
+      .default({}),
   })
   .optional();
 
