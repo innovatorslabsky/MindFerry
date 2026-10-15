@@ -23,6 +23,9 @@ import { createSharedLinkModel } from './sharedLink';
 import { createAccessRoleModel } from './accessRole';
 import { createToolFavoriteModel } from './favorite';
 import { createHubThreadModel } from './hubThread';
+import { createLibraryDocumentModel } from './libraryDocument';
+import { createLibraryHighlightModel } from './libraryHighlight';
+import { createLibraryProgressModel } from './libraryProgress';
 import { createMCPServerModel } from './mcpServer';
 import { createAssistantModel } from './assistant';
 import { createSkillFileModel } from './skillFile';
@@ -70,6 +73,9 @@ export function createModels(mongoose: typeof import('mongoose')): {
   HubThread: ReturnType<typeof createHubThreadModel>;
   HubNote: ReturnType<typeof createHubNoteModel>;
   HubOAuthClient: ReturnType<typeof createHubOAuthClientModel>;
+  LibraryDocument: ReturnType<typeof createLibraryDocumentModel>;
+  LibraryHighlight: ReturnType<typeof createLibraryHighlightModel>;
+  LibraryProgress: ReturnType<typeof createLibraryProgressModel>;
   AgentCategory: ReturnType<typeof createAgentCategoryModel>;
   MCPServer: ReturnType<typeof createMCPServerModel>;
   Role: ReturnType<typeof createRoleModel>;
@@ -124,6 +130,9 @@ export function createModels(mongoose: typeof import('mongoose')): {
     HubThread: createHubThreadModel(mongoose),
     HubNote: createHubNoteModel(mongoose),
     HubOAuthClient: createHubOAuthClientModel(mongoose),
+    LibraryDocument: createLibraryDocumentModel(mongoose),
+    LibraryHighlight: createLibraryHighlightModel(mongoose),
+    LibraryProgress: createLibraryProgressModel(mongoose),
     AgentCategory: createAgentCategoryModel(mongoose),
     MCPServer: createMCPServerModel(mongoose),
     Role: createRoleModel(mongoose),

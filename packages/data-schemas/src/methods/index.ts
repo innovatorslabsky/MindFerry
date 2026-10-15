@@ -47,6 +47,7 @@ import { createAgentCategoryMethods, type AgentCategoryMethods } from './agentCa
 import { createAgentApiKeyMethods, type AgentApiKeyMethods } from './agentApiKey';
 /* Context Hub */
 import { createHubMethods, type HubMethods } from './hub';
+import { createLibraryMethods, type LibraryMethods } from './library';
 /* MCP Servers */
 import { createMCPServerMethods, type MCPServerMethods } from './mcpServer';
 import { createCodeEnvironmentMethods, type CodeEnvironmentMethods } from './codeEnvironment';
@@ -293,6 +294,7 @@ export type AllMethods = ToolApprovalGrantStorage &
   AgentTriggerDeliveryMethods &
   AgentQueuedTurnMethods &
   HubMethods &
+  LibraryMethods &
   ScheduleMCPConsentStorage &
   ScheduleMethods &
   AgentMethods &
@@ -504,6 +506,7 @@ export function createMethods(
     ...createAgentCategoryMethods(mongoose),
     ...createAgentApiKeyMethods(mongoose),
     ...createHubMethods(mongoose),
+    ...createLibraryMethods(mongoose),
     ...createMCPServerMethods(mongoose),
     ...createCodeEnvironmentMethods(mongoose),
     ...createAccessRoleMethods(mongoose),
@@ -576,6 +579,7 @@ export type {
   AgentCategoryMethods,
   AgentApiKeyMethods,
   HubMethods,
+  LibraryMethods,
   MCPServerMethods,
   CodeEnvironmentMethods,
   UserGroupMethods,
