@@ -2,6 +2,8 @@ const multer = require('multer');
 const express = require('express');
 const {
   createLibraryService,
+  createLibraryIngest,
+  getLibraryIsolation,
   createLibraryHandlers,
   libraryBrowseLimiter,
   librarySaveLimiter,
@@ -19,7 +21,25 @@ const router = express.Router();
  * the caller in the service layer. Saving by URL makes the server fetch a third-party page, so it
  * has its own, much stricter rate limit than the read routes.
  */
-const handlers = createLibraryHandlers({ service: createLibraryService({ methods: db }) });
+/**
+ * Untrusted pages, files and feeds are parsed in a restricted child process (see
+ * `contextHub.library.isolation`). The parsers for one set of isolation settings are built once and
+ * reused, so concurrency limits hold across requests; a change of settings builds a new set.
+ */
+const serviceBySettings = new Map();
+
+function serviceFor(req) {
+  const isolation = getLibraryIsolation(req.config);
+  const key = JSON.stringify(isolation);
+  let service = serviceBySettings.get(key);
+  if (!service) {
+    service = createLibraryService({ methods: db, ingest: createLibraryIngest(isolation) });
+    serviceBySettings.set(key, service);
+  }
+  return service;
+}
+
+const handlers = createLibraryHandlers({ service: serviceFor });
 
 const browse = [requireJwtAuth, configMiddleware, libraryBrowseLimiter];
 const save = [requireJwtAuth, configMiddleware, librarySaveLimiter];

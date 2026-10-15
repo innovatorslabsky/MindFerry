@@ -3,6 +3,13 @@ import type { ServerRequest } from '../../types/http';
 import { createFakeLibraryMethods } from './helpers/fakeLibraryMethods';
 import { FetchError, TooLargeError, UnsafeUrlError } from '../net/safeFetch';
 import { createLibraryHandlers } from '../routes';
+import {
+  ParseTimeoutError,
+  WorkerBusyError,
+  WorkerCrashedError,
+  WorkerResultTooLargeError,
+  WorkerUnavailableError,
+} from '../worker/errors';
 import { createLibraryService } from '../service';
 import { NotReadableError } from '../ingest/extract';
 import { createAnchor } from '../anchor/textQuote';
@@ -113,6 +120,26 @@ describe('save', () => {
     await handlers.save(req({ body: { url: 'https://example.test/m' } }), response);
     expect(out.status).toBe(status);
     expect(out.body).toMatchObject({ error: { code } });
+  });
+
+  it.each([
+    [new WorkerBusyError('busy'), 503, 'busy'],
+    [new ParseTimeoutError('slow'), 422, 'timeout'],
+    [new WorkerResultTooLargeError('big'), 413, 'too_large'],
+    [new WorkerCrashedError('boom: /srv/app/secret/path'), 422, 'unreadable_file'],
+    [new WorkerUnavailableError('entry missing at /srv/app'), 503, 'unavailable'],
+  ])('maps the isolated parser failure %p to %i', async (error, status, code) => {
+    const { handlers } = setup({
+      saveFromUrl: async () => {
+        throw error;
+      },
+    });
+    const { response, out } = res();
+    await handlers.save(req({ body: { url: 'https://example.test/m' } }), response);
+    expect(out.status).toBe(status);
+    expect(out.body).toMatchObject({ error: { code } });
+    // Internals (paths, stderr) stay in the log, not in the response.
+    expect(JSON.stringify(out.body)).not.toMatch(/\/srv\/app|boom/);
   });
 
   it('does not leak an internal error message to the client', async () => {

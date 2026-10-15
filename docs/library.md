@@ -7,6 +7,12 @@ connected to the Context Hub can search and read what you saved. Off by default.
 contextHub:
   library:
     enabled: true     # the library API; the MCP tools also need contextHub.mcp.enabled
+    isolation:        # all optional; these are the defaults
+      mode: process   # or "inline" (single trusted user only, see below)
+      maxConcurrent: 2
+      maxQueue: 16
+      timeoutMs: 60000
+      memoryMb: 768
 ```
 
 ## What you can save
@@ -45,8 +51,10 @@ Each coordinate space is separate:
 - **Scanned PDFs** (`needsOcr: true`) have almost no text and are not searchable. There is no OCR.
 - **Multi-column PDFs** read in content-stream order, which can interleave columns.
 - **PDFs that forbid copying** are read like any other. Whether to honour that flag is undecided.
-- **Parsing runs in the API process**, bounded by size, page, time and (for URLs) SSRF limits. It is
-  not isolated in a worker.
+- **Network isolation is the deployment's job.** The parser process cannot read your files, secrets or
+  database, but it shares the host's network. URL fetches are guarded in code (public addresses only,
+  checked when the socket connects and again on every redirect); for defence in depth, give the API
+  container an egress policy that blocks private ranges and cloud metadata addresses.
 - **Feeds are not subscribed to.** There is no polling schedule yet.
 - **Pages that need JavaScript** to render cannot be fetched by URL; save them from the browser with
   `{ url, html }` instead.
@@ -54,3 +62,29 @@ Each coordinate space is separate:
   on the server only, not in a real browser.
 - Saving by URL stores third-party text for the user. Take legal advice before offering that
   publicly.
+
+## How untrusted input is handled
+
+Every page, PDF, EPUB and feed is parsed by a separate, short-lived Node process, not by the API
+process (`isolation.mode: process`, the default). The process:
+
+- gets one job and exits; a hostile input can only affect that one process;
+- starts with an empty environment (no database URL, no keys, no tokens), apart from certificate
+  locations;
+- runs under Node's permission model: it can read the API package and its `node_modules` and nothing
+  else, and cannot write files, start processes, start threads or load native addons;
+- has a heap ceiling (`memoryMb`) and a hard wall-clock limit (`timeoutMs`), after which it is killed;
+- returns plain data, and the API trusts none of it: errors it reports are mapped by name onto a fixed
+  list, and anything else becomes a generic failure whose detail goes to the log only.
+
+At most `maxConcurrent` run at once; `maxQueue` more may wait; beyond that a save gets `503 busy`.
+Each parse costs about a second of start-up. If the parser program is not built, saving fails with
+`503 unavailable` rather than quietly parsing in the API process.
+
+`mode: inline` parses inside the API process, with none of the above, and logs a warning. Use it only
+for development or a deployment with a single trusted user.
+
+Known gap: `--disallow-code-generation-from-strings` is not used, because jsdom's selector engine
+needs `new Function`. A stand-in `DOMMatrix` is installed in the parser because pdf.js would otherwise
+load a native canvas addon, which the sandbox forbids; it refuses to do arithmetic, so a code path that
+unexpectedly needed one fails loudly.

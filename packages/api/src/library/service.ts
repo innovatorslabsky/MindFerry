@@ -19,6 +19,7 @@ import type { FeedFetchResult } from './feed/fetchFeed';
 import { saveHtml, saveUrl } from './ingest/saveDocument';
 import { ingestUpload } from './ingest/upload';
 import { subscribeToUrl } from './feed/fetchFeed';
+import type { LibraryIngest } from './worker/ingest';
 import { uploadToBook } from './book';
 
 type Methods = Pick<
@@ -43,11 +44,12 @@ type Methods = Pick<
 
 export interface LibraryServiceDeps {
   methods: Methods;
-  /** Injected so tests (and a future isolated worker) can replace the network path. */
-  saveUrl?: typeof saveUrl;
-  saveHtml?: typeof saveHtml;
-  ingestUpload?: typeof ingestUpload;
-  subscribeToUrl?: typeof subscribeToUrl;
+  /**
+   * How untrusted input is parsed. Defaults to parsing in this process; production passes an
+   * isolated one (`createIsolatedIngest`) so a hostile page or file can only hurt a short-lived,
+   * restricted child process.
+   */
+  ingest?: Partial<LibraryIngest>;
 }
 
 export interface SaveResult {
@@ -153,11 +155,11 @@ function toSummary(doc: LibraryDocumentRecord): LibraryDocumentSummary {
   return summary;
 }
 
-export function createLibraryService({ methods, ...injected }: LibraryServiceDeps): LibraryService {
-  const fetchUrl = injected.saveUrl ?? saveUrl;
-  const fromHtml = injected.saveHtml ?? saveHtml;
-  const readUpload = injected.ingestUpload ?? ingestUpload;
-  const readFeed = injected.subscribeToUrl ?? subscribeToUrl;
+export function createLibraryService({ methods, ingest = {} }: LibraryServiceDeps): LibraryService {
+  const fetchUrl = ingest.saveUrl ?? ((url: string) => saveUrl(url));
+  const fromHtml = ingest.saveHtml ?? (async (url: string, html: string) => saveHtml(url, html));
+  const readUpload = ingest.ingestUpload ?? ((bytes: Uint8Array) => ingestUpload(bytes));
+  const readFeed = ingest.subscribeToUrl ?? ((url: string) => subscribeToUrl(url));
 
   async function persist(
     userId: string,
@@ -221,7 +223,7 @@ export function createLibraryService({ methods, ...injected }: LibraryServiceDep
 
     /** For a client that already holds the rendered page: no server-side fetch happens. */
     async saveFromHtml(userId: string, url: string, html: string, location?: LibraryLocationValue) {
-      return persist(userId, fromHtml(url, html), location);
+      return persist(userId, await fromHtml(url, html), location);
     },
 
     async saveUpload(

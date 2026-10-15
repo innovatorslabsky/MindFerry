@@ -10,6 +10,13 @@ import { UnsupportedUploadError } from './ingest/upload';
 import { EpubDrmError, EpubError } from './epub/parseEpub';
 import { PdfEncryptedError, PdfError } from './pdf/parsePdf';
 import { FeedParseError } from './feed/parseFeed';
+import {
+  ParseTimeoutError,
+  WorkerBusyError,
+  WorkerCrashedError,
+  WorkerResultTooLargeError,
+  WorkerUnavailableError,
+} from './worker/errors';
 import { FetchError, TooLargeError, UnsafeUrlError } from './net/safeFetch';
 import { createHighlightSchema, LOCATIONS } from './types';
 import { isLibraryEnabled } from './config';
@@ -119,6 +126,9 @@ function param(req: ServerRequest, name: string): string {
 
 /** Maps what saving a URL can throw onto a status the UI can show; anything else is a 500. */
 function saveFailure(res: Response, error: unknown): void {
+  if (isolationFailure(res, error)) {
+    return;
+  }
   if (error instanceof UnsafeUrlError) {
     return fail(res, 400, 'unsafe_url', error.message);
   }
@@ -135,11 +145,42 @@ function saveFailure(res: Response, error: unknown): void {
   return fail(res, 500, 'internal_error', 'Could not save the page');
 }
 
+/** Failures of the isolated parser itself, shared by everything that parses untrusted input. */
+function isolationFailure(res: Response, error: unknown): boolean {
+  if (error instanceof WorkerBusyError) {
+    res.setHeader?.('Retry-After', '5');
+    fail(res, 503, 'busy', 'The reader is busy; try again in a few seconds');
+    return true;
+  }
+  if (error instanceof ParseTimeoutError) {
+    fail(res, 422, 'timeout', 'Reading this took too long and was stopped');
+    return true;
+  }
+  if (error instanceof WorkerResultTooLargeError) {
+    fail(res, 413, 'too_large', 'This is too large to read');
+    return true;
+  }
+  if (error instanceof WorkerCrashedError) {
+    logger.warn('[library] The parser stopped while reading an input:', error.message);
+    fail(res, 422, 'unreadable_file', 'This could not be read');
+    return true;
+  }
+  if (error instanceof WorkerUnavailableError) {
+    logger.error('[library] The isolated parser is unavailable:', error.message);
+    fail(res, 503, 'unavailable', 'Saving is unavailable right now');
+    return true;
+  }
+  return false;
+}
+
 type Handler = (req: ServerRequest, res: Response) => Promise<void>;
 
 type UploadedRequest = ServerRequest & { file?: { buffer?: Uint8Array; size?: number } };
 
 function uploadFailure(res: Response, error: unknown): void {
+  if (isolationFailure(res, error)) {
+    return;
+  }
   if (error instanceof UnsupportedUploadError) {
     return fail(res, 415, 'unsupported_file', error.message);
   }
@@ -157,6 +198,9 @@ function uploadFailure(res: Response, error: unknown): void {
 }
 
 function feedFailure(res: Response, error: unknown): void {
+  if (isolationFailure(res, error)) {
+    return;
+  }
   if (error instanceof UnsafeUrlError) {
     return fail(res, 400, 'unsafe_url', error.message);
   }
@@ -188,10 +232,22 @@ export interface LibraryHandlers {
   setProgress: Handler;
 }
 
-export function createLibraryHandlers({ service }: { service: LibraryService }): LibraryHandlers {
+/** A service, or a function that picks one per request (so isolation settings can follow the config). */
+export type LibraryServiceSource = LibraryService | ((req: ServerRequest) => LibraryService);
+
+export function createLibraryHandlers({
+  service: source,
+}: {
+  service: LibraryServiceSource;
+}): LibraryHandlers {
+  // Resolved once per request by the handler's first use; a plain service is used as is.
+  const serviceFor = (req: ServerRequest): LibraryService =>
+    typeof source === 'function' ? source(req) : source;
+
   const save: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
+    const service = serviceFor(req);
     const body = saveBodySchema.safeParse(req.body);
     if (!body.success) return fail(res, 400, 'invalid_request', 'A valid url is required');
     const { url, html, location } = body.data;
@@ -208,6 +264,7 @@ export function createLibraryHandlers({ service }: { service: LibraryService }):
   const upload: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
+    const service = serviceFor(req);
     const bytes = (req as UploadedRequest).file?.buffer;
     if (!bytes || bytes.length === 0) {
       return fail(res, 400, 'invalid_request', 'A file is required');
@@ -225,6 +282,7 @@ export function createLibraryHandlers({ service }: { service: LibraryService }):
   const previewFeed: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
+    const service = serviceFor(req);
     const body = feedBodySchema.safeParse(req.body);
     if (!body.success) return fail(res, 400, 'invalid_request', 'A valid url is required');
     try {
@@ -237,6 +295,7 @@ export function createLibraryHandlers({ service }: { service: LibraryService }):
   const list: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
+    const service = serviceFor(req);
     const limit = clampLimit(req.query.limit);
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
     if (q) {
@@ -255,6 +314,7 @@ export function createLibraryHandlers({ service }: { service: LibraryService }):
   const get: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
+    const service = serviceFor(req);
     const id = param(req, 'id');
     const [document, highlights, progress] = await Promise.all([
       service.get(userId, id),
@@ -275,6 +335,7 @@ export function createLibraryHandlers({ service }: { service: LibraryService }):
   const getUnit: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
+    const service = serviceFor(req);
     const documentId = param(req, 'id');
     const index = Number(param(req, 'index'));
     const unit = await service.getUnit(userId, documentId, index);
@@ -288,6 +349,7 @@ export function createLibraryHandlers({ service }: { service: LibraryService }):
   const patch: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
+    const service = serviceFor(req);
     const body = patchDocumentSchema.safeParse(req.body);
     if (!body.success) return fail(res, 400, 'invalid_request', 'Nothing valid to update');
     const document = await service.update(userId, param(req, 'id'), body.data);
@@ -298,6 +360,7 @@ export function createLibraryHandlers({ service }: { service: LibraryService }):
   const remove: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
+    const service = serviceFor(req);
     const removed = await service.remove(userId, param(req, 'id'));
     if (!removed) return fail(res, 404, 'not_found', 'Document not found');
     res.status(204).end();
@@ -306,6 +369,7 @@ export function createLibraryHandlers({ service }: { service: LibraryService }):
   const createHighlight: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
+    const service = serviceFor(req);
     const body = createHighlightSchema.safeParse(req.body);
     if (!body.success) return fail(res, 400, 'invalid_request', 'Invalid highlight');
     const outcome = await service.createHighlight(userId, body.data);
@@ -325,6 +389,7 @@ export function createLibraryHandlers({ service }: { service: LibraryService }):
   const patchHighlight: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
+    const service = serviceFor(req);
     const body = patchHighlightSchema.safeParse(req.body);
     if (!body.success) return fail(res, 400, 'invalid_request', 'Nothing valid to update');
     const highlight = await service.updateHighlight(userId, param(req, 'id'), body.data);
@@ -335,6 +400,7 @@ export function createLibraryHandlers({ service }: { service: LibraryService }):
   const removeHighlight: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
+    const service = serviceFor(req);
     const removed = await service.removeHighlight(userId, param(req, 'id'));
     if (!removed) return fail(res, 404, 'not_found', 'Highlight not found');
     res.status(204).end();
@@ -343,6 +409,7 @@ export function createLibraryHandlers({ service }: { service: LibraryService }):
   const setProgress: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
+    const service = serviceFor(req);
     const body = progressBodySchema.safeParse(req.body);
     if (!body.success)
       return fail(res, 400, 'invalid_request', 'textOffset must be a whole number');

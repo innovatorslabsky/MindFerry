@@ -53,6 +53,17 @@ export function makePdf(spec: PdfSpec): Uint8Array {
   objs[pagesRoot - 1] =
     `<< /Type /Pages /Kids [${pageIds.map((i) => `${i} 0 R`).join(' ')}] /Count ${n} >>`;
 
+  // A standard-security-handler dictionary whose owner/user entries do not match any password, so a
+  // reader has to ask for one. Enough to exercise "needs a password"; it encrypts nothing.
+  let encryptRef = '';
+  if (spec.encrypt) {
+    const zeros = '00'.repeat(32);
+    const id = add(
+      `<< /Filter /Standard /V 1 /R 2 /Length 40 /P -4 /O <${zeros}> /U <${zeros}> >>`,
+    );
+    encryptRef = ` /Encrypt ${id} 0 R /ID [<${'11'.repeat(16)}> <${'11'.repeat(16)}>]`;
+  }
+
   let out = '%PDF-1.4\n';
   const offsets: number[] = [];
   objs.forEach((body, i) => {
@@ -61,6 +72,6 @@ export function makePdf(spec: PdfSpec): Uint8Array {
   });
   const xref = out.length;
   out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('')}`;
-  out += `trailer\n<< /Size ${objs.length + 1} /Root ${catalog} 0 R /Info ${info} 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  out += `trailer\n<< /Size ${objs.length + 1} /Root ${catalog} 0 R /Info ${info} 0 R${encryptRef} >>\nstartxref\n${xref}\n%%EOF\n`;
   return new TextEncoder().encode(out);
 }

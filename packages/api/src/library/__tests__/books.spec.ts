@@ -238,7 +238,7 @@ describe('previewFeed', () => {
     const fake = createFakeLibraryMethods();
     const service = createLibraryService({
       methods: fake.methods,
-      subscribeToUrl: async () => feed,
+      ingest: { subscribeToUrl: async () => feed },
     });
     const preview = await service.previewFeed('https://example.test/');
     expect(preview.items[0]).toMatchObject({ title: 'One', summary: 'A short teaser' });

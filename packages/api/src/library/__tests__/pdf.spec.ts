@@ -1,4 +1,5 @@
 import {
+  PdfEncryptedError,
   PdfError,
   createAnchor,
   pageReadableText,
@@ -139,6 +140,11 @@ describe('parsePdf', () => {
     await expect(parsePdf(SAMPLE, { signal: AbortSignal.abort() })).rejects.toThrow(
       /cancelled|timed out/,
     );
+  });
+
+  it('refuses a PDF that needs a password, without trying to guess one', async () => {
+    const locked = makePdf({ pages: [[[72, 720, 'secret']]], encrypt: true });
+    await expect(parsePdf(locked)).rejects.toBeInstanceOf(PdfEncryptedError);
   });
 
   it('accepts a Node Buffer, which is what an upload middleware hands over', async () => {

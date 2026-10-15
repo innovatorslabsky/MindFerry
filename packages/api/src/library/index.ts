@@ -2,7 +2,7 @@
  * Public surface of the reading library. The ingestion internals (`core.ts`) stay private: names
  * like `similarity` or `FetchError` are too generic to export from the package root.
  */
-export { isLibraryEnabled } from './config';
+export { isLibraryEnabled, getLibraryIsolation } from './config';
 export { createLibraryService } from './service';
 export type {
   LibraryService,
@@ -10,6 +10,13 @@ export type {
   SaveResult,
   CreateHighlightOutcome,
 } from './service';
+export {
+  createLibraryIngest,
+  createIsolatedIngest,
+  createProcessRunner,
+  resolveWorkerEntry,
+} from './worker';
+export type { LibraryIsolationConfig, LibraryIngest, ProcessRunner } from './worker';
 export {
   createLibraryHandlers,
   libraryBrowseLimiter,

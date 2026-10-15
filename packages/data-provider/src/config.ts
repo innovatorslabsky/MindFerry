@@ -688,6 +688,20 @@ export const contextHubSchema = z
     library: z
       .object({
         enabled: z.boolean().default(false),
+        /**
+         * Where untrusted pages, PDFs, EPUBs and feeds are parsed. `process` (the default) uses a
+         * short-lived child process with no secrets, no writable disk, a memory ceiling and a hard
+         * timeout; `inline` parses inside the API process and is only for a single trusted user.
+         */
+        isolation: z
+          .object({
+            mode: z.enum(['process', 'inline']).default('process'),
+            maxConcurrent: z.number().int().min(1).max(16).default(2),
+            maxQueue: z.number().int().min(0).max(256).default(16),
+            timeoutMs: z.number().int().min(5_000).max(300_000).default(60_000),
+            memoryMb: z.number().int().min(128).max(4096).default(768),
+          })
+          .default({}),
       })
       .default({}),
   })
