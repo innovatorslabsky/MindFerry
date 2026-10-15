@@ -42,6 +42,7 @@ const keys = require('./keys');
 const user = require('./user');
 const mcp = require('./mcp');
 const hub = require('./hub');
+const library = require('./library');
 const hubWellKnown = require('./hubWellKnown');
 const rum = require('./rum');
 const insights = require('./insights');
@@ -52,6 +53,7 @@ module.exports = {
   rum,
   mcp,
   hub,
+  library,
   hubWellKnown,
   slackChannel,
   auth,

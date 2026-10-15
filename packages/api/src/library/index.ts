@@ -16,3 +16,4 @@ export {
   librarySaveLimiter,
   LIBRARY_MAX_HTML_CHARS,
 } from './routes';
+export type { LibraryHandlers } from './routes';

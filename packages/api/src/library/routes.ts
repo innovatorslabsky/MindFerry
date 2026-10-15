@@ -124,7 +124,19 @@ function saveFailure(res: Response, error: unknown): void {
 
 type Handler = (req: ServerRequest, res: Response) => Promise<void>;
 
-export function createLibraryHandlers({ service }: { service: LibraryService }) {
+export interface LibraryHandlers {
+  save: Handler;
+  list: Handler;
+  get: Handler;
+  patch: Handler;
+  remove: Handler;
+  createHighlight: Handler;
+  patchHighlight: Handler;
+  removeHighlight: Handler;
+  setProgress: Handler;
+}
+
+export function createLibraryHandlers({ service }: { service: LibraryService }): LibraryHandlers {
   const save: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;

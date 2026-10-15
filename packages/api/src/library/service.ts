@@ -54,12 +54,57 @@ export type CreateHighlightOutcome =
   /** `anchor.exact` is not what the stored text says is at [start, end). */
   | { status: 'mismatch' };
 
+export interface LibraryService {
+  saveFromUrl: (
+    userId: string,
+    url: string,
+    location?: LibraryLocationValue,
+  ) => Promise<SaveResult>;
+  /** For a client that already holds the rendered page: no server-side fetch happens. */
+  saveFromHtml: (
+    userId: string,
+    url: string,
+    html: string,
+    location?: LibraryLocationValue,
+  ) => Promise<SaveResult>;
+  list: (userId: string, query: LibraryListQuery) => Promise<LibraryDocumentSummary[]>;
+  search: (userId: string, query: string, limit: number) => Promise<LibraryDocumentSummary[]>;
+  get: (userId: string, id: string) => Promise<LibraryDocumentRecord | null>;
+  update: (
+    userId: string,
+    id: string,
+    patch: LibraryDocumentPatch,
+  ) => Promise<LibraryDocumentSummary | null>;
+  remove: (userId: string, id: string) => Promise<boolean>;
+  createHighlight: (
+    userId: string,
+    input: LibraryHighlightInput,
+  ) => Promise<CreateHighlightOutcome>;
+  listHighlights: (
+    userId: string,
+    documentId?: string,
+    limit?: number,
+  ) => Promise<LibraryHighlightRecord[]>;
+  updateHighlight: (
+    userId: string,
+    id: string,
+    patch: LibraryHighlightPatch,
+  ) => Promise<LibraryHighlightRecord | null>;
+  removeHighlight: (userId: string, id: string) => Promise<boolean>;
+  getProgress: (userId: string, documentId: string) => Promise<LibraryProgressRecord | null>;
+  setProgress: (
+    userId: string,
+    documentId: string,
+    textOffset: number,
+  ) => Promise<LibraryProgressRecord | null>;
+}
+
 function toSummary(doc: LibraryDocumentRecord): LibraryDocumentSummary {
   const { contentHtml: _html, text: _text, ...summary } = doc;
   return summary;
 }
 
-export function createLibraryService({ methods, ...injected }: LibraryServiceDeps) {
+export function createLibraryService({ methods, ...injected }: LibraryServiceDeps): LibraryService {
   const fetchUrl = injected.saveUrl ?? saveUrl;
   const fromHtml = injected.saveHtml ?? saveHtml;
 
@@ -188,5 +233,3 @@ export function createLibraryService({ methods, ...injected }: LibraryServiceDep
     },
   };
 }
-
-export type LibraryService = ReturnType<typeof createLibraryService>;

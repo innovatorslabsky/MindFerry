@@ -1,0 +1,48 @@
+describe('library routes wiring', () => {
+  const router = () => require('../library');
+  const find = (path, method) =>
+    router().stack.find((layer) => layer.route?.path === path && layer.route.methods[method])
+      ?.route;
+
+  it('loads the library router without throwing', () => {
+    expect(() => router()).not.toThrow();
+  });
+
+  it.each([
+    ['/documents', 'post'],
+    ['/documents', 'get'],
+    ['/documents/:id', 'get'],
+    ['/documents/:id', 'patch'],
+    ['/documents/:id', 'delete'],
+    ['/documents/:id/progress', 'put'],
+    ['/highlights', 'post'],
+    ['/highlights/:id', 'patch'],
+    ['/highlights/:id', 'delete'],
+  ])('registers %s %s behind auth, config and a rate limit', (path, method) => {
+    const route = find(path, method);
+    expect(route).toBeDefined();
+    // requireJwtAuth, configMiddleware, limiter, handler
+    expect(route.stack.length).toBe(4);
+  });
+
+  it('gives the routes every method the service calls from the app models', () => {
+    const db = require('~/models');
+    for (const name of [
+      'saveLibraryDocument',
+      'getLibraryDocument',
+      'listLibraryDocuments',
+      'searchLibraryDocuments',
+      'updateLibraryDocument',
+      'deleteLibraryDocument',
+      'createLibraryHighlight',
+      'listLibraryHighlights',
+      'updateLibraryHighlight',
+      'deleteLibraryHighlight',
+      'reanchorLibraryHighlights',
+      'getLibraryProgress',
+      'setLibraryProgress',
+    ]) {
+      expect(typeof db[name]).toBe('function');
+    }
+  });
+});
