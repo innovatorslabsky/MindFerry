@@ -12,6 +12,9 @@ import { contextHubRateLimitKey } from '../ratelimit';
 import { createHubMongoStore } from './mongoStore';
 import { isContextHubMcpEnabled } from '../config';
 import { createHubOpenInChat } from './chat';
+import type { LibraryServiceDeps } from '../../library/service';
+import { isLibraryEnabled } from '../../library/config';
+import { createLibraryService } from '../../library/service';
 import { handleHubMcpRequest } from './http';
 
 export { isContextHubMcpEnabled };
@@ -46,6 +49,11 @@ export interface CreateContextHubMcpHandlerDeps {
   importConversation?: CreateHubOpenInChatDeps['importConversation'];
   /** The app's public origin, so `open_in_chat` can link to the chat it made. */
   clientOrigin?: string;
+  /**
+   * The reading library's storage. The library tools are offered only when this is supplied and
+   * `contextHub.library.enabled` is on, so an operator who has not enabled the library exposes none of it.
+   */
+  libraryMethods?: LibraryServiceDeps['methods'];
 }
 
 /**
@@ -104,7 +112,7 @@ export function buildOpenInChat(
 export function createContextHubMcpHandler(
   deps: CreateContextHubMcpHandlerDeps,
 ): (req: ServerRequest, res: Response) => Promise<void> {
-  const { methods, importConversation, clientOrigin } = deps;
+  const { methods, importConversation, clientOrigin, libraryMethods } = deps;
 
   return async (req, res) => {
     if (!isContextHubMcpEnabled(req.config)) {
@@ -148,6 +156,10 @@ export function createContextHubMcpHandler(
           allowArchive: mcpConfig?.allowArchive,
           maxArchiveBytes: mcpConfig?.maxArchiveBytes,
           openInChat,
+          library:
+            libraryMethods && isLibraryEnabled(req.config)
+              ? { userId, service: createLibraryService({ methods: libraryMethods }) }
+              : undefined,
         },
       });
     } catch (error) {
