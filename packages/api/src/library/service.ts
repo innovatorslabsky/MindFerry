@@ -25,7 +25,9 @@ import { saveHtml, saveUrl } from './ingest/saveDocument';
 import { ingestUpload } from './ingest/upload';
 import { fetchFeed, subscribeToUrl } from './feed/fetchFeed';
 import { feedItemKey } from './feed/parseFeed';
+import { createHash } from 'node:crypto';
 import { suggestTags } from './autotag';
+import { totalWords } from './ingest/extract';
 import type { LibraryIngest } from './worker/ingest';
 import { uploadToBook } from './book';
 
@@ -41,6 +43,7 @@ type Methods = Pick<
   | 'listLibraryUnits'
   | 'getLibraryUnit'
   | 'getLibraryResource'
+  | 'saveLibraryUnitText'
   | 'createLibraryFolder'
   | 'listLibraryFolders'
   | 'renameLibraryFolder'
@@ -176,6 +179,16 @@ export interface LibraryService {
     patch: LibraryDocumentPatch,
   ) => Promise<LibraryDocumentSummary | null>;
   remove: (userId: string, id: string) => Promise<boolean>;
+  /**
+   * Stores text read from the image of a scanned PDF page by the person's browser. Only a page that
+   * has no text of its own is filled in, so nothing already highlighted can be replaced.
+   */
+  saveUnitText: (
+    userId: string,
+    documentId: string,
+    index: number,
+    text: string,
+  ) => Promise<SaveUnitTextOutcome>;
   createFolder: (userId: string, name: string) => Promise<LibraryFolderCreateResult>;
   listFolders: (userId: string) => Promise<LibraryFolderRecord[]>;
   renameFolder: (userId: string, id: string, name: string) => Promise<LibraryFolderRenameResult>;
@@ -214,6 +227,29 @@ function stripTags(html: string): string {
 function toSummary(doc: LibraryDocumentRecord): LibraryDocumentSummary {
   const { contentHtml: _html, text: _text, ...summary } = doc;
   return summary;
+}
+
+/** Longest OCR text accepted for one page. */
+export const MAX_OCR_PAGE_CHARS = 100_000;
+/** A page with at least this many characters already has text and is never replaced by OCR. */
+export const MIN_PAGE_TEXT_CHARS = 10;
+
+export type SaveUnitTextOutcome =
+  | { status: 'saved'; unit: LibraryUnitRecord; needsOcr: boolean }
+  | { status: 'not_found' | 'has_text' | 'empty' };
+
+/** Plain text only: no control characters, one kind of line break, no runs of blank lines. */
+export function cleanOcrText(raw: string): string {
+  return (
+    raw
+      .replace(/\r\n?/g, '\n')
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u2028\u2029]/g, ' ')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+      .slice(0, MAX_OCR_PAGE_CHARS)
+  );
 }
 
 /** Most folders one person may have. */
@@ -487,6 +523,24 @@ export function createLibraryService({
 
     update(userId: string, id: string, patch: LibraryDocumentPatch) {
       return methods.updateLibraryDocument(userId, id, patch);
+    },
+
+    async saveUnitText(userId: string, documentId: string, index: number, text: string) {
+      const clean = cleanOcrText(text);
+      if (clean.length < MIN_PAGE_TEXT_CHARS) {
+        return { status: 'empty' } as const;
+      }
+      return methods.saveLibraryUnitText(
+        userId,
+        documentId,
+        index,
+        {
+          text: clean,
+          contentHash: createHash('sha256').update(clean).digest('hex'),
+          wordCount: totalWords(clean),
+        },
+        MIN_PAGE_TEXT_CHARS,
+      );
     },
 
     createFolder(userId: string, name: string) {

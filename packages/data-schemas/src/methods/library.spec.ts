@@ -841,3 +841,72 @@ describe('folders', () => {
     expect(await methods.deleteAllLibraryData(userA)).toMatchObject({ folders: 1 });
   });
 });
+
+describe('OCR text for a scanned page', () => {
+  const scanned = (over: Partial<LibraryBookInput> = {}) =>
+    book({
+      kind: 'pdf',
+      urlKey: 'upload://scan',
+      needsOcr: true,
+      text: '',
+      units: [0, 1, 2, 3, 4, 5].map((index) => ({
+        index,
+        kind: 'page' as const,
+        contentHtml: '',
+        text: index === 5 ? 'Real text here ok.' : '',
+        wordCount: index === 5 ? 4 : 0,
+        contentHash: HASH,
+      })),
+      ...over,
+    });
+  const ocr = (text: string) => ({ text, contentHash: HASH2, wordCount: text.split(' ').length });
+
+  it('fills blank pages, refreshes the document, and clears needsOcr once there is enough text', async () => {
+    const saved = await methods.saveLibraryBook(userA, scanned());
+    const id = saved.document.id;
+    const page = 'hello scanned world';
+    const first = await methods.saveLibraryUnitText(userA, id, 0, ocr(page), 10);
+    expect(first).toMatchObject({ status: 'saved', needsOcr: true });
+    if (first.status !== 'saved') throw new Error('not saved');
+    expect(first.unit).toMatchObject({ index: 0, text: page, contentHash: HASH2 });
+    expect(await methods.saveLibraryUnitText(userA, id, 1, ocr(page), 10)).toMatchObject({
+      needsOcr: true,
+    });
+    expect(await methods.saveLibraryUnitText(userA, id, 2, ocr(page), 10)).toMatchObject({
+      needsOcr: false,
+    });
+    const doc = await methods.getLibraryDocument(userA, id);
+    expect(doc).toMatchObject({ needsOcr: false, wordCount: 3 * 3 + 4 });
+    expect(doc?.text).toContain(page);
+    expect(doc?.contentHash).toBe(HASH);
+    expect(await methods.searchLibraryDocuments(userA, 'scanned', 10)).toHaveLength(1);
+  });
+
+  it("never replaces a page that already has text, or touches someone else's", async () => {
+    const saved = await methods.saveLibraryBook(userA, scanned());
+    const id = saved.document.id;
+    expect(await methods.saveLibraryUnitText(userA, id, 5, ocr('overwrite'), 10)).toEqual({
+      status: 'has_text',
+    });
+    expect((await methods.getLibraryUnit(userA, id, 5))?.text).toContain('Real text');
+    expect(await methods.saveLibraryUnitText(userB, id, 0, ocr('theirs'), 10)).toEqual({
+      status: 'not_found',
+    });
+    expect(await methods.saveLibraryUnitText(userA, id, 9, ocr('missing'), 10)).toEqual({
+      status: 'not_found',
+    });
+    const article = await methods.saveLibraryDocument(userA, doc());
+    expect(await methods.saveLibraryUnitText(userA, article.document.id, 0, ocr('x'), 10)).toEqual({
+      status: 'not_found',
+    });
+  });
+
+  it('lets only one of two racing writes win', async () => {
+    const saved = await methods.saveLibraryBook(userA, scanned());
+    const results = await Promise.all([
+      methods.saveLibraryUnitText(userA, saved.document.id, 0, ocr('first writer'), 10),
+      methods.saveLibraryUnitText(userA, saved.document.id, 0, ocr('second writer'), 10),
+    ]);
+    expect(results.map((r) => r.status).sort()).toEqual(['has_text', 'saved']);
+  });
+});

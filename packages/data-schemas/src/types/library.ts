@@ -253,3 +253,13 @@ export type LibraryFolderCreateResult =
 
 export type LibraryFolderRenameResult =
   { status: 'renamed'; folder: LibraryFolderRecord } | { status: 'not_found' | 'exists' };
+
+export interface LibraryUnitTextInput {
+  text: string;
+  contentHash: string;
+  wordCount: number;
+}
+
+export type LibraryUnitTextResult =
+  | { status: 'saved'; unit: LibraryUnitRecord; needsOcr: boolean }
+  | { status: 'not_found' | 'has_text' };

@@ -20,6 +20,7 @@ import {
 import { FetchError, TooLargeError, UnsafeUrlError } from './net/safeFetch';
 import { createHighlightSchema, LOCATIONS } from './types';
 import { isLibraryEnabled } from './config';
+import { MAX_OCR_PAGE_CHARS } from './service';
 
 /**
  * HTTP surface of the reading library, for MindFerry's own UI. Every handler is gated by
@@ -87,6 +88,8 @@ const progressBodySchema = z.object({
   /** The chapter or page the offset is in; required for a book, refused for an article. */
   unitIndex: z.number().int().nonnegative().optional(),
 });
+
+const unitTextSchema = z.object({ text: z.string().max(MAX_OCR_PAGE_CHARS * 2) });
 
 const folderBodySchema = z.object({
   name: z
@@ -240,6 +243,7 @@ export interface LibraryHandlers {
   unfollowFeed: Handler;
   getUnit: Handler;
   getResource: Handler;
+  saveUnitText: Handler;
   getSource: Handler;
   removeSource: Handler;
   list: Handler;
@@ -476,6 +480,31 @@ export function createLibraryHandlers({
     res.status(200).end(resource.bytes);
   };
 
+  const saveUnitText: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const service = serviceFor(req);
+    const body = unitTextSchema.safeParse(req.body);
+    if (!body.success) return fail(res, 400, 'invalid_request', 'Text is required');
+    const outcome = await service.saveUnitText(
+      userId,
+      param(req, 'id'),
+      Number(param(req, 'index')),
+      body.data.text,
+    );
+    switch (outcome.status) {
+      case 'saved':
+        res.status(200).json({ unit: outcome.unit, needsOcr: outcome.needsOcr });
+        return;
+      case 'has_text':
+        return fail(res, 409, 'has_text', 'This page already has text');
+      case 'empty':
+        return fail(res, 422, 'empty_text', 'No text was found on that page');
+      default:
+        return fail(res, 404, 'not_found', 'Page not found');
+    }
+  };
+
   const getSource: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
@@ -593,6 +622,7 @@ export function createLibraryHandlers({
     unfollowFeed,
     getUnit,
     getResource,
+    saveUnitText,
     getSource,
     removeSource,
     list,

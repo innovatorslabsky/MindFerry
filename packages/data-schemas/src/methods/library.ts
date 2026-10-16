@@ -26,6 +26,8 @@ import type {
   LibraryResourceRecord,
   LibraryUnitRecord,
   LibraryUnitSummary,
+  LibraryUnitTextInput,
+  LibraryUnitTextResult,
 } from '~/types';
 import type { ILibraryDocument } from '~/schema/libraryDocument';
 import type { ILibraryHighlight } from '~/schema/libraryHighlight';
@@ -66,6 +68,18 @@ export interface LibraryMethods {
   getLibrarySource: (userId: string, documentId: string) => Promise<Buffer | null>;
   /** Drops the stored original, keeping the text and highlights. `false` when there was none. */
   deleteLibrarySource: (userId: string, documentId: string) => Promise<boolean>;
+  /**
+   * Fills in the text of a PDF page that had none (a scanned page, read by OCR). A page that already
+   * has `minChars` or more characters is left alone (`has_text`), so this can never replace text a
+   * person may have highlighted. The document's search text, size and `needsOcr` are brought up to date.
+   */
+  saveLibraryUnitText: (
+    userId: string,
+    documentId: string,
+    index: number,
+    input: LibraryUnitTextInput,
+    minChars: number,
+  ) => Promise<LibraryUnitTextResult>;
   /** Creates a folder; one with the same name (ignoring case) is returned as it is. */
   createLibraryFolder: (
     userId: string,
@@ -153,6 +167,10 @@ export interface LibraryMethods {
 }
 
 const UNIT_INSERT_BATCH = 100;
+/** The most text kept on a book's own row for search; matches the limit used when it is first saved. */
+const BOOK_SEARCH_TEXT_CHARS = 100_000;
+/** A PDF with fewer characters per page than this is treated as scanned images. */
+const NEEDS_OCR_CHARS_PER_PAGE = 10;
 /** Items remembered per feed. Older keys drop off, so an item old enough to drop is old enough not to return. */
 const MAX_SEEN_KEYS = 500;
 /** Images are large; a few per write keeps each insert well under the wire-protocol message limit. */
@@ -477,6 +495,84 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       { $unset: { hasSource: '' } },
     );
     return result.deletedCount > 0;
+  }
+
+  async function saveLibraryUnitText(
+    userId: string,
+    documentId: string,
+    index: number,
+    input: LibraryUnitTextInput,
+    minChars: number,
+  ): Promise<LibraryUnitTextResult> {
+    if (!Types.ObjectId.isValid(documentId) || !Number.isInteger(index) || index < 0) {
+      return { status: 'not_found' };
+    }
+    const owner = toObjectId(userId);
+    const docId = toObjectId(documentId);
+    const LibraryUnit = mongoose.models.LibraryUnit;
+    const LibraryDocument = mongoose.models.LibraryDocument;
+    const mine = await LibraryDocument.exists({ _id: docId, userId: owner, kind: 'pdf' });
+    if (!mine) {
+      return { status: 'not_found' };
+    }
+    const scope = { userId: owner, documentId: docId };
+    const current = (await LibraryUnit.findOne({
+      ...scope,
+      index,
+    }).lean()) as unknown as ILibraryUnit | null;
+    if (!current) {
+      return { status: 'not_found' };
+    }
+    if ((current.text ?? '').trim().length >= minChars) {
+      return { status: 'has_text' };
+    }
+    // The condition repeats the check, so two pages racing cannot both write.
+    const updated = (await LibraryUnit.findOneAndUpdate(
+      { ...scope, index, text: current.text },
+      { $set: { text: input.text, contentHash: input.contentHash, wordCount: input.wordCount } },
+      { new: true },
+    ).lean()) as unknown as ILibraryUnit | null;
+    if (!updated) {
+      return { status: 'has_text' };
+    }
+
+    let words = 0;
+    let chars = 0;
+    let pages = 0;
+    let searchText = '';
+    const cursor = LibraryUnit.find(scope, { text: 1, wordCount: 1 }).sort({ index: 1 }).cursor();
+    for await (const unit of cursor as AsyncIterable<ILibraryUnit>) {
+      const text = unit.text ?? '';
+      words += unit.wordCount ?? 0;
+      chars += text.trim().length;
+      pages++;
+      if (searchText.length < BOOK_SEARCH_TEXT_CHARS) {
+        searchText = `${searchText}${searchText ? '\n\n' : ''}${text}`.slice(
+          0,
+          BOOK_SEARCH_TEXT_CHARS,
+        );
+      }
+    }
+    // The same test the PDF reader applies when a file is first read: almost no text per page.
+    const needsOcr = pages > 0 && chars / pages < NEEDS_OCR_CHARS_PER_PAGE;
+    // `contentHash` of the document is left as it is: it identifies the uploaded file's text as first
+    // read, and changing it would make a re-upload of the same file look like new content.
+    await LibraryDocument.updateOne(
+      { _id: docId, userId: owner },
+      {
+        $set: {
+          text: searchText,
+          wordCount: words,
+          readingMinutes: Math.max(1, Math.ceil(words / 230)),
+          needsOcr,
+        },
+      },
+    );
+    return {
+      status: 'saved',
+      needsOcr,
+      unit: toUnitRecord(updated),
+    };
   }
 
   function toFolderRecord(doc: ILibraryFolder, documentCount: number): LibraryFolderRecord {
@@ -1042,6 +1138,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     listLibraryUnits,
     getLibraryUnit,
     getLibraryResource,
+    saveLibraryUnitText,
     createLibraryFolder,
     listLibraryFolders,
     renameLibraryFolder,

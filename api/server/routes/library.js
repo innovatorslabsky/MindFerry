@@ -110,6 +110,7 @@ router.get('/documents/:id', ...browse, handlers.get);
 router.patch('/documents/:id', ...browse, handlers.patch);
 router.delete('/documents/:id', ...browse, handlers.remove);
 router.get('/documents/:id/units/:index', ...browse, handlers.getUnit);
+router.put('/documents/:id/units/:index/text', ...browse, handlers.saveUnitText);
 router.get('/documents/:id/resources', ...browse, handlers.getResource);
 router.get('/documents/:id/source', ...browse, handlers.getSource);
 router.delete('/documents/:id/source', ...browse, handlers.removeSource);

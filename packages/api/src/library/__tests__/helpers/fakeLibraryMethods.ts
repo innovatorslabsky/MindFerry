@@ -222,6 +222,18 @@ export function createFakeLibraryMethods() {
       progress.set(`${userId}:${documentId}`, record);
       return { ...record };
     },
+    async saveLibraryUnitText(userId, documentId, index, input, minChars) {
+      const doc = documents.get(documentId);
+      const unit = units.get(`${documentId}:${index}`);
+      if (!doc || doc.userId !== userId || doc.kind !== 'pdf' || !unit)
+        return { status: 'not_found' };
+      if (unit.text.trim().length >= minChars) return { status: 'has_text' };
+      Object.assign(unit, input);
+      const all = [...units.values()].filter((u) => u.documentId === documentId);
+      const chars = all.reduce((n, u) => n + u.text.trim().length, 0);
+      doc.needsOcr = chars / all.length < 10;
+      return { status: 'saved', needsOcr: doc.needsOcr, unit: { ...unit } };
+    },
     async createLibraryFolder(userId, name, maxFolders) {
       const clean = name.trim().replace(/\s+/g, ' ');
       const mine = [...folders.values()].filter((f) => f.userId === userId);
