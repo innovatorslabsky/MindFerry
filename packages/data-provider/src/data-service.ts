@@ -1037,6 +1037,9 @@ export function listLibraryDocuments(
   if (params.location) {
     query.set('location', params.location);
   }
+  if (params.tag) {
+    query.set('tag', params.tag);
+  }
   if (params.limit) {
     query.set('limit', String(params.limit));
   }
@@ -1078,6 +1081,22 @@ export function previewLibraryFeed(url: string): Promise<{ feed: t.TLibraryFeedP
 }
 
 /** One image of a saved book, as a Blob. The request carries the session's credentials, which an `<img src>` cannot. */
+export function listLibraryFeeds(): Promise<{ feeds: t.TLibraryFeed[] }> {
+  return request.get(endpoints.libraryFeeds());
+}
+
+export function followLibraryFeed(url: string): Promise<t.TLibraryFollowResponse> {
+  return request.post(endpoints.libraryFeeds(), { url });
+}
+
+export function refreshLibraryFeed(id: string): Promise<{ refresh: t.TLibraryFeedRefresh }> {
+  return request.post(endpoints.libraryFeedRefresh(id), {});
+}
+
+export function unfollowLibraryFeed(id: string): Promise<void> {
+  return request.delete(endpoints.libraryFeed(id));
+}
+
 export async function getLibraryResource(id: string, path: string): Promise<Blob> {
   const response = await request.getResponse(endpoints.libraryResource(id, path), {
     responseType: 'blob',

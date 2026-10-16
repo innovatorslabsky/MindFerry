@@ -221,6 +221,14 @@ export const libraryUploads = () => `${BASE_URL}/api/library/uploads`;
 
 export const libraryFeedPreview = () => `${BASE_URL}/api/library/feeds/preview`;
 
+export const libraryFeeds = () => `${BASE_URL}/api/library/feeds`;
+
+export const libraryFeed = (id: string) =>
+  `${BASE_URL}/api/library/feeds/${encodeURIComponent(id)}`;
+
+export const libraryFeedRefresh = (id: string) =>
+  `${BASE_URL}/api/library/feeds/${encodeURIComponent(id)}/refresh`;
+
 export const libraryHighlights = () => `${BASE_URL}/api/library/highlights`;
 
 export const libraryHighlight = (id: string) =>

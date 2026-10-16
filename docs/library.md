@@ -21,7 +21,7 @@ With `contextHub.library.enabled: true` a Library entry appears in the sidebar (
 drawer), leading to `/library`:
 
 - paste an article address and press **Save**, or **Upload PDF or EPUB**;
-- the **Inbox / Later / Archive** buttons filter the list; typing in the search box searches the
+- the **Inbox / Later / Archive / Feed** buttons filter the list; typing in the search box searches the
   title and text of everything instead; each row can be moved or deleted;
 - opening an article shows it cleanly with a **Highlights** panel beside it. Select text and pick a
   colour to highlight it; add a note under a highlight; delete it from the panel. Highlights stay put
@@ -33,19 +33,27 @@ drawer), leading to `/library`:
 - on a narrow screen the contents and the highlights open as a sheet over the text from buttons in the
   header, instead of as side columns.
 
+- tags are edited under the reader's header (Enter adds, × removes); clicking a tag on a list row
+  shows only documents with it;
+- the **Feed** tab holds the feeds you follow. Paste a feed or site address and press **Follow**: the
+  newest 5 items are saved to the tab. **Check** on a feed saves up to 10 items it has not shown you
+  before. Nothing is checked in the background; an item that cannot be read is counted and not retried.
+  You can follow up to 50 feeds.
+
 What the screens do not do yet: show a PDF page as the page itself (there is no page image, only its
-text), edit tags, or subscribe to feeds (the feed preview endpoint has no screen). If the text the browser shows ever differs from
+text). If the text the browser shows ever differs from
 the text the server anchored highlights in, highlighting is switched off for that text with a notice,
 rather than saving highlights in the wrong place.
 
 ## What you can save
 
-| Source                       | How                                                                  | Stored as                                                           |
-| ---------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| A web page                   | `POST /api/library/documents` with `{ url }` — the server fetches it | one text (`kind: article`)                                          |
-| A page you already have open | the same call with `{ url, html }` — no fetch happens                | one text                                                            |
-| A PDF or EPUB                | `POST /api/library/uploads`, multipart field `file`, up to 50 MiB    | one **unit** per page (PDF) or chapter (EPUB), `kind: pdf` / `epub` |
-| An RSS, Atom or JSON feed    | `POST /api/library/feeds/preview` with `{ url }`                     | **nothing** — it lists items; save the ones you want by URL         |
+| Source                       | How                                                                                               | Stored as                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| A web page                   | `POST /api/library/documents` with `{ url }` — the server fetches it                              | one text (`kind: article`)                                          |
+| A page you already have open | the same call with `{ url, html }` — no fetch happens                                             | one text                                                            |
+| A PDF or EPUB                | `POST /api/library/uploads`, multipart field `file`, up to 50 MiB                                 | one **unit** per page (PDF) or chapter (EPUB), `kind: pdf` / `epub` |
+| An RSS, Atom or JSON feed    | `POST /api/library/feeds/preview` with `{ url }`                                                  | **nothing** — it lists items; save the ones you want by URL         |
+| A feed you follow            | `POST /api/library/feeds` `{ url }`; `GET /feeds`; `POST /feeds/:id/refresh`; `DELETE /feeds/:id` | each item as an article in the Feed tab (`location: feed`)          |
 
 The file type is decided from the bytes, never the file name or declared type. The uploaded file is
 not kept: its text, chapters and table of contents are.
@@ -87,7 +95,8 @@ added later it will need its own mapping from the image's text layer to these of
   database, but it shares the host's network. URL fetches are guarded in code (public addresses only,
   checked when the socket connects and again on every redirect); for defence in depth, give the API
   container an egress policy that blocks private ranges and cloud metadata addresses.
-- **Feeds are not subscribed to.** There is no polling schedule yet.
+- **Feeds are only checked when you ask.** There is no background schedule; a refresh uses the
+  feed's ETag / Last-Modified so an unchanged feed costs one cheap request.
 - **Pages that need JavaScript** to render cannot be fetched by URL; save them from the browser with
   `{ url, html }` instead.
 - Saving by URL stores third-party text for the user. Take legal advice before offering that

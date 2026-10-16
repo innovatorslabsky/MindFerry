@@ -36,6 +36,11 @@ jest.mock('@librechat/client', () => ({
   useToastContext: () => ({ showToast: mockToast }),
 }));
 
+jest.mock('../FeedsPanel', () => ({
+  __esModule: true,
+  default: () => <div data-testid="feeds-panel" />,
+}));
+
 import LibraryView from '../LibraryView';
 
 const doc = (overrides: Record<string, unknown> = {}) => ({
@@ -133,6 +138,34 @@ describe('LibraryView: finding things', () => {
     expect(mockQueryParams).not.toHaveProperty('location');
     expect(screen.queryByRole('group')).not.toBeInTheDocument();
     expect(screen.getByText('com_library_empty_search')).toBeInTheDocument();
+  });
+});
+
+describe('LibraryView: the Feed tab and tags', () => {
+  it('shows the followed feeds only on the Feed tab, and saves your own links to the inbox', () => {
+    renderView();
+    expect(screen.queryByTestId('feeds-panel')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_tab_feed' }));
+    expect(mockQueryParams).toMatchObject({ location: 'feed' });
+    expect(screen.getByTestId('feeds-panel')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('com_library_add_placeholder'), {
+      target: { value: 'https://example.test/x' },
+    });
+    fireEvent.submit(screen.getByLabelText('com_library_add_placeholder'));
+    expect(mockSave).toHaveBeenCalledWith({ url: 'https://example.test/x', location: 'inbox' });
+  });
+
+  it('filters by a tag chosen on a row, and clears it', () => {
+    mockList = {
+      data: { documents: [doc({ tags: ['psych'] })] },
+      isLoading: false,
+      isError: false,
+    };
+    renderView();
+    fireEvent.click(screen.getByLabelText('com_library_tag_filter:psych'));
+    expect(mockQueryParams).toMatchObject({ location: 'inbox', tag: 'psych' });
+    fireEvent.click(screen.getByLabelText('com_library_tag_filter_clear:psych'));
+    expect(mockQueryParams).toMatchObject({ location: 'inbox', tag: undefined });
   });
 });
 

@@ -12,6 +12,7 @@ import type {
 import { useLibraryDocumentQuery, useLibraryUnitQuery } from '~/data-provider';
 import ReaderBody, { type ReaderBodyHandle } from './ReaderBody';
 import HighlightsPanel from './HighlightsPanel';
+import TagEditor from './TagEditor';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
@@ -248,6 +249,7 @@ export default function ReaderView() {
           </Button>
         )}
       </header>
+      <TagEditor documentId={document.id} tags={document.tags} />
       <div className="flex min-h-0 flex-1">
         {isBook && units && (
           <aside className="border-border-light hidden w-60 shrink-0 border-r md:block">

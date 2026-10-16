@@ -27,6 +27,10 @@ jest.mock('../ReaderBody', () => ({
     return <div data-testid="reader-body" />;
   },
 }));
+jest.mock('../TagEditor', () => ({
+  __esModule: true,
+  default: ({ tags }: { tags: string[] }) => <div data-testid="tag-editor">{tags.join(',')}</div>,
+}));
 jest.mock('../HighlightsPanel', () => ({
   __esModule: true,
   default: ({ highlights }: { highlights: unknown[] }) => (
@@ -265,6 +269,22 @@ describe('ReaderView: when there is nothing to show', () => {
     mockDocument = { isLoading: false, isError: false, data: undefined };
     renderAt('/library/d1');
     expect(screen.getByText('com_library_not_found')).toBeInTheDocument();
+  });
+});
+
+describe('ReaderView: tags', () => {
+  it("shows the document's tags in an editor under the header", () => {
+    mockDocument = {
+      data: {
+        document: { ...summary({ tags: ['psych', 'memory'] }), contentHtml: '<p>x</p>', text: 'x' },
+        highlights: [],
+        progress: null,
+      },
+      isLoading: false,
+      isError: false,
+    };
+    renderAt('/library/d1');
+    expect(screen.getByTestId('tag-editor')).toHaveTextContent('psych,memory');
   });
 });
 

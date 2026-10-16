@@ -20,6 +20,7 @@ const MESSAGES: Record<string, TranslationKeys> = {
   unavailable: 'com_library_error_unavailable',
   not_a_feed: 'com_library_error_not_a_feed',
   fetch_failed: 'com_library_error_fetch_failed',
+  feed_limit: 'com_library_error_feed_limit',
   stale_content: 'com_library_error_stale',
   anchor_mismatch: 'com_library_error_mismatch',
 };

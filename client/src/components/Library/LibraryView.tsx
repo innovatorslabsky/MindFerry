@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Archive, BookOpen, Clock, FileText, Inbox, Trash2, Upload } from 'lucide-react';
+import { Archive, BookOpen, Clock, FileText, Inbox, Trash2, Upload, X } from 'lucide-react';
 import {
   Input,
   Button,
@@ -18,11 +18,12 @@ import {
   useUploadLibraryFileMutation,
 } from '~/data-provider';
 import { libraryErrorKey } from './errors';
+import FeedsPanel from './FeedsPanel';
 import { NotificationSeverity } from '~/common';
 import { useDebounce } from '~/hooks/Input';
 import { useLocalize } from '~/hooks';
 
-const LOCATIONS: readonly TLibraryLocation[] = ['inbox', 'later', 'archive'] as const;
+const LOCATIONS: readonly TLibraryLocation[] = ['inbox', 'later', 'archive', 'feed'] as const;
 const PAGE_SIZE = 50;
 
 const LOCATION_LABEL = {
@@ -35,9 +36,11 @@ const LOCATION_LABEL = {
 function DocumentRow({
   document,
   onDelete,
+  onTag,
 }: {
   document: TLibraryDocumentSummary;
   onDelete: (document: TLibraryDocumentSummary) => void;
+  onTag: (tag: string) => void;
 }) {
   const localize = useLocalize();
   const { showToast } = useToastContext();
@@ -79,6 +82,21 @@ function DocumentRow({
           {document.title}
         </Link>
         <p className="text-text-secondary truncate text-xs">{meta.join(' · ')}</p>
+        {document.tags.length > 0 && (
+          <p className="flex flex-wrap gap-1 pt-0.5">
+            {document.tags.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                className="bg-surface-secondary text-text-secondary hover:text-text-primary rounded-full px-2 py-0.5 text-xs"
+                aria-label={localize('com_library_tag_filter', { 0: tag })}
+                onClick={() => onTag(tag)}
+              >
+                {tag}
+              </button>
+            ))}
+          </p>
+        )}
         {document.needsOcr && (
           <p className="text-text-secondary text-xs">{localize('com_library_needs_ocr')}</p>
         )}
@@ -142,13 +160,15 @@ export default function LibraryView() {
   const [location, setLocation] = useState<TLibraryLocation>('inbox');
   const [search, setSearch] = useState('');
   const [address, setAddress] = useState('');
+  const [tag, setTag] = useState('');
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [toDelete, setToDelete] = useState<TLibraryDocumentSummary | null>(null);
   const query = useDebounce(search.trim(), 300);
 
-  const documents = useLibraryDocumentsQuery(query ? { q: query, limit } : { location, limit }, {
-    keepPreviousData: true,
-  });
+  const documents = useLibraryDocumentsQuery(
+    query ? { q: query, limit } : { location, tag: tag || undefined, limit },
+    { keepPreviousData: true },
+  );
 
   const fail = (error: unknown) =>
     showToast({
@@ -185,7 +205,7 @@ export default function LibraryView() {
     event.preventDefault();
     const url = address.trim();
     if (url) {
-      save.mutate({ url, location });
+      save.mutate({ url, location: location === 'feed' ? 'inbox' : location });
     }
   };
 
@@ -197,7 +217,7 @@ export default function LibraryView() {
     }
     const form = new FormData();
     form.append('file', file);
-    form.append('location', location);
+    form.append('location', location === 'feed' ? 'inbox' : location);
     upload.mutate(form);
   };
 
@@ -230,7 +250,12 @@ export default function LibraryView() {
       <>
         <ul className="divide-border-light border-border-light divide-y overflow-hidden rounded-xl border">
           {rows.map((document) => (
-            <DocumentRow key={document.id} document={document} onDelete={setToDelete} />
+            <DocumentRow
+              key={document.id}
+              document={document}
+              onDelete={setToDelete}
+              onTag={setTag}
+            />
           ))}
         </ul>
         {rows.length >= limit && (
@@ -311,6 +336,22 @@ export default function LibraryView() {
             ))}
           </div>
         )}
+
+        {!query && tag && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="self-start"
+            aria-label={localize('com_library_tag_filter_clear', { 0: tag })}
+            onClick={() => setTag('')}
+          >
+            {tag}
+            <X className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
+        )}
+
+        {!query && location === 'feed' && <FeedsPanel />}
 
         {list}
       </div>

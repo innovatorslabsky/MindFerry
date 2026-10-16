@@ -16,6 +16,7 @@ export const useLibraryDocumentsQuery = (
       QueryKeys.libraryDocuments,
       params.q ?? '',
       params.location ?? '',
+      params.tag ?? '',
       params.limit ?? null,
       params.skip ?? null,
     ],
@@ -59,6 +60,22 @@ export const useLibraryUnitQuery = (
       refetchOnWindowFocus: false,
       ...config,
       enabled: (config?.enabled ?? true) === true && queriesEnabled && id != null && index != null,
+    },
+  );
+};
+
+/** The feeds this person follows. */
+export const useLibraryFeedsQuery = (
+  config?: UseQueryOptions<{ feeds: t.TLibraryFeed[] }>,
+): QueryObserverResult<{ feeds: t.TLibraryFeed[] }> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+  return useQuery<{ feeds: t.TLibraryFeed[] }>(
+    [QueryKeys.libraryFeeds],
+    () => dataService.listLibraryFeeds(),
+    {
+      refetchOnWindowFocus: false,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
     },
   );
 };

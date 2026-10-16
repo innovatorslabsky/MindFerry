@@ -178,3 +178,51 @@ export const useDeleteLibraryHighlightMutation = (
     },
   );
 };
+
+/** Following a feed, or checking one, saves items to the Feed tab and updates the feed's own row. */
+function useRefreshLibraryFeeds() {
+  const queryClient = useQueryClient();
+  return () => {
+    queryClient.invalidateQueries([QueryKeys.libraryDocuments]);
+    queryClient.invalidateQueries([QueryKeys.libraryFeeds]);
+  };
+}
+
+export const useFollowLibraryFeedMutation = (
+  options?: t.MutationOptions<t.TLibraryFollowResponse, string>,
+): UseMutationResult<t.TLibraryFollowResponse, unknown, string, unknown> => {
+  const refresh = useRefreshLibraryFeeds();
+  return useMutation((url: string) => dataService.followLibraryFeed(url), {
+    ...options,
+    onSuccess: (data, variables, context) => {
+      refresh();
+      options?.onSuccess?.(data, variables, context);
+    },
+  });
+};
+
+export const useRefreshLibraryFeedMutation = (
+  options?: t.MutationOptions<{ refresh: t.TLibraryFeedRefresh }, string>,
+): UseMutationResult<{ refresh: t.TLibraryFeedRefresh }, unknown, string, unknown> => {
+  const refresh = useRefreshLibraryFeeds();
+  return useMutation((id: string) => dataService.refreshLibraryFeed(id), {
+    ...options,
+    onSuccess: (data, variables, context) => {
+      refresh();
+      options?.onSuccess?.(data, variables, context);
+    },
+  });
+};
+
+export const useUnfollowLibraryFeedMutation = (
+  options?: t.MutationOptions<void, string>,
+): UseMutationResult<void, unknown, string, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation((id: string) => dataService.unfollowLibraryFeed(id), {
+    ...options,
+    onSuccess: (data, variables, context) => {
+      queryClient.invalidateQueries([QueryKeys.libraryFeeds]);
+      options?.onSuccess?.(data, variables, context);
+    },
+  });
+};

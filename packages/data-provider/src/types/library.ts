@@ -95,6 +95,8 @@ export type TLibraryProgress = {
 export type TLibraryListParams = {
   q?: string;
   location?: TLibraryLocation;
+  /** Only documents carrying this tag. */
+  tag?: string;
   limit?: number;
   skip?: number;
 };
@@ -158,3 +160,26 @@ export type TLibraryFeedPreview = {
   description: string | null;
   items: TLibraryFeedItem[];
 };
+
+export type TLibraryFeed = {
+  id: string;
+  feedUrl: string;
+  title: string;
+  siteUrl?: string;
+  lastRefreshedAt?: string;
+  createdAt: string;
+};
+
+export type TLibraryFeedRefresh = {
+  /** New items saved to the Feed tab. */
+  added: number;
+  /** Items that could not be read; they are not tried again. */
+  failed: number;
+  /** Items left for a later refresh. */
+  skipped: number;
+  notModified: boolean;
+};
+
+export type TLibraryFollowResponse =
+  | { status: 'followed'; feed: TLibraryFeed; refresh: TLibraryFeedRefresh }
+  | { status: 'exists'; feed: TLibraryFeed };
