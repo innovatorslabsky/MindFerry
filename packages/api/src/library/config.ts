@@ -15,6 +15,14 @@ export function getLibraryIsolation(config: AppConfig | undefined): LibraryIsola
 }
 
 /**
+ * Whether an uploaded PDF's original file is kept so its pages can be shown as the page itself.
+ * Off by default: it multiplies what is stored per user, and keeps a copy of the file, not only text.
+ */
+export function getLibraryKeepPdfOriginals(config: AppConfig | undefined): boolean {
+  return config?.contextHub?.library?.keepPdfOriginals === true;
+}
+
+/**
  * The reading library is opt-in per deployment (`contextHub.library.enabled`). It fetches URLs on
  * behalf of users and stores third-party content, so an operator turns it on deliberately.
  */

@@ -7,6 +7,7 @@ import libraryProgressSchema from '~/schema/libraryProgress';
 import libraryUnitSchema from '~/schema/libraryUnit';
 import libraryResourceSchema from '~/schema/libraryResource';
 import libraryFeedSchema from '~/schema/libraryFeed';
+import librarySourceSchema, { LIBRARY_SOURCE_CHUNK_BYTES } from '~/schema/librarySource';
 import { createLibraryMethods, type LibraryMethods } from './library';
 
 let mongoServer: MongoMemoryServer;
@@ -53,6 +54,9 @@ beforeAll(async () => {
   }
   if (!mongoose.models.LibraryResource) {
     mongoose.model('LibraryResource', libraryResourceSchema);
+  }
+  if (!mongoose.models.LibrarySource) {
+    mongoose.model('LibrarySource', librarySourceSchema);
   }
   if (!mongoose.models.LibraryFeed) {
     mongoose.model('LibraryFeed', libraryFeedSchema);
@@ -259,6 +263,7 @@ describe('deletion', () => {
       progress: 1,
       units: 0,
       resources: 0,
+      sources: 0,
       feeds: 0,
     });
     expect(await methods.listLibraryDocuments(userB, { limit: 10 })).toHaveLength(1);
@@ -643,7 +648,7 @@ describe('followed feeds', () => {
     await methods.recordLibraryFeedRefresh(userA, id, { newKeys: many });
     const capped = await methods.getLibraryFeed(userA, id);
     expect(capped?.seenKeys).toHaveLength(500);
-    expect(capped?.seenKeys.at(-1)).toBe('n519');
+    expect(capped?.seenKeys[capped.seenKeys.length - 1]).toBe('n519');
   });
 
   it('will not read, refresh or delete another user\u2019s feed', async () => {
@@ -663,5 +668,74 @@ describe('followed feeds', () => {
     await methods.addLibraryFeed(userB, feed(), 10);
     expect(await methods.deleteAllLibraryData(userA)).toMatchObject({ feeds: 1 });
     expect(await methods.listLibraryFeeds(userB)).toHaveLength(1);
+  });
+});
+
+describe('stored PDF originals', () => {
+  const pdfBook = () => book({ kind: 'pdf', urlKey: 'upload://pdf1' });
+  const bytes = (length: number) => Uint8Array.from({ length }, (_, i) => i % 251);
+
+  it('is off for a document until an original is stored, then marks it', async () => {
+    const saved = await methods.saveLibraryBook(userA, pdfBook());
+    expect(saved.document.hasSource).toBe(false);
+    expect(await methods.getLibrarySource(userA, saved.document.id)).toBeNull();
+    expect(await methods.saveLibrarySource(userA, saved.document.id, bytes(1000))).toBe(true);
+    expect((await methods.getLibraryDocument(userA, saved.document.id))?.hasSource).toBe(true);
+    const back = await methods.getLibrarySource(userA, saved.document.id);
+    expect(Buffer.compare(back!, Buffer.from(bytes(1000)))).toBe(0);
+  });
+
+  it('splits a file over the chunk size and puts it back together exactly', async () => {
+    const saved = await methods.saveLibraryBook(userA, pdfBook());
+    const big = bytes(LIBRARY_SOURCE_CHUNK_BYTES * 2 + 123);
+    await methods.saveLibrarySource(userA, saved.document.id, big);
+    expect(await mongoose.models.LibrarySource.countDocuments({})).toBe(3);
+    const back = await methods.getLibrarySource(userA, saved.document.id);
+    expect(back!.length).toBe(big.length);
+    expect(Buffer.compare(back!, Buffer.from(big))).toBe(0);
+  });
+
+  it('replaces an earlier copy rather than adding to it', async () => {
+    const saved = await methods.saveLibraryBook(userA, pdfBook());
+    await methods.saveLibrarySource(
+      userA,
+      saved.document.id,
+      bytes(LIBRARY_SOURCE_CHUNK_BYTES + 5),
+    );
+    await methods.saveLibrarySource(userA, saved.document.id, bytes(10));
+    expect(await mongoose.models.LibrarySource.countDocuments({})).toBe(1);
+    expect((await methods.getLibrarySource(userA, saved.document.id))!.length).toBe(10);
+  });
+
+  it("refuses another user's document, an article, and an empty file", async () => {
+    const pdf = await methods.saveLibraryBook(userA, pdfBook());
+    const article = await methods.saveLibraryDocument(userA, doc());
+    expect(await methods.saveLibrarySource(userB, pdf.document.id, bytes(10))).toBe(false);
+    expect(await methods.saveLibrarySource(userA, article.document.id, bytes(10))).toBe(false);
+    expect(await methods.saveLibrarySource(userA, pdf.document.id, new Uint8Array())).toBe(false);
+    await methods.saveLibrarySource(userA, pdf.document.id, bytes(10));
+    expect(await methods.getLibrarySource(userB, pdf.document.id)).toBeNull();
+    expect(await methods.deleteLibrarySource(userB, pdf.document.id)).toBe(false);
+    expect(await methods.getLibrarySource(userA, pdf.document.id)).not.toBeNull();
+  });
+
+  it('can be dropped on its own, keeping the text and highlights', async () => {
+    const saved = await methods.saveLibraryBook(userA, pdfBook());
+    await methods.saveLibrarySource(userA, saved.document.id, bytes(10));
+    expect(await methods.deleteLibrarySource(userA, saved.document.id)).toBe(true);
+    expect(await methods.deleteLibrarySource(userA, saved.document.id)).toBe(false);
+    const after = await methods.getLibraryDocument(userA, saved.document.id);
+    expect(after?.hasSource).toBe(false);
+    expect(await methods.getLibraryUnit(userA, saved.document.id, 0)).not.toBeNull();
+  });
+
+  it('goes with the document, and with the account', async () => {
+    const one = await methods.saveLibraryBook(userA, pdfBook());
+    await methods.saveLibrarySource(userA, one.document.id, bytes(10));
+    await methods.deleteLibraryDocument(userA, one.document.id);
+    expect(await mongoose.models.LibrarySource.countDocuments({})).toBe(0);
+    const two = await methods.saveLibraryBook(userB, pdfBook());
+    await methods.saveLibrarySource(userB, two.document.id, bytes(10));
+    expect(await methods.deleteAllLibraryData(userB)).toMatchObject({ sources: 1 });
   });
 });

@@ -702,6 +702,11 @@ export const contextHubSchema = z
             memoryMb: z.number().int().min(128).max(4096).default(768),
           })
           .default({}),
+        /**
+         * Keep the original file of each uploaded PDF so a page can be shown as the page itself,
+         * not only as reflowed text. Off by default: it stores the whole file for every PDF.
+         */
+        keepPdfOriginals: z.boolean().default(false),
       })
       .default({}),
   })
@@ -2688,10 +2693,7 @@ export const traceViewerDefaults = {
 } as const;
 
 type TraceViewerLimitField =
-  | 'maxRecords'
-  | 'maxContentLength'
-  | 'requestsPerMinute'
-  | 'requestTimeoutMs';
+  'maxRecords' | 'maxContentLength' | 'requestsPerMinute' | 'requestTimeoutMs';
 
 /** Inclusive bounds for the numeric `interface.traceViewer` fields. */
 export const traceViewerLimits: Readonly<
@@ -5690,7 +5692,7 @@ export type TSpecialVarLabel = `com_ui_special_var_${keyof typeof specialVariabl
  * Does not infer or default any endpoint type when absent.
  */
 export function getEndpointField<
-  K extends TConfig[keyof TConfig] extends never ? never : keyof TConfig,
+  K extends (TConfig[keyof TConfig] extends never ? never : keyof TConfig),
 >(
   endpointsConfig: TEndpointsConfig | undefined | null,
   endpoint: EModelEndpoint | string | null | undefined,

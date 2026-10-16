@@ -1,5 +1,5 @@
 import type { AppConfig } from '@librechat/data-schemas';
-import { getLibraryIsolation } from '../config';
+import { getLibraryIsolation, getLibraryKeepPdfOriginals } from '../config';
 import { createLibraryIngest } from '../worker';
 import { WorkerUnavailableError } from '../worker/errors';
 
@@ -27,6 +27,18 @@ describe('getLibraryIsolation', () => {
       memoryMb: 512,
       timeoutMs: 60_000,
     });
+  });
+});
+
+describe('getLibraryKeepPdfOriginals', () => {
+  it('is off unless the operator turned it on', () => {
+    expect(getLibraryKeepPdfOriginals(undefined)).toBe(false);
+    expect(getLibraryKeepPdfOriginals({} as AppConfig)).toBe(false);
+    expect(getLibraryKeepPdfOriginals(configWith())).toBe(false);
+    const on = {
+      contextHub: { enabled: false, library: { enabled: true, keepPdfOriginals: true } },
+    } as unknown as AppConfig;
+    expect(getLibraryKeepPdfOriginals(on)).toBe(true);
   });
 });
 

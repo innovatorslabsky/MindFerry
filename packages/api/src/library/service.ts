@@ -37,6 +37,9 @@ type Methods = Pick<
   | 'listLibraryUnits'
   | 'getLibraryUnit'
   | 'getLibraryResource'
+  | 'saveLibrarySource'
+  | 'getLibrarySource'
+  | 'deleteLibrarySource'
   | 'getLibraryDocument'
   | 'listLibraryDocuments'
   | 'searchLibraryDocuments'
@@ -59,6 +62,8 @@ export interface LibraryServiceDeps {
    * restricted child process.
    */
   ingest?: Partial<LibraryIngest>;
+  /** Keep the original file of each uploaded PDF (`contextHub.library.keepPdfOriginals`). */
+  keepPdfOriginals?: boolean;
 }
 
 export interface SaveResult {
@@ -147,6 +152,10 @@ export interface LibraryService {
     documentId: string,
     path: string,
   ) => Promise<LibraryResourceRecord | null>;
+  /** The original file of a PDF, when the operator keeps them and the person's copy has one. */
+  getSource: (userId: string, documentId: string) => Promise<Buffer | null>;
+  /** Drops the stored original of a PDF, keeping its text, pages and highlights. */
+  removeSource: (userId: string, documentId: string) => Promise<boolean>;
   getUnit: (userId: string, documentId: string, index: number) => Promise<LibraryUnitRecord | null>;
   list: (userId: string, query: LibraryListQuery) => Promise<LibraryDocumentSummary[]>;
   search: (userId: string, query: string, limit: number) => Promise<LibraryDocumentSummary[]>;
@@ -200,7 +209,11 @@ export const MAX_ITEMS_PER_REFRESH = 10;
 /** The first refresh, when following, saves only the newest few rather than a feed's whole history. */
 export const MAX_ITEMS_ON_FOLLOW = 5;
 
-export function createLibraryService({ methods, ingest = {} }: LibraryServiceDeps): LibraryService {
+export function createLibraryService({
+  methods,
+  ingest = {},
+  keepPdfOriginals = false,
+}: LibraryServiceDeps): LibraryService {
   const fetchUrl = ingest.saveUrl ?? ((url: string) => saveUrl(url));
   const fromHtml = ingest.saveHtml ?? (async (url: string, html: string) => saveHtml(url, html));
   const readUpload = ingest.ingestUpload ?? ((bytes: Uint8Array) => ingestUpload(bytes));
@@ -331,7 +344,13 @@ export function createLibraryService({ methods, ingest = {} }: LibraryServiceDep
     ): Promise<UploadResult> {
       const book = uploadToBook(bytes, await readUpload(bytes), new Date());
       const saved = await methods.saveLibraryBook(userId, { ...book, location });
-      return { document: toSummary(saved.document), created: saved.created };
+      let document = toSummary(saved.document);
+      // The same file uploaded again keeps the copy it already has.
+      if (keepPdfOriginals && book.kind === 'pdf' && !document.hasSource) {
+        const kept = await methods.saveLibrarySource(userId, document.id, bytes);
+        document = { ...document, hasSource: kept };
+      }
+      return { document, created: saved.created };
     },
 
     async previewFeed(url: string): Promise<FeedPreview> {
@@ -401,6 +420,14 @@ export function createLibraryService({ methods, ingest = {} }: LibraryServiceDep
 
     listUnits(userId: string, documentId: string) {
       return methods.listLibraryUnits(userId, documentId);
+    },
+
+    getSource(userId: string, documentId: string) {
+      return methods.getLibrarySource(userId, documentId);
+    },
+
+    removeSource(userId: string, documentId: string) {
+      return methods.deleteLibrarySource(userId, documentId);
     },
 
     getResource(userId: string, documentId: string, path: string) {

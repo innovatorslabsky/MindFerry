@@ -65,6 +65,8 @@ export interface LibraryDocumentSummary {
   toc: LibraryTocRecord[];
   needsOcr?: boolean;
   truncated?: boolean;
+  /** The original PDF is kept, so its pages can be shown as images. */
+  hasSource: boolean;
   location: LibraryLocationValue;
   tags: string[];
   fetchedAt: Date;
@@ -193,6 +195,7 @@ export interface LibraryDataDeleteResult {
   progress: number;
   units: number;
   resources: number;
+  sources: number;
   feeds: number;
 }
 

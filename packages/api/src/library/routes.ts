@@ -227,6 +227,8 @@ export interface LibraryHandlers {
   unfollowFeed: Handler;
   getUnit: Handler;
   getResource: Handler;
+  getSource: Handler;
+  removeSource: Handler;
   list: Handler;
   get: Handler;
   patch: Handler;
@@ -416,6 +418,32 @@ export function createLibraryHandlers({
     res.status(200).end(resource.bytes);
   };
 
+  const getSource: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const service = serviceFor(req);
+    const bytes = await service.getSource(userId, param(req, 'id'));
+    if (!bytes) return fail(res, 404, 'not_found', 'No original file is stored for this document');
+    // Only ever a PDF the person uploaded; typed here, never taken from the file. The headers keep a
+    // browser from running anything in it if the address is opened directly.
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', String(bytes.length));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.status(200).end(bytes);
+  };
+
+  const removeSource: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const service = serviceFor(req);
+    const removed = await service.removeSource(userId, param(req, 'id'));
+    if (!removed)
+      return fail(res, 404, 'not_found', 'No original file is stored for this document');
+    res.status(204).end();
+  };
+
   const patch: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
@@ -503,6 +531,8 @@ export function createLibraryHandlers({
     unfollowFeed,
     getUnit,
     getResource,
+    getSource,
+    removeSource,
     list,
     get,
     patch,

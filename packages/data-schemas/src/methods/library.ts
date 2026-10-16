@@ -30,6 +30,8 @@ import type { ILibraryProgress } from '~/schema/libraryProgress';
 import type { ILibraryUnit } from '~/schema/libraryUnit';
 import type { ILibraryResource } from '~/schema/libraryResource';
 import type { ILibraryFeed } from '~/schema/libraryFeed';
+import type { ILibrarySource } from '~/schema/librarySource';
+import { LIBRARY_SOURCE_CHUNK_BYTES } from '~/schema/librarySource';
 import { tenantSafeBulkWrite } from '~/utils/tenantBulkWrite';
 import logger from '~/config/winston';
 
@@ -51,6 +53,15 @@ export interface LibraryMethods {
     documentId: string,
     path: string,
   ) => Promise<LibraryResourceRecord | null>;
+  /**
+   * Keeps the original file of a PDF the user saved, replacing any earlier copy. `false` when the
+   * document is not the user's PDF.
+   */
+  saveLibrarySource: (userId: string, documentId: string, bytes: Uint8Array) => Promise<boolean>;
+  /** The stored original of a PDF. `null` when the user has none for that document. */
+  getLibrarySource: (userId: string, documentId: string) => Promise<Buffer | null>;
+  /** Drops the stored original, keeping the text and highlights. `false` when there was none. */
+  deleteLibrarySource: (userId: string, documentId: string) => Promise<boolean>;
   /** Chapter or page titles and sizes, in order, without their text. */
   listLibraryUnits: (userId: string, documentId: string) => Promise<LibraryUnitSummary[]>;
   getLibraryUnit: (
@@ -158,6 +169,7 @@ function toSummary(doc: ILibraryDocument): LibraryDocumentSummary {
     })),
     ...(doc.needsOcr === undefined ? {} : { needsOcr: doc.needsOcr }),
     ...(doc.truncated === undefined ? {} : { truncated: doc.truncated }),
+    hasSource: doc.hasSource === true,
     location: doc.location,
     tags: doc.tags ?? [],
     fetchedAt: doc.fetchedAt,
@@ -372,6 +384,82 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     return { path: doc.path, mediaType: doc.mediaType, bytes };
   }
 
+  async function saveLibrarySource(
+    userId: string,
+    documentId: string,
+    bytes: Uint8Array,
+  ): Promise<boolean> {
+    if (!Types.ObjectId.isValid(documentId) || bytes.byteLength === 0) {
+      return false;
+    }
+    const owner = toObjectId(userId);
+    const docId = toObjectId(documentId);
+    const mine = await mongoose.models.LibraryDocument.exists({
+      _id: docId,
+      userId: owner,
+      kind: 'pdf',
+    });
+    if (!mine) {
+      return false;
+    }
+    const LibrarySource = mongoose.models.LibrarySource;
+    await LibrarySource.deleteMany({ userId: owner, documentId: docId });
+    for (let offset = 0, index = 0; offset < bytes.byteLength; index++) {
+      const end = Math.min(offset + LIBRARY_SOURCE_CHUNK_BYTES, bytes.byteLength);
+      await LibrarySource.create({
+        userId: owner,
+        documentId: docId,
+        index,
+        bytes: Buffer.from(bytes.subarray(offset, end)),
+      });
+      offset = end;
+    }
+    await mongoose.models.LibraryDocument.updateOne(
+      { _id: docId, userId: owner },
+      { $set: { hasSource: true } },
+    );
+    return true;
+  }
+
+  async function getLibrarySource(userId: string, documentId: string): Promise<Buffer | null> {
+    if (!Types.ObjectId.isValid(documentId)) {
+      return null;
+    }
+    const chunks = (await mongoose.models.LibrarySource.find({
+      userId: toObjectId(userId),
+      documentId: toObjectId(documentId),
+    })
+      .sort({ index: 1 })
+      .lean()) as unknown as ILibrarySource[];
+    if (chunks.length === 0) {
+      return null;
+    }
+    // A lean read hands back the driver's Binary wrapper rather than a Buffer.
+    return Buffer.concat(
+      chunks.map((chunk) => {
+        const raw = chunk.bytes as unknown as Buffer | { buffer: Uint8Array };
+        return Buffer.isBuffer(raw) ? raw : Buffer.from(raw.buffer);
+      }),
+    );
+  }
+
+  async function deleteLibrarySource(userId: string, documentId: string): Promise<boolean> {
+    if (!Types.ObjectId.isValid(documentId)) {
+      return false;
+    }
+    const owner = toObjectId(userId);
+    const docId = toObjectId(documentId);
+    const result = await mongoose.models.LibrarySource.deleteMany({
+      userId: owner,
+      documentId: docId,
+    });
+    await mongoose.models.LibraryDocument.updateOne(
+      { _id: docId, userId: owner },
+      { $unset: { hasSource: '' } },
+    );
+    return result.deletedCount > 0;
+  }
+
   async function listLibraryUnits(
     userId: string,
     documentId: string,
@@ -501,6 +589,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       mongoose.models.LibraryProgress.deleteMany({ userId: owner, documentId }),
       mongoose.models.LibraryUnit.deleteMany({ userId: owner, documentId }),
       mongoose.models.LibraryResource.deleteMany({ userId: owner, documentId }),
+      mongoose.models.LibrarySource.deleteMany({ userId: owner, documentId }),
     ]);
     return true;
   }
@@ -770,12 +859,13 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
 
   async function deleteAllLibraryData(userId: string): Promise<LibraryDataDeleteResult> {
     const owner = toObjectId(userId);
-    const [documents, highlights, progress, units, resources, feeds] = await Promise.all([
+    const [documents, highlights, progress, units, resources, sources, feeds] = await Promise.all([
       mongoose.models.LibraryDocument.deleteMany({ userId: owner }),
       mongoose.models.LibraryHighlight.deleteMany({ userId: owner }),
       mongoose.models.LibraryProgress.deleteMany({ userId: owner }),
       mongoose.models.LibraryUnit.deleteMany({ userId: owner }),
       mongoose.models.LibraryResource.deleteMany({ userId: owner }),
+      mongoose.models.LibrarySource.deleteMany({ userId: owner }),
       mongoose.models.LibraryFeed.deleteMany({ userId: owner }),
     ]);
     return {
@@ -784,6 +874,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       progress: progress.deletedCount,
       units: units.deletedCount,
       resources: resources.deletedCount,
+      sources: sources.deletedCount,
       feeds: feeds.deletedCount,
     };
   }
@@ -795,6 +886,9 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     listLibraryUnits,
     getLibraryUnit,
     getLibraryResource,
+    saveLibrarySource,
+    getLibrarySource,
+    deleteLibrarySource,
     listLibraryDocuments,
     searchLibraryDocuments,
     updateLibraryDocument,

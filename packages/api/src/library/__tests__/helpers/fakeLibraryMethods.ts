@@ -19,6 +19,7 @@ export function createFakeLibraryMethods() {
   const progress = new Map<string, LibraryProgressRecord & { userId: string }>();
   const units = new Map<string, LibraryUnitRecord & { userId: string }>();
   const resources = new Map<string, LibraryResourceRecord & { userId: string }>();
+  const sources = new Map<string, Uint8Array>();
   const feeds = new Map<string, LibraryFeedState & { userId: string }>();
 
   const methods: LibraryMethods = {
@@ -42,6 +43,7 @@ export function createFakeLibraryMethods() {
         toc: input.toc ?? [],
         location: input.location ?? 'inbox',
         tags: [],
+        hasSource: false,
         createdAt: now,
         updatedAt: now,
       } as LibraryDocumentRecord & { userId: string };
@@ -208,6 +210,25 @@ export function createFakeLibraryMethods() {
       progress.set(`${userId}:${documentId}`, record);
       return { ...record };
     },
+    async saveLibrarySource(userId, documentId, bytes) {
+      const doc = documents.get(documentId);
+      if (!doc || doc.userId !== userId || doc.kind !== 'pdf' || bytes.byteLength === 0)
+        return false;
+      sources.set(documentId, bytes);
+      doc.hasSource = true;
+      return true;
+    },
+    async getLibrarySource(userId, documentId) {
+      const doc = documents.get(documentId);
+      const bytes = sources.get(documentId);
+      return doc && doc.userId === userId && bytes ? Buffer.from(bytes) : null;
+    },
+    async deleteLibrarySource(userId, documentId) {
+      const doc = documents.get(documentId);
+      if (!doc || doc.userId !== userId || !sources.delete(documentId)) return false;
+      doc.hasSource = false;
+      return true;
+    },
     async addLibraryFeed(userId, input, maxFeeds) {
       const mine = [...feeds.values()].filter((f) => f.userId === userId);
       const existing = mine.find((f) => f.feedUrl === input.feedUrl);
@@ -241,8 +262,16 @@ export function createFakeLibraryMethods() {
       return true;
     },
     async deleteAllLibraryData() {
-      return { documents: 0, highlights: 0, progress: 0, units: 0, resources: 0, feeds: 0 };
+      return {
+        documents: 0,
+        highlights: 0,
+        progress: 0,
+        units: 0,
+        resources: 0,
+        sources: 0,
+        feeds: 0,
+      };
     },
   };
-  return { methods, documents, highlights, progress, feeds };
+  return { methods, documents, highlights, progress, feeds, sources };
 }

@@ -41,6 +41,8 @@ export interface ILibraryDocument extends Document {
   needsOcr?: boolean;
   /** A PDF with more pages than were read. */
   truncated?: boolean;
+  /** The original PDF file is stored (`LibrarySource`), so a page can be shown as the page itself. */
+  hasSource?: boolean;
   location: LibraryLocation;
   tags: string[];
   fetchedAt: Date;
@@ -82,6 +84,7 @@ const libraryDocumentSchema: Schema<ILibraryDocument> = new Schema(
     },
     needsOcr: { type: Boolean },
     truncated: { type: Boolean },
+    hasSource: { type: Boolean },
     location: { type: String, enum: LIBRARY_LOCATIONS, required: true, default: 'inbox' },
     tags: { type: [String], default: [] },
     fetchedAt: { type: Date, required: true },

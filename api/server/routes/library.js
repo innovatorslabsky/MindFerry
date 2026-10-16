@@ -4,6 +4,7 @@ const {
   createLibraryService,
   createLibraryIngest,
   getLibraryIsolation,
+  getLibraryKeepPdfOriginals,
   createLibraryHandlers,
   libraryBrowseLimiter,
   librarySaveLimiter,
@@ -30,10 +31,15 @@ const serviceBySettings = new Map();
 
 function serviceFor(req) {
   const isolation = getLibraryIsolation(req.config);
-  const key = JSON.stringify(isolation);
+  const keepPdfOriginals = getLibraryKeepPdfOriginals(req.config);
+  const key = JSON.stringify({ isolation, keepPdfOriginals });
   let service = serviceBySettings.get(key);
   if (!service) {
-    service = createLibraryService({ methods: db, ingest: createLibraryIngest(isolation) });
+    service = createLibraryService({
+      methods: db,
+      ingest: createLibraryIngest(isolation),
+      keepPdfOriginals,
+    });
     serviceBySettings.set(key, service);
   }
   return service;
@@ -45,8 +51,8 @@ const browse = [requireJwtAuth, configMiddleware, libraryBrowseLimiter];
 const save = [requireJwtAuth, configMiddleware, librarySaveLimiter];
 
 /**
- * A PDF or EPUB, held in memory only long enough to parse it: the file itself is not kept, just the
- * text and chapters taken from it. The type is decided from the bytes, never from the file name or
+ * A PDF or EPUB, held in memory only long enough to parse it: the file itself is not kept (unless
+ * `contextHub.library.keepPdfOriginals` is on, for PDFs), just the text and chapters taken from it. The type is decided from the bytes, never from the file name or
  * the declared MIME type, so there is no file filter here.
  */
 const uploadSingle = multer({
@@ -98,6 +104,8 @@ router.patch('/documents/:id', ...browse, handlers.patch);
 router.delete('/documents/:id', ...browse, handlers.remove);
 router.get('/documents/:id/units/:index', ...browse, handlers.getUnit);
 router.get('/documents/:id/resources', ...browse, handlers.getResource);
+router.get('/documents/:id/source', ...browse, handlers.getSource);
+router.delete('/documents/:id/source', ...browse, handlers.removeSource);
 router.put('/documents/:id/progress', ...browse, handlers.setProgress);
 
 router.post('/highlights', ...browse, handlers.createHighlight);
