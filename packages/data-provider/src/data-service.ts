@@ -1040,6 +1040,9 @@ export function listLibraryDocuments(
   if (params.tag) {
     query.set('tag', params.tag);
   }
+  if (params.folder) {
+    query.set('folder', params.folder);
+  }
   if (params.limit) {
     query.set('limit', String(params.limit));
   }
@@ -1067,7 +1070,7 @@ export function uploadLibraryFile(data: FormData): Promise<t.TLibrarySaveRespons
 
 export function updateLibraryDocument(
   id: string,
-  patch: { location?: t.TLibraryLocation; tags?: string[] },
+  patch: { location?: t.TLibraryLocation; tags?: string[]; folderId?: string | null },
 ): Promise<{ document: t.TLibraryDocumentSummary }> {
   return request.patch(endpoints.libraryDocument(id), patch);
 }
@@ -1078,6 +1081,25 @@ export function deleteLibraryDocument(id: string): Promise<void> {
 
 export function previewLibraryFeed(url: string): Promise<{ feed: t.TLibraryFeedPreview }> {
   return request.post(endpoints.libraryFeedPreview(), { url });
+}
+
+export function listLibraryFolders(): Promise<{ folders: t.TLibraryFolder[] }> {
+  return request.get(endpoints.libraryFolders());
+}
+
+export function createLibraryFolder(name: string): Promise<{ folder: t.TLibraryFolder }> {
+  return request.post(endpoints.libraryFolders(), { name });
+}
+
+export function renameLibraryFolder(
+  id: string,
+  name: string,
+): Promise<{ folder: t.TLibraryFolder }> {
+  return request.patch(endpoints.libraryFolder(id), { name });
+}
+
+export function deleteLibraryFolder(id: string): Promise<void> {
+  return request.delete(endpoints.libraryFolder(id));
 }
 
 export function listLibraryFeeds(): Promise<{ feeds: t.TLibraryFeed[] }> {

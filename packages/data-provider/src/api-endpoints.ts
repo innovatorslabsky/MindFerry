@@ -224,6 +224,11 @@ export const libraryUploads = () => `${BASE_URL}/api/library/uploads`;
 
 export const libraryFeedPreview = () => `${BASE_URL}/api/library/feeds/preview`;
 
+export const libraryFolders = () => `${BASE_URL}/api/library/folders`;
+
+export const libraryFolder = (id: string) =>
+  `${BASE_URL}/api/library/folders/${encodeURIComponent(id)}`;
+
 export const libraryFeeds = () => `${BASE_URL}/api/library/feeds`;
 
 export const libraryFeed = (id: string) =>

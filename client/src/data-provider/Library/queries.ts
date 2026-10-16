@@ -17,6 +17,7 @@ export const useLibraryDocumentsQuery = (
       params.q ?? '',
       params.location ?? '',
       params.tag ?? '',
+      params.folder ?? '',
       params.limit ?? null,
       params.skip ?? null,
     ],
@@ -94,6 +95,22 @@ export const useLibraryFeedsQuery = (
   return useQuery<{ feeds: t.TLibraryFeed[] }>(
     [QueryKeys.libraryFeeds],
     () => dataService.listLibraryFeeds(),
+    {
+      refetchOnWindowFocus: false,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
+/** The folders this person files documents into, with how many each holds. */
+export const useLibraryFoldersQuery = (
+  config?: UseQueryOptions<{ folders: t.TLibraryFolder[] }>,
+): QueryObserverResult<{ folders: t.TLibraryFolder[] }> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+  return useQuery<{ folders: t.TLibraryFolder[] }>(
+    [QueryKeys.libraryFolders],
+    () => dataService.listLibraryFolders(),
     {
       refetchOnWindowFocus: false,
       ...config,

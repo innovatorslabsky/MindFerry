@@ -14,6 +14,7 @@ let mockList: { data?: { documents: unknown[] }; isLoading: boolean; isError: bo
   isError: false,
 };
 let mockQueryParams: unknown;
+let mockFolders: unknown[] = [];
 
 jest.mock('~/hooks', () => ({
   useLocalize: () => (key: string, vars?: Record<string, unknown>) =>
@@ -22,6 +23,7 @@ jest.mock('~/hooks', () => ({
 jest.mock('~/hooks/Input', () => ({ useDebounce: (value: string) => value }));
 jest.mock('~/common', () => ({ NotificationSeverity: { ERROR: 'error', SUCCESS: 'success' } }));
 jest.mock('~/data-provider', () => ({
+  useLibraryFoldersQuery: () => ({ data: { folders: mockFolders } }),
   useLibraryDocumentsQuery: (params: unknown) => {
     mockQueryParams = params;
     return mockList;
@@ -36,6 +38,13 @@ jest.mock('@librechat/client', () => ({
   useToastContext: () => ({ showToast: mockToast }),
 }));
 
+jest.mock('../FolderBar', () => ({
+  __esModule: true,
+  NO_FOLDER: 'none',
+  default: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+    <button data-testid="folder-bar" data-value={value} onClick={() => onChange('f1')} />
+  ),
+}));
 jest.mock('../FeedsPanel', () => ({
   __esModule: true,
   default: () => <div data-testid="feeds-panel" />,
@@ -66,6 +75,7 @@ const doc = (overrides: Record<string, unknown> = {}) => ({
 const renderView = () => render(<LibraryView />, { wrapper: MemoryRouter });
 
 beforeEach(() => {
+  mockFolders = [];
   mockList = { data: { documents: [] }, isLoading: false, isError: false };
 });
 afterEach(() => jest.clearAllMocks());
@@ -166,6 +176,30 @@ describe('LibraryView: the Feed tab and tags', () => {
     expect(mockQueryParams).toMatchObject({ location: 'inbox', tag: 'psych' });
     fireEvent.click(screen.getByLabelText('com_library_tag_filter_clear:psych'));
     expect(mockQueryParams).toMatchObject({ location: 'inbox', tag: undefined });
+  });
+});
+
+describe('LibraryView: folders', () => {
+  it('asks for the chosen folder, and hides the folder bar on the Feed tab', () => {
+    renderView();
+    fireEvent.click(screen.getByTestId('folder-bar'));
+    expect(mockQueryParams).toMatchObject({ location: 'inbox', folder: 'f1' });
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_tab_feed' }));
+    expect(screen.queryByTestId('folder-bar')).not.toBeInTheDocument();
+  });
+
+  it('offers to move a document only once there is a folder, and files it', () => {
+    mockList = { data: { documents: [doc()] }, isLoading: false, isError: false };
+    const { unmount } = renderView();
+    expect(screen.queryByLabelText(/com_library_folder_move/)).not.toBeInTheDocument();
+    unmount();
+    mockFolders = [{ id: 'f1', name: 'Work', documentCount: 0, createdAt: '' }];
+    renderView();
+    const select = screen.getByLabelText(/com_library_folder_move/);
+    fireEvent.change(select, { target: { value: 'f1' } });
+    expect(mockUpdate).toHaveBeenCalledWith({ id: 'd1', patch: { folderId: 'f1' } });
+    fireEvent.change(select, { target: { value: '' } });
+    expect(mockUpdate).toHaveBeenLastCalledWith({ id: 'd1', patch: { folderId: null } });
   });
 });
 

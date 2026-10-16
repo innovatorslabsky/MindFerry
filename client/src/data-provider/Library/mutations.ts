@@ -6,7 +6,11 @@ import type t from 'librechat-data-provider';
 /** Saving, uploading or deleting changes what every list shows. */
 function useRefreshLibraryLists() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries([QueryKeys.libraryDocuments]);
+  return () => {
+    queryClient.invalidateQueries([QueryKeys.libraryDocuments]);
+    // Filing and deleting change how many each folder holds.
+    queryClient.invalidateQueries([QueryKeys.libraryFolders]);
+  };
 }
 
 /** Saves a page by address, or from HTML the browser already holds. */
@@ -42,7 +46,7 @@ export const useUploadLibraryFileMutation = (
 
 export type UpdateLibraryDocumentVariables = {
   id: string;
-  patch: { location?: t.TLibraryLocation; tags?: string[] };
+  patch: { location?: t.TLibraryLocation; tags?: string[]; folderId?: string | null };
 };
 
 export const useUpdateLibraryDocumentMutation = (
@@ -239,6 +243,55 @@ export const useDeleteLibrarySourceMutation = (
       refresh();
       queryClient.removeQueries([QueryKeys.librarySource, variables.id]);
       queryClient.invalidateQueries([QueryKeys.libraryDocument, variables.id]);
+      options?.onSuccess?.(data, variables, context);
+    },
+  });
+};
+
+export const useCreateLibraryFolderMutation = (
+  options?: t.MutationOptions<{ folder: t.TLibraryFolder }, string>,
+): UseMutationResult<{ folder: t.TLibraryFolder }, unknown, string, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation((name: string) => dataService.createLibraryFolder(name), {
+    ...options,
+    onSuccess: (data, variables, context) => {
+      queryClient.invalidateQueries([QueryKeys.libraryFolders]);
+      options?.onSuccess?.(data, variables, context);
+    },
+  });
+};
+
+export const useRenameLibraryFolderMutation = (
+  options?: t.MutationOptions<{ folder: t.TLibraryFolder }, { id: string; name: string }>,
+): UseMutationResult<
+  { folder: t.TLibraryFolder },
+  unknown,
+  { id: string; name: string },
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation(
+    ({ id, name }: { id: string; name: string }) => dataService.renameLibraryFolder(id, name),
+    {
+      ...options,
+      onSuccess: (data, variables, context) => {
+        queryClient.invalidateQueries([QueryKeys.libraryFolders]);
+        options?.onSuccess?.(data, variables, context);
+      },
+    },
+  );
+};
+
+/** Deleting a folder keeps its documents, which are then in no folder. */
+export const useDeleteLibraryFolderMutation = (
+  options?: t.MutationOptions<void, { id: string }>,
+): UseMutationResult<void, unknown, { id: string }, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation(({ id }: { id: string }) => dataService.deleteLibraryFolder(id), {
+    ...options,
+    onSuccess: (data, variables, context) => {
+      queryClient.invalidateQueries([QueryKeys.libraryFolders]);
+      queryClient.invalidateQueries([QueryKeys.libraryDocuments]);
       options?.onSuccess?.(data, variables, context);
     },
   });

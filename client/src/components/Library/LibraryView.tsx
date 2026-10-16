@@ -9,16 +9,22 @@ import {
   OGDialogTemplate,
   useToastContext,
 } from '@librechat/client';
-import type { TLibraryDocumentSummary, TLibraryLocation } from 'librechat-data-provider';
+import type {
+  TLibraryDocumentSummary,
+  TLibraryFolder,
+  TLibraryLocation,
+} from 'librechat-data-provider';
 import {
   useDeleteLibraryDocumentMutation,
   useLibraryDocumentsQuery,
+  useLibraryFoldersQuery,
   useSaveLibraryDocumentMutation,
   useUpdateLibraryDocumentMutation,
   useUploadLibraryFileMutation,
 } from '~/data-provider';
 import { libraryErrorKey } from './errors';
 import FeedsPanel from './FeedsPanel';
+import FolderBar from './FolderBar';
 import { NotificationSeverity } from '~/common';
 import { useDebounce } from '~/hooks/Input';
 import { useLocalize } from '~/hooks';
@@ -35,10 +41,12 @@ const LOCATION_LABEL = {
 
 function DocumentRow({
   document,
+  folders,
   onDelete,
   onTag,
 }: {
   document: TLibraryDocumentSummary;
+  folders: TLibraryFolder[];
   onDelete: (document: TLibraryDocumentSummary) => void;
   onTag: (tag: string) => void;
 }) {
@@ -105,6 +113,23 @@ function DocumentRow({
         )}
       </div>
       <div className="flex shrink-0 items-center gap-1">
+        {folders.length > 0 && (
+          <select
+            value={document.folderId ?? ''}
+            onChange={(event) =>
+              update.mutate({ id: document.id, patch: { folderId: event.target.value || null } })
+            }
+            aria-label={localize('com_library_folder_move', { 0: document.title })}
+            className="border-border-medium bg-surface-primary text-text-secondary hidden max-w-32 rounded-md border px-1.5 py-1 text-xs sm:block"
+          >
+            <option value="">{localize('com_library_folder_none')}</option>
+            {folders.map((folder) => (
+              <option key={folder.id} value={folder.id}>
+                {folder.name}
+              </option>
+            ))}
+          </select>
+        )}
         {document.location !== 'inbox' && (
           <Button
             variant="ghost"
@@ -161,14 +186,19 @@ export default function LibraryView() {
   const [search, setSearch] = useState('');
   const [address, setAddress] = useState('');
   const [tag, setTag] = useState('');
+  const [folder, setFolder] = useState('');
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [toDelete, setToDelete] = useState<TLibraryDocumentSummary | null>(null);
   const query = useDebounce(search.trim(), 300);
 
   const documents = useLibraryDocumentsQuery(
-    query ? { q: query, limit } : { location, tag: tag || undefined, limit },
+    query
+      ? { q: query, limit }
+      : { location, tag: tag || undefined, folder: folder || undefined, limit },
     { keepPreviousData: true },
   );
+
+  const folderList = useLibraryFoldersQuery().data?.folders ?? [];
 
   const fail = (error: unknown) =>
     showToast({
@@ -253,6 +283,7 @@ export default function LibraryView() {
             <DocumentRow
               key={document.id}
               document={document}
+              folders={folderList}
               onDelete={setToDelete}
               onTag={setTag}
             />
@@ -335,6 +366,10 @@ export default function LibraryView() {
               </Button>
             ))}
           </div>
+        )}
+
+        {!query && location !== 'feed' && (
+          <FolderBar folders={folderList} value={folder} onChange={setFolder} />
         )}
 
         {!query && tag && (

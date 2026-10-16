@@ -38,6 +38,7 @@ export enum QueryKeys {
   libraryDocument = 'libraryDocument',
   libraryUnit = 'libraryUnit',
   libraryFeeds = 'libraryFeeds',
+  libraryFolders = 'libraryFolders',
   librarySource = 'librarySource',
   assistants = 'assistants',
   assistant = 'assistant',

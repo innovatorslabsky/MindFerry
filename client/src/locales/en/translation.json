@@ -3575,5 +3575,21 @@
   "com_library_page_error": "The original page couldn't be shown. The text view still works.",
   "com_library_source_remove": "Remove original file",
   "com_library_source_remove_confirm": "The uploaded PDF file will be deleted from MindFerry. Its text, pages and highlights stay, but pages can no longer be shown as images.",
-  "com_library_source_remove_error": "Couldn't remove the original file."
+  "com_library_source_remove_error": "Couldn't remove the original file.",
+  "com_library_folder_all": "All folders",
+  "com_library_folder_none": "No folder",
+  "com_library_folder_filter": "Folder",
+  "com_library_folder_new": "New folder",
+  "com_library_folder_name": "Folder name",
+  "com_library_folder_create": "Create",
+  "com_library_folder_rename": "Rename folder",
+  "com_library_folder_delete": "Delete folder",
+  "com_library_folder_delete_confirm": "Delete the folder \"{{0}}\"? Its documents stay in your library, in no folder.",
+  "com_library_folder_move": "Move {{0}} to a folder",
+  "com_library_folder_count": "{{0}} ({{1}})",
+  "com_library_folder_error": "Couldn't update the folder.",
+  "com_library_folder_exists": "A folder with that name already exists.",
+  "com_library_folder_limit": "You have as many folders as allowed.",
+  "com_library_error_folder_exists": "A folder with that name already exists.",
+  "com_library_error_folder_limit": "You have as many folders as allowed."
 }

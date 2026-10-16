@@ -37,6 +37,8 @@ export type TLibraryDocumentSummary = {
   hasSource: boolean;
   location: TLibraryLocation;
   tags: string[];
+  /** The folder it is filed in, if any. */
+  folderId?: string;
   fetchedAt: string;
   createdAt: string;
   updatedAt: string;
@@ -99,6 +101,8 @@ export type TLibraryListParams = {
   location?: TLibraryLocation;
   /** Only documents carrying this tag. */
   tag?: string;
+  /** A folder id, or `none` for documents in no folder. */
+  folder?: string;
   limit?: number;
   skip?: number;
 };
@@ -185,3 +189,10 @@ export type TLibraryFeedRefresh = {
 export type TLibraryFollowResponse =
   | { status: 'followed'; feed: TLibraryFeed; refresh: TLibraryFeedRefresh }
   | { status: 'exists'; feed: TLibraryFeed };
+
+export type TLibraryFolder = {
+  id: string;
+  name: string;
+  documentCount: number;
+  createdAt: string;
+};

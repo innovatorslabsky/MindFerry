@@ -33,6 +33,11 @@ drawer), leading to `/library`:
 - on a narrow screen the contents and the highlights open as a sheet over the text from buttons in the
   header, instead of as side columns.
 
+- every new document is tagged automatically with the site it came from (`example.com`), `pdf` or
+  `epub` for a book, and up to three keywords (see "Automatic tags" below);
+- a **folder** menu above the list filters by folder (all, unfiled, or one folder, with counts). The
+  new-folder button makes one, the pencil renames it, the bin deletes it (its documents stay, in no
+  folder). Each row has a menu to move it into a folder;
 - tags are edited under the reader's header (Enter adds, × removes); clicking a tag on a list row
   shows only documents with it;
 - the **Feed** tab holds the feeds you follow. Paste a feed or site address and press **Follow**: the
@@ -84,6 +89,29 @@ Each coordinate space is separate:
 A PDF page's anchors therefore mean something only against the reflowed text. If a page image view is
 added later it will need its own mapping from the image's text layer to these offsets.
 
+## Automatic tags
+
+A new document gets up to five tags when it is first saved, chosen by counting words on the page, not
+by any model, and nothing leaves the server:
+
+- the site (`www.` removed) for a page, or nothing for an uploaded file;
+- `pdf` or `epub` for a book;
+- up to three keywords: English words of at least four letters that are not common words and appear at
+  least three times (a word in the title counts three times). Other languages get the site tag only.
+
+The tags are set once. Saving the same page again, or editing the tags, is never overwritten. Turn it
+off with `contextHub.library.autoTag: false` (default on). Scanned PDFs have no text to count, so they get
+only `pdf`; there is no OCR yet.
+
+## Folders
+
+Folders are one level deep, a document is in at most one, and a person can have up to 100
+(`GET/POST /api/library/folders`, `PATCH/DELETE /api/library/folders/:id`). File a document with
+`PATCH /api/library/documents/:id` and `{ "folderId": "<id>" }` (`null` takes it out); list a folder
+with `GET /api/library/documents?folder=<id>` (`folder=none` for unfiled). Folder names are unique per
+person ignoring case. Deleting a folder never deletes documents. A document can only be filed into the
+person's own folder.
+
 ## Keeping original PDFs
 
 ```yaml
@@ -91,6 +119,7 @@ contextHub:
   library:
     enabled: true
     keepPdfOriginals: true # default false
+    autoTag: true # default true
 ```
 
 Off by default, because it changes what is stored: the whole PDF, not only its text, for every PDF a
