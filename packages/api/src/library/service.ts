@@ -3,6 +3,9 @@ import type {
   LibraryDocumentRecord,
   LibraryDocumentSummary,
   LibraryFeedRecord,
+  LibraryFolderCreateResult,
+  LibraryFolderRecord,
+  LibraryFolderRenameResult,
   LibraryHighlightInput,
   LibraryHighlightPatch,
   LibraryHighlightRecord,
@@ -22,6 +25,7 @@ import { saveHtml, saveUrl } from './ingest/saveDocument';
 import { ingestUpload } from './ingest/upload';
 import { fetchFeed, subscribeToUrl } from './feed/fetchFeed';
 import { feedItemKey } from './feed/parseFeed';
+import { suggestTags } from './autotag';
 import type { LibraryIngest } from './worker/ingest';
 import { uploadToBook } from './book';
 
@@ -37,6 +41,10 @@ type Methods = Pick<
   | 'listLibraryUnits'
   | 'getLibraryUnit'
   | 'getLibraryResource'
+  | 'createLibraryFolder'
+  | 'listLibraryFolders'
+  | 'renameLibraryFolder'
+  | 'deleteLibraryFolder'
   | 'saveLibrarySource'
   | 'getLibrarySource'
   | 'deleteLibrarySource'
@@ -64,6 +72,8 @@ export interface LibraryServiceDeps {
   ingest?: Partial<LibraryIngest>;
   /** Keep the original file of each uploaded PDF (`contextHub.library.keepPdfOriginals`). */
   keepPdfOriginals?: boolean;
+  /** Tag each new document with its site and keywords (default on). */
+  autoTag?: boolean;
 }
 
 export interface SaveResult {
@@ -166,6 +176,10 @@ export interface LibraryService {
     patch: LibraryDocumentPatch,
   ) => Promise<LibraryDocumentSummary | null>;
   remove: (userId: string, id: string) => Promise<boolean>;
+  createFolder: (userId: string, name: string) => Promise<LibraryFolderCreateResult>;
+  listFolders: (userId: string) => Promise<LibraryFolderRecord[]>;
+  renameFolder: (userId: string, id: string, name: string) => Promise<LibraryFolderRenameResult>;
+  deleteFolder: (userId: string, id: string) => Promise<boolean>;
   createHighlight: (
     userId: string,
     input: LibraryHighlightInput,
@@ -202,6 +216,8 @@ function toSummary(doc: LibraryDocumentRecord): LibraryDocumentSummary {
   return summary;
 }
 
+/** Most folders one person may have. */
+export const MAX_FOLDERS = 100;
 /** Most feeds one person may follow. */
 export const MAX_FOLLOWED_FEEDS = 50;
 /** Items saved by one refresh. Each is a fetch of a third-party page, so the number is kept small. */
@@ -213,6 +229,7 @@ export function createLibraryService({
   methods,
   ingest = {},
   keepPdfOriginals = false,
+  autoTag = true,
 }: LibraryServiceDeps): LibraryService {
   const fetchUrl = ingest.saveUrl ?? ((url: string) => saveUrl(url));
   const fromHtml = ingest.saveHtml ?? (async (url: string, html: string) => saveHtml(url, html));
@@ -243,6 +260,15 @@ export function createLibraryService({
       readingMinutes: draft.readingMinutes,
       fetchedAt: new Date(draft.fetchedAt),
       location,
+      tags: autoTag
+        ? suggestTags({
+            kind: 'article',
+            title: draft.title,
+            text: draft.text,
+            lang: draft.lang,
+            normalizedUrl: draft.normalizedUrl,
+          })
+        : undefined,
     });
     const reanchored = saved.contentChanged
       ? await reanchor(userId, saved.document)
@@ -343,7 +369,16 @@ export function createLibraryService({
       location?: LibraryLocationValue,
     ): Promise<UploadResult> {
       const book = uploadToBook(bytes, await readUpload(bytes), new Date());
-      const saved = await methods.saveLibraryBook(userId, { ...book, location });
+      const tags = autoTag
+        ? suggestTags({
+            kind: book.kind ?? 'epub',
+            title: book.title,
+            text: book.text,
+            lang: book.lang,
+            normalizedUrl: book.normalizedUrl,
+          })
+        : undefined;
+      const saved = await methods.saveLibraryBook(userId, { ...book, location, tags });
       let document = toSummary(saved.document);
       // The same file uploaded again keeps the copy it already has.
       if (keepPdfOriginals && book.kind === 'pdf' && !document.hasSource) {
@@ -452,6 +487,22 @@ export function createLibraryService({
 
     update(userId: string, id: string, patch: LibraryDocumentPatch) {
       return methods.updateLibraryDocument(userId, id, patch);
+    },
+
+    createFolder(userId: string, name: string) {
+      return methods.createLibraryFolder(userId, name, MAX_FOLDERS);
+    },
+
+    listFolders(userId: string) {
+      return methods.listLibraryFolders(userId);
+    },
+
+    renameFolder(userId: string, id: string, name: string) {
+      return methods.renameLibraryFolder(userId, id, name);
+    },
+
+    deleteFolder(userId: string, id: string) {
+      return methods.deleteLibraryFolder(userId, id);
     },
 
     remove(userId: string, id: string) {

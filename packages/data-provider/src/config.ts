@@ -707,6 +707,8 @@ export const contextHubSchema = z
          * not only as reflowed text. Off by default: it stores the whole file for every PDF.
          */
         keepPdfOriginals: z.boolean().default(false),
+        /** Tag each new document with its site and a few keywords. On unless turned off. */
+        autoTag: z.boolean().default(true),
       })
       .default({}),
   })

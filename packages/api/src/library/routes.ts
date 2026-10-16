@@ -65,8 +65,10 @@ const patchDocumentSchema = z
   .object({
     location: z.enum(LOCATIONS).optional(),
     tags: z.array(z.string().min(1).max(64)).max(50).optional(),
+    /** A folder id, or null to take the document out of its folder. */
+    folderId: z.string().min(1).max(64).nullable().optional(),
   })
-  .refine((patch) => patch.location !== undefined || patch.tags !== undefined, {
+  .refine((patch) => Object.values(patch).some((value) => value !== undefined), {
     message: 'Nothing to update',
   });
 
@@ -84,6 +86,13 @@ const progressBodySchema = z.object({
   textOffset: z.number().int().nonnegative(),
   /** The chapter or page the offset is in; required for a book, refused for an article. */
   unitIndex: z.number().int().nonnegative().optional(),
+});
+
+const folderBodySchema = z.object({
+  name: z
+    .string()
+    .transform((name) => name.trim().replace(/\s+/g, ' '))
+    .pipe(z.string().min(1).max(64)),
 });
 
 const feedBodySchema = z.object({ url: z.string().url().max(2048) });
@@ -221,6 +230,10 @@ export interface LibraryHandlers {
   save: Handler;
   upload: Handler;
   previewFeed: Handler;
+  listFolders: Handler;
+  createFolder: Handler;
+  renameFolder: Handler;
+  deleteFolder: Handler;
   followFeed: Handler;
   listFeeds: Handler;
   refreshFeed: Handler;
@@ -299,6 +312,49 @@ export function createLibraryHandlers({
     }
   };
 
+  const listFolders: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const service = serviceFor(req);
+    res.status(200).json({ folders: await service.listFolders(userId) });
+  };
+
+  const createFolder: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const service = serviceFor(req);
+    const body = folderBodySchema.safeParse(req.body);
+    if (!body.success) return fail(res, 400, 'invalid_request', 'A folder name is required');
+    const outcome = await service.createFolder(userId, body.data.name);
+    if (outcome.status === 'limit') {
+      return fail(res, 409, 'folder_limit', 'You have as many folders as allowed');
+    }
+    res.status(outcome.status === 'created' ? 201 : 200).json({ folder: outcome.folder });
+  };
+
+  const renameFolder: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const service = serviceFor(req);
+    const body = folderBodySchema.safeParse(req.body);
+    if (!body.success) return fail(res, 400, 'invalid_request', 'A folder name is required');
+    const outcome = await service.renameFolder(userId, param(req, 'id'), body.data.name);
+    if (outcome.status === 'not_found') return fail(res, 404, 'not_found', 'Folder not found');
+    if (outcome.status === 'exists') {
+      return fail(res, 409, 'folder_exists', 'A folder with that name already exists');
+    }
+    res.status(200).json({ folder: outcome.folder });
+  };
+
+  const deleteFolder: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const service = serviceFor(req);
+    const removed = await service.deleteFolder(userId, param(req, 'id'));
+    if (!removed) return fail(res, 404, 'not_found', 'Folder not found');
+    res.status(204).end();
+  };
+
   const followFeed: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
@@ -356,10 +412,12 @@ export function createLibraryHandlers({
       return;
     }
     const location = LOCATIONS.find((value) => value === req.query.location);
+    const folder = typeof req.query.folder === 'string' ? req.query.folder.trim().slice(0, 64) : '';
     const tag = typeof req.query.tag === 'string' ? req.query.tag.trim().slice(0, 64) : '';
     const documents = await service.list(userId, {
       location,
       tag: tag || undefined,
+      folder: folder || undefined,
       limit,
       skip: clampSkip(req.query.skip),
     });
@@ -451,7 +509,7 @@ export function createLibraryHandlers({
     const body = patchDocumentSchema.safeParse(req.body);
     if (!body.success) return fail(res, 400, 'invalid_request', 'Nothing valid to update');
     const document = await service.update(userId, param(req, 'id'), body.data);
-    if (!document) return fail(res, 404, 'not_found', 'Document not found');
+    if (!document) return fail(res, 404, 'not_found', 'Document or folder not found');
     res.status(200).json({ document });
   };
 
@@ -525,6 +583,10 @@ export function createLibraryHandlers({
     save,
     upload,
     previewFeed,
+    listFolders,
+    createFolder,
+    renameFolder,
+    deleteFolder,
     followFeed,
     listFeeds,
     refreshFeed,

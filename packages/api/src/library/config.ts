@@ -14,6 +14,11 @@ export function getLibraryIsolation(config: AppConfig | undefined): LibraryIsola
   return { ...ISOLATION_DEFAULTS, ...config?.contextHub?.library?.isolation };
 }
 
+/** New documents are tagged with their site and keywords unless the operator turns it off. */
+export function getLibraryAutoTag(config: AppConfig | undefined): boolean {
+  return config?.contextHub?.library?.autoTag !== false;
+}
+
 /**
  * Whether an uploaded PDF's original file is kept so its pages can be shown as the page itself.
  * Off by default: it multiplies what is stored per user, and keeps a copy of the file, not only text.

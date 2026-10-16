@@ -8,6 +8,9 @@ import type {
   LibraryDocumentRecord,
   LibraryDocumentSaveResult,
   LibraryDocumentSummary,
+  LibraryFolderCreateResult,
+  LibraryFolderRecord,
+  LibraryFolderRenameResult,
   LibraryFeedAddResult,
   LibraryFeedInput,
   LibraryFeedRecord,
@@ -31,6 +34,7 @@ import type { ILibraryUnit } from '~/schema/libraryUnit';
 import type { ILibraryResource } from '~/schema/libraryResource';
 import type { ILibraryFeed } from '~/schema/libraryFeed';
 import type { ILibrarySource } from '~/schema/librarySource';
+import type { ILibraryFolder } from '~/schema/libraryFolder';
 import { LIBRARY_SOURCE_CHUNK_BYTES } from '~/schema/librarySource';
 import { tenantSafeBulkWrite } from '~/utils/tenantBulkWrite';
 import logger from '~/config/winston';
@@ -62,6 +66,20 @@ export interface LibraryMethods {
   getLibrarySource: (userId: string, documentId: string) => Promise<Buffer | null>;
   /** Drops the stored original, keeping the text and highlights. `false` when there was none. */
   deleteLibrarySource: (userId: string, documentId: string) => Promise<boolean>;
+  /** Creates a folder; one with the same name (ignoring case) is returned as it is. */
+  createLibraryFolder: (
+    userId: string,
+    name: string,
+    maxFolders: number,
+  ) => Promise<LibraryFolderCreateResult>;
+  listLibraryFolders: (userId: string) => Promise<LibraryFolderRecord[]>;
+  renameLibraryFolder: (
+    userId: string,
+    id: string,
+    name: string,
+  ) => Promise<LibraryFolderRenameResult>;
+  /** Deletes the folder only: its documents stay, now in no folder. `false` when it is not the user's. */
+  deleteLibraryFolder: (userId: string, id: string) => Promise<boolean>;
   /** Chapter or page titles and sizes, in order, without their text. */
   listLibraryUnits: (userId: string, documentId: string) => Promise<LibraryUnitSummary[]>;
   getLibraryUnit: (
@@ -172,6 +190,7 @@ function toSummary(doc: ILibraryDocument): LibraryDocumentSummary {
     hasSource: doc.hasSource === true,
     location: doc.location,
     tags: doc.tags ?? [],
+    ...(doc.folderId ? { folderId: doc.folderId.toString() } : {}),
     fetchedAt: doc.fetchedAt,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
@@ -264,7 +283,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
   ): Promise<LibraryDocumentSaveResult> {
     const LibraryDocument = mongoose.models.LibraryDocument;
     const owner = toObjectId(userId);
-    const { location, ...content } = input;
+    const { location, tags, ...content } = input;
     try {
       const before = (await LibraryDocument.findOne(
         { userId: owner, urlKey: input.urlKey },
@@ -274,7 +293,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
         { userId: owner, urlKey: input.urlKey },
         {
           $set: { ...content, userId: owner },
-          $setOnInsert: { location: location ?? 'inbox', tags: [] },
+          $setOnInsert: { location: location ?? 'inbox', tags: tags ?? [] },
         },
         { upsert: true, new: true },
       ).lean()) as unknown as ILibraryDocument;
@@ -460,6 +479,113 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     return result.deletedCount > 0;
   }
 
+  function toFolderRecord(doc: ILibraryFolder, documentCount: number): LibraryFolderRecord {
+    return {
+      id: (doc._id as Types.ObjectId).toString(),
+      name: doc.name,
+      documentCount,
+      createdAt: doc.createdAt,
+    };
+  }
+
+  async function countInFolder(owner: Types.ObjectId, folderId: Types.ObjectId): Promise<number> {
+    return mongoose.models.LibraryDocument.countDocuments({ userId: owner, folderId });
+  }
+
+  async function createLibraryFolder(
+    userId: string,
+    name: string,
+    maxFolders: number,
+  ): Promise<LibraryFolderCreateResult> {
+    const LibraryFolder = mongoose.models.LibraryFolder;
+    const owner = toObjectId(userId);
+    const clean = name.trim().replace(/\s+/g, ' ');
+    const nameKey = clean.toLowerCase();
+    const existing = (await LibraryFolder.findOne({
+      userId: owner,
+      nameKey,
+    }).lean()) as unknown as ILibraryFolder | null;
+    if (existing) {
+      return {
+        status: 'exists',
+        folder: toFolderRecord(
+          existing,
+          await countInFolder(owner, existing._id as Types.ObjectId),
+        ),
+      };
+    }
+    if ((await LibraryFolder.countDocuments({ userId: owner })) >= maxFolders) {
+      return { status: 'limit' };
+    }
+    const created = (await LibraryFolder.findOneAndUpdate(
+      { userId: owner, nameKey },
+      { $setOnInsert: { userId: owner, name: clean, nameKey } },
+      { upsert: true, new: true },
+    ).lean()) as unknown as ILibraryFolder;
+    return { status: 'created', folder: toFolderRecord(created, 0) };
+  }
+
+  async function listLibraryFolders(userId: string): Promise<LibraryFolderRecord[]> {
+    const owner = toObjectId(userId);
+    const [folders, counts] = await Promise.all([
+      mongoose.models.LibraryFolder.find({ userId: owner })
+        .sort({ nameKey: 1 })
+        .lean() as unknown as Promise<ILibraryFolder[]>,
+      mongoose.models.LibraryDocument.aggregate([
+        { $match: { userId: owner, folderId: { $exists: true } } },
+        { $group: { _id: '$folderId', count: { $sum: 1 } } },
+      ]) as Promise<Array<{ _id: Types.ObjectId; count: number }>>,
+    ]);
+    const byFolder = new Map(counts.map((entry) => [entry._id.toString(), entry.count]));
+    return folders.map((folder) =>
+      toFolderRecord(folder, byFolder.get((folder._id as Types.ObjectId).toString()) ?? 0),
+    );
+  }
+
+  async function renameLibraryFolder(
+    userId: string,
+    id: string,
+    name: string,
+  ): Promise<LibraryFolderRenameResult> {
+    if (!Types.ObjectId.isValid(id)) {
+      return { status: 'not_found' };
+    }
+    const owner = toObjectId(userId);
+    const folderId = toObjectId(id);
+    const clean = name.trim().replace(/\s+/g, ' ');
+    const nameKey = clean.toLowerCase();
+    const LibraryFolder = mongoose.models.LibraryFolder;
+    const clash = await LibraryFolder.exists({ userId: owner, nameKey, _id: { $ne: folderId } });
+    if (clash) {
+      return { status: 'exists' };
+    }
+    const renamed = (await LibraryFolder.findOneAndUpdate(
+      { _id: folderId, userId: owner },
+      { $set: { name: clean, nameKey } },
+      { new: true },
+    ).lean()) as unknown as ILibraryFolder | null;
+    return renamed
+      ? { status: 'renamed', folder: toFolderRecord(renamed, await countInFolder(owner, folderId)) }
+      : { status: 'not_found' };
+  }
+
+  async function deleteLibraryFolder(userId: string, id: string): Promise<boolean> {
+    if (!Types.ObjectId.isValid(id)) {
+      return false;
+    }
+    const owner = toObjectId(userId);
+    const folderId = toObjectId(id);
+    const result = await mongoose.models.LibraryFolder.deleteOne({ _id: folderId, userId: owner });
+    if (result.deletedCount === 0) {
+      return false;
+    }
+    await mongoose.models.LibraryDocument.updateMany(
+      { userId: owner, folderId },
+      { $unset: { folderId: '' } },
+    );
+    return true;
+  }
+
   async function listLibraryUnits(
     userId: string,
     documentId: string,
@@ -519,6 +645,14 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     if (query.tag) {
       filter.tags = query.tag;
     }
+    if (query.folder === 'none') {
+      filter.folderId = { $exists: false };
+    } else if (query.folder) {
+      if (!Types.ObjectId.isValid(query.folder)) {
+        return [];
+      }
+      filter.folderId = toObjectId(query.folder);
+    }
     const docs = (await LibraryDocument.find(filter, SUMMARY_PROJECTION)
       .sort({ updatedAt: -1, _id: -1 })
       .skip(query.skip ?? 0)
@@ -562,10 +696,29 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     if (patch.tags !== undefined) {
       set.tags = patch.tags;
     }
+    const unset: Record<string, ''> = {};
+    if (patch.folderId === null) {
+      unset.folderId = '';
+    } else if (patch.folderId !== undefined) {
+      // Only a folder the person owns can be filed into.
+      if (
+        !Types.ObjectId.isValid(patch.folderId) ||
+        !(await mongoose.models.LibraryFolder.exists({
+          _id: toObjectId(patch.folderId),
+          userId: toObjectId(userId),
+        }))
+      ) {
+        return null;
+      }
+      set.folderId = toObjectId(patch.folderId);
+    }
     const LibraryDocument = mongoose.models.LibraryDocument;
     const doc = (await LibraryDocument.findOneAndUpdate(
       { _id: toObjectId(id), userId: toObjectId(userId) },
-      { $set: set },
+      {
+        ...(Object.keys(set).length > 0 ? { $set: set } : {}),
+        ...(Object.keys(unset).length > 0 ? { $unset: unset } : {}),
+      },
       { new: true, projection: SUMMARY_PROJECTION },
     ).lean()) as unknown as ILibraryDocument | null;
     return doc ? toSummary(doc) : null;
@@ -859,15 +1012,17 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
 
   async function deleteAllLibraryData(userId: string): Promise<LibraryDataDeleteResult> {
     const owner = toObjectId(userId);
-    const [documents, highlights, progress, units, resources, sources, feeds] = await Promise.all([
-      mongoose.models.LibraryDocument.deleteMany({ userId: owner }),
-      mongoose.models.LibraryHighlight.deleteMany({ userId: owner }),
-      mongoose.models.LibraryProgress.deleteMany({ userId: owner }),
-      mongoose.models.LibraryUnit.deleteMany({ userId: owner }),
-      mongoose.models.LibraryResource.deleteMany({ userId: owner }),
-      mongoose.models.LibrarySource.deleteMany({ userId: owner }),
-      mongoose.models.LibraryFeed.deleteMany({ userId: owner }),
-    ]);
+    const [documents, highlights, progress, units, resources, sources, folders, feeds] =
+      await Promise.all([
+        mongoose.models.LibraryDocument.deleteMany({ userId: owner }),
+        mongoose.models.LibraryHighlight.deleteMany({ userId: owner }),
+        mongoose.models.LibraryProgress.deleteMany({ userId: owner }),
+        mongoose.models.LibraryUnit.deleteMany({ userId: owner }),
+        mongoose.models.LibraryResource.deleteMany({ userId: owner }),
+        mongoose.models.LibrarySource.deleteMany({ userId: owner }),
+        mongoose.models.LibraryFolder.deleteMany({ userId: owner }),
+        mongoose.models.LibraryFeed.deleteMany({ userId: owner }),
+      ]);
     return {
       documents: documents.deletedCount,
       highlights: highlights.deletedCount,
@@ -875,6 +1030,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       units: units.deletedCount,
       resources: resources.deletedCount,
       sources: sources.deletedCount,
+      folders: folders.deletedCount,
       feeds: feeds.deletedCount,
     };
   }
@@ -886,6 +1042,10 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     listLibraryUnits,
     getLibraryUnit,
     getLibraryResource,
+    createLibraryFolder,
+    listLibraryFolders,
+    renameLibraryFolder,
+    deleteLibraryFolder,
     saveLibrarySource,
     getLibrarySource,
     deleteLibrarySource,

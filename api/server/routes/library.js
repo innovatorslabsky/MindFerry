@@ -5,6 +5,7 @@ const {
   createLibraryIngest,
   getLibraryIsolation,
   getLibraryKeepPdfOriginals,
+  getLibraryAutoTag,
   createLibraryHandlers,
   libraryBrowseLimiter,
   librarySaveLimiter,
@@ -32,13 +33,15 @@ const serviceBySettings = new Map();
 function serviceFor(req) {
   const isolation = getLibraryIsolation(req.config);
   const keepPdfOriginals = getLibraryKeepPdfOriginals(req.config);
-  const key = JSON.stringify({ isolation, keepPdfOriginals });
+  const autoTag = getLibraryAutoTag(req.config);
+  const key = JSON.stringify({ isolation, keepPdfOriginals, autoTag });
   let service = serviceBySettings.get(key);
   if (!service) {
     service = createLibraryService({
       methods: db,
       ingest: createLibraryIngest(isolation),
       keepPdfOriginals,
+      autoTag,
     });
     serviceBySettings.set(key, service);
   }
@@ -94,6 +97,10 @@ router.post(
   handlers.upload,
 );
 router.post('/feeds/preview', ...save, handlers.previewFeed);
+router.get('/folders', ...browse, handlers.listFolders);
+router.post('/folders', ...browse, handlers.createFolder);
+router.patch('/folders/:id', ...browse, handlers.renameFolder);
+router.delete('/folders/:id', ...browse, handlers.deleteFolder);
 router.post('/feeds', ...save, handlers.followFeed);
 router.get('/feeds', ...browse, handlers.listFeeds);
 router.post('/feeds/:id/refresh', ...save, handlers.refreshFeed);

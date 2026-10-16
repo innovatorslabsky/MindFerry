@@ -3,6 +3,7 @@ import type {
   LibraryDocumentInput,
   LibraryDocumentRecord,
   LibraryFeedState,
+  LibraryFolderRecord,
   LibraryHighlightRecord,
   LibraryMethods,
   LibraryProgressRecord,
@@ -20,6 +21,7 @@ export function createFakeLibraryMethods() {
   const units = new Map<string, LibraryUnitRecord & { userId: string }>();
   const resources = new Map<string, LibraryResourceRecord & { userId: string }>();
   const sources = new Map<string, Uint8Array>();
+  const folders = new Map<string, LibraryFolderRecord & { userId: string }>();
   const feeds = new Map<string, LibraryFeedState & { userId: string }>();
 
   const methods: LibraryMethods = {
@@ -30,7 +32,7 @@ export function createFakeLibraryMethods() {
       const now = new Date();
       if (existing) {
         const contentChanged = existing.contentHash !== input.contentHash;
-        const { location: _ignored, ...content } = input;
+        const { location: _ignored, tags: _tags, ...content } = input;
         Object.assign(existing, content, { updatedAt: now });
         return { document: { ...existing }, created: false, contentChanged };
       }
@@ -42,7 +44,7 @@ export function createFakeLibraryMethods() {
         unitCount: input.unitCount ?? 0,
         toc: input.toc ?? [],
         location: input.location ?? 'inbox',
-        tags: [],
+        tags: input.tags ?? [],
         hasSource: false,
         createdAt: now,
         updatedAt: now,
@@ -114,7 +116,9 @@ export function createFakeLibraryMethods() {
           (d) =>
             d.userId === userId &&
             (!query.location || d.location === query.location) &&
-            (!query.tag || d.tags.includes(query.tag)),
+            (!query.tag || d.tags.includes(query.tag)) &&
+            (!query.folder ||
+              (query.folder === 'none' ? !d.folderId : d.folderId === query.folder)),
         )
         .slice(0, query.limit);
     },
@@ -126,7 +130,15 @@ export function createFakeLibraryMethods() {
     async updateLibraryDocument(userId, id, patch) {
       const doc = documents.get(id);
       if (!doc || doc.userId !== userId) return null;
-      Object.assign(doc, patch);
+      const { folderId, ...rest } = patch;
+      if (typeof folderId === 'string') {
+        const folder = folders.get(folderId);
+        if (!folder || folder.userId !== userId) return null;
+        doc.folderId = folderId;
+      } else if (folderId === null) {
+        delete doc.folderId;
+      }
+      Object.assign(doc, rest);
       return { ...doc };
     },
     async deleteLibraryDocument(userId, id) {
@@ -210,6 +222,44 @@ export function createFakeLibraryMethods() {
       progress.set(`${userId}:${documentId}`, record);
       return { ...record };
     },
+    async createLibraryFolder(userId, name, maxFolders) {
+      const clean = name.trim().replace(/\s+/g, ' ');
+      const mine = [...folders.values()].filter((f) => f.userId === userId);
+      const existing = mine.find((f) => f.name.toLowerCase() === clean.toLowerCase());
+      const count = (id: string) => [...documents.values()].filter((d) => d.folderId === id).length;
+      if (existing)
+        return { status: 'exists', folder: { ...existing, documentCount: count(existing.id) } };
+      if (mine.length >= maxFolders) return { status: 'limit' };
+      const folder = { id: nextId(), userId, name: clean, documentCount: 0, createdAt: new Date() };
+      folders.set(folder.id, folder);
+      return { status: 'created', folder: { ...folder } };
+    },
+    async listLibraryFolders(userId) {
+      return [...folders.values()]
+        .filter((f) => f.userId === userId)
+        .map((f) => ({
+          ...f,
+          documentCount: [...documents.values()].filter((d) => d.folderId === f.id).length,
+        }));
+    },
+    async renameLibraryFolder(userId, id, name) {
+      const folder = folders.get(id);
+      if (!folder || folder.userId !== userId) return { status: 'not_found' };
+      const clean = name.trim().replace(/\s+/g, ' ');
+      const clash = [...folders.values()].some(
+        (f) => f.userId === userId && f.id !== id && f.name.toLowerCase() === clean.toLowerCase(),
+      );
+      if (clash) return { status: 'exists' };
+      folder.name = clean;
+      return { status: 'renamed', folder: { ...folder } };
+    },
+    async deleteLibraryFolder(userId, id) {
+      const folder = folders.get(id);
+      if (!folder || folder.userId !== userId) return false;
+      folders.delete(id);
+      for (const d of documents.values()) if (d.folderId === id) delete d.folderId;
+      return true;
+    },
     async saveLibrarySource(userId, documentId, bytes) {
       const doc = documents.get(documentId);
       if (!doc || doc.userId !== userId || doc.kind !== 'pdf' || bytes.byteLength === 0)
@@ -269,9 +319,10 @@ export function createFakeLibraryMethods() {
         units: 0,
         resources: 0,
         sources: 0,
+        folders: 0,
         feeds: 0,
       };
     },
   };
-  return { methods, documents, highlights, progress, feeds, sources };
+  return { methods, documents, highlights, progress, feeds, sources, folders };
 }

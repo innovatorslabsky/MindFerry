@@ -45,6 +45,8 @@ export interface LibraryDocumentInput {
   fetchedAt: Date;
   /** Only applied when the document is new; saving a page again never moves it out of the archive. */
   location?: LibraryLocationValue;
+  /** Only applied when the document is new; a re-save never changes the tags the person has set. */
+  tags?: string[];
 }
 
 /** A document without its body, which is what listings and search return. */
@@ -69,6 +71,7 @@ export interface LibraryDocumentSummary {
   hasSource: boolean;
   location: LibraryLocationValue;
   tags: string[];
+  folderId?: string;
   fetchedAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -134,12 +137,16 @@ export interface LibraryDocumentSaveResult {
 export interface LibraryDocumentPatch {
   location?: LibraryLocationValue;
   tags?: string[];
+  /** A folder id to file the document in, or `null` to take it out of its folder. */
+  folderId?: string | null;
 }
 
 export interface LibraryListQuery {
   location?: LibraryLocationValue;
   /** Only documents carrying this tag. */
   tag?: string;
+  /** Only documents in this folder, or only those in none when `'none'`. */
+  folder?: string;
   limit: number;
   skip?: number;
 }
@@ -196,6 +203,7 @@ export interface LibraryDataDeleteResult {
   units: number;
   resources: number;
   sources: number;
+  folders: number;
   feeds: number;
 }
 
@@ -231,3 +239,17 @@ export interface LibraryFeedRefreshRecord {
   /** Keys to add to those already seen. */
   newKeys: string[];
 }
+
+export interface LibraryFolderRecord {
+  id: string;
+  name: string;
+  /** Documents currently filed in it. */
+  documentCount: number;
+  createdAt: Date;
+}
+
+export type LibraryFolderCreateResult =
+  { status: 'created' | 'exists'; folder: LibraryFolderRecord } | { status: 'limit' };
+
+export type LibraryFolderRenameResult =
+  { status: 'renamed'; folder: LibraryFolderRecord } | { status: 'not_found' | 'exists' };

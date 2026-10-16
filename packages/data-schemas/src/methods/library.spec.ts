@@ -7,6 +7,7 @@ import libraryProgressSchema from '~/schema/libraryProgress';
 import libraryUnitSchema from '~/schema/libraryUnit';
 import libraryResourceSchema from '~/schema/libraryResource';
 import libraryFeedSchema from '~/schema/libraryFeed';
+import libraryFolderSchema from '~/schema/libraryFolder';
 import librarySourceSchema, { LIBRARY_SOURCE_CHUNK_BYTES } from '~/schema/librarySource';
 import { createLibraryMethods, type LibraryMethods } from './library';
 
@@ -54,6 +55,9 @@ beforeAll(async () => {
   }
   if (!mongoose.models.LibraryResource) {
     mongoose.model('LibraryResource', libraryResourceSchema);
+  }
+  if (!mongoose.models.LibraryFolder) {
+    mongoose.model('LibraryFolder', libraryFolderSchema);
   }
   if (!mongoose.models.LibrarySource) {
     mongoose.model('LibrarySource', librarySourceSchema);
@@ -264,6 +268,7 @@ describe('deletion', () => {
       units: 0,
       resources: 0,
       sources: 0,
+      folders: 0,
       feeds: 0,
     });
     expect(await methods.listLibraryDocuments(userB, { limit: 10 })).toHaveLength(1);
@@ -737,5 +742,102 @@ describe('stored PDF originals', () => {
     const two = await methods.saveLibraryBook(userB, pdfBook());
     await methods.saveLibrarySource(userB, two.document.id, bytes(10));
     expect(await methods.deleteAllLibraryData(userB)).toMatchObject({ sources: 1 });
+  });
+});
+
+describe('initial tags', () => {
+  it('applies the tags given to a new document, and never changes them on a re-save', async () => {
+    const first = await methods.saveLibraryDocument(
+      userA,
+      doc({ tags: ['example.com', 'memory'] }),
+    );
+    expect(first.document.tags).toEqual(['example.com', 'memory']);
+    await methods.updateLibraryDocument(userA, first.document.id, { tags: ['mine'] });
+    const again = await methods.saveLibraryDocument(
+      userA,
+      doc({ tags: ['example.com', 'memory'] }),
+    );
+    expect(again.created).toBe(false);
+    expect(again.document.tags).toEqual(['mine']);
+  });
+});
+
+describe('folders', () => {
+  it('creates a folder once per name, ignoring case and spacing', async () => {
+    const a = await methods.createLibraryFolder(userA, '  Psychology ', 10);
+    expect(a).toMatchObject({
+      status: 'created',
+      folder: { name: 'Psychology', documentCount: 0 },
+    });
+    const b = await methods.createLibraryFolder(userA, 'psychology', 10);
+    expect(b).toMatchObject({ status: 'exists' });
+    expect((await methods.listLibraryFolders(userA)).length).toBe(1);
+    expect((await methods.createLibraryFolder(userB, 'Psychology', 10)).status).toBe('created');
+  });
+
+  it('stops at the folder limit', async () => {
+    await methods.createLibraryFolder(userA, 'one', 2);
+    await methods.createLibraryFolder(userA, 'two', 2);
+    expect((await methods.createLibraryFolder(userA, 'three', 2)).status).toBe('limit');
+  });
+
+  it('files a document, filters by folder, counts, and unfiles', async () => {
+    const folder = await methods.createLibraryFolder(userA, 'Work', 10);
+    if (folder.status === 'limit') throw new Error('limit');
+    const one = await methods.saveLibraryDocument(userA, doc({ urlKey: 'f1' }));
+    await methods.saveLibraryDocument(userA, doc({ urlKey: 'f2' }));
+    const filed = await methods.updateLibraryDocument(userA, one.document.id, {
+      folderId: folder.folder.id,
+    });
+    expect(filed?.folderId).toBe(folder.folder.id);
+    expect(
+      await methods.listLibraryDocuments(userA, { folder: folder.folder.id, limit: 10 }),
+    ).toHaveLength(1);
+    expect(await methods.listLibraryDocuments(userA, { folder: 'none', limit: 10 })).toHaveLength(
+      1,
+    );
+    expect(await methods.listLibraryDocuments(userA, { folder: 'not-an-id', limit: 10 })).toEqual(
+      [],
+    );
+    expect((await methods.listLibraryFolders(userA))[0].documentCount).toBe(1);
+    const out = await methods.updateLibraryDocument(userA, one.document.id, { folderId: null });
+    expect(out?.folderId).toBeUndefined();
+    expect((await methods.listLibraryFolders(userA))[0].documentCount).toBe(0);
+  });
+
+  it("will not file into someone else's folder, or file someone else's document", async () => {
+    const theirs = await methods.createLibraryFolder(userB, 'Theirs', 10);
+    if (theirs.status === 'limit') throw new Error('limit');
+    const mine = await methods.saveLibraryDocument(userA, doc());
+    expect(
+      await methods.updateLibraryDocument(userA, mine.document.id, { folderId: theirs.folder.id }),
+    ).toBeNull();
+    expect(
+      await methods.updateLibraryDocument(userB, mine.document.id, { folderId: theirs.folder.id }),
+    ).toBeNull();
+    expect((await methods.getLibraryDocument(userA, mine.document.id))?.folderId).toBeUndefined();
+  });
+
+  it('renames, refuses a clash, and deleting keeps the documents', async () => {
+    const a = await methods.createLibraryFolder(userA, 'A', 10);
+    const b = await methods.createLibraryFolder(userA, 'B', 10);
+    if (a.status === 'limit' || b.status === 'limit') throw new Error('limit');
+    expect(await methods.renameLibraryFolder(userA, a.folder.id, 'b')).toEqual({
+      status: 'exists',
+    });
+    expect(await methods.renameLibraryFolder(userB, a.folder.id, 'Z')).toEqual({
+      status: 'not_found',
+    });
+    expect(await methods.renameLibraryFolder(userA, a.folder.id, 'A2')).toMatchObject({
+      status: 'renamed',
+    });
+    const d = await methods.saveLibraryDocument(userA, doc());
+    await methods.updateLibraryDocument(userA, d.document.id, { folderId: a.folder.id });
+    expect(await methods.deleteLibraryFolder(userB, a.folder.id)).toBe(false);
+    expect(await methods.deleteLibraryFolder(userA, a.folder.id)).toBe(true);
+    const after = await methods.getLibraryDocument(userA, d.document.id);
+    expect(after).not.toBeNull();
+    expect(after?.folderId).toBeUndefined();
+    expect(await methods.deleteAllLibraryData(userA)).toMatchObject({ folders: 1 });
   });
 });

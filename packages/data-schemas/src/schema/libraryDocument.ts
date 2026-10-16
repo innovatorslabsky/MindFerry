@@ -45,6 +45,8 @@ export interface ILibraryDocument extends Document {
   hasSource?: boolean;
   location: LibraryLocation;
   tags: string[];
+  /** The folder the document is filed in, if any. */
+  folderId?: Types.ObjectId;
   fetchedAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -87,6 +89,7 @@ const libraryDocumentSchema: Schema<ILibraryDocument> = new Schema(
     hasSource: { type: Boolean },
     location: { type: String, enum: LIBRARY_LOCATIONS, required: true, default: 'inbox' },
     tags: { type: [String], default: [] },
+    folderId: { type: mongoose.Schema.Types.ObjectId, ref: 'LibraryFolder' },
     fetchedAt: { type: Date, required: true },
     tenantId: { type: String, index: true },
   },
@@ -96,6 +99,7 @@ const libraryDocumentSchema: Schema<ILibraryDocument> = new Schema(
 libraryDocumentSchema.index({ userId: 1, urlKey: 1 }, { unique: true });
 libraryDocumentSchema.index({ userId: 1, location: 1, updatedAt: -1 });
 libraryDocumentSchema.index({ userId: 1, tags: 1, updatedAt: -1 });
+libraryDocumentSchema.index({ userId: 1, folderId: 1, updatedAt: -1 });
 /** `userId` prefixes the text index so a search is scoped to one user before any scoring. */
 libraryDocumentSchema.index({ userId: 1, title: 'text', text: 'text' });
 
