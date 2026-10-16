@@ -226,3 +226,20 @@ export const useUnfollowLibraryFeedMutation = (
     },
   });
 };
+
+/** Drops the stored original of a PDF; its text, pages and highlights stay. */
+export const useDeleteLibrarySourceMutation = (
+  options?: t.MutationOptions<void, { id: string }>,
+): UseMutationResult<void, unknown, { id: string }, unknown> => {
+  const refresh = useRefreshLibraryLists();
+  const queryClient = useQueryClient();
+  return useMutation(({ id }: { id: string }) => dataService.deleteLibrarySource(id), {
+    ...options,
+    onSuccess: (data, variables, context) => {
+      refresh();
+      queryClient.removeQueries([QueryKeys.librarySource, variables.id]);
+      queryClient.invalidateQueries([QueryKeys.libraryDocument, variables.id]);
+      options?.onSuccess?.(data, variables, context);
+    },
+  });
+};

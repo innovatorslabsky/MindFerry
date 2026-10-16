@@ -64,6 +64,28 @@ export const useLibraryUnitQuery = (
   );
 };
 
+/**
+ * The stored original of a PDF. It can be large, so it is read only when a page is shown and is not
+ * kept in the cache once nothing is showing it.
+ */
+export const useLibrarySourceQuery = (
+  id: string | undefined,
+  config?: UseQueryOptions<Blob>,
+): QueryObserverResult<Blob> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+  return useQuery<Blob>(
+    [QueryKeys.librarySource, id],
+    () => dataService.getLibrarySource(id as string),
+    {
+      refetchOnWindowFocus: false,
+      staleTime: Infinity,
+      cacheTime: 0,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled && id != null,
+    },
+  );
+};
+
 /** The feeds this person follows. */
 export const useLibraryFeedsQuery = (
   config?: UseQueryOptions<{ feeds: t.TLibraryFeed[] }>,

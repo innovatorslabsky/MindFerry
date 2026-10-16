@@ -1080,7 +1080,6 @@ export function previewLibraryFeed(url: string): Promise<{ feed: t.TLibraryFeedP
   return request.post(endpoints.libraryFeedPreview(), { url });
 }
 
-/** One image of a saved book, as a Blob. The request carries the session's credentials, which an `<img src>` cannot. */
 export function listLibraryFeeds(): Promise<{ feeds: t.TLibraryFeed[] }> {
   return request.get(endpoints.libraryFeeds());
 }
@@ -1097,6 +1096,19 @@ export function unfollowLibraryFeed(id: string): Promise<void> {
   return request.delete(endpoints.libraryFeed(id));
 }
 
+/** The original file of a PDF, when the deployment keeps them. */
+export async function getLibrarySource(id: string): Promise<Blob> {
+  const response = await request.getResponse(endpoints.librarySource(id), {
+    responseType: 'blob',
+  });
+  return response.data as Blob;
+}
+
+export function deleteLibrarySource(id: string): Promise<void> {
+  return request.delete(endpoints.librarySource(id));
+}
+
+/** One image of a saved book, as a Blob. The request carries the session's credentials, which an `<img src>` cannot. */
 export async function getLibraryResource(id: string, path: string): Promise<Blob> {
   const response = await request.getResponse(endpoints.libraryResource(id, path), {
     responseType: 'blob',

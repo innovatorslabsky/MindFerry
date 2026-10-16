@@ -3566,5 +3566,14 @@
   "com_library_tag_remove": "Remove tag {{0}}",
   "com_library_tag_filter": "Show only {{0}}",
   "com_library_tag_filter_clear": "Showing tag {{0}}. Show all",
-  "com_library_tag_error": "Couldn't update the tags."
+  "com_library_tag_error": "Couldn't update the tags.",
+  "com_library_view": "View",
+  "com_library_view_text": "Text",
+  "com_library_view_page": "Page",
+  "com_library_page_view_note": "This is the page as uploaded. Highlights are made in the text view.",
+  "com_library_page_label": "Page {{0}} of the original PDF",
+  "com_library_page_error": "The original page couldn't be shown. The text view still works.",
+  "com_library_source_remove": "Remove original file",
+  "com_library_source_remove_confirm": "The uploaded PDF file will be deleted from MindFerry. Its text, pages and highlights stay, but pages can no longer be shown as images.",
+  "com_library_source_remove_error": "Couldn't remove the original file."
 }

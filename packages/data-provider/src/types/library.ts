@@ -33,6 +33,8 @@ export type TLibraryDocumentSummary = {
   needsOcr?: boolean;
   /** A PDF with more pages than were read. */
   truncated?: boolean;
+  /** The original PDF is stored, so a page can be shown as the page itself. */
+  hasSource: boolean;
   location: TLibraryLocation;
   tags: string[];
   fetchedAt: string;

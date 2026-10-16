@@ -2,16 +2,22 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { ArrowLeft, ExternalLink, Highlighter, List, X } from 'lucide-react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { Button, Spinner } from '@librechat/client';
+import { Button, Spinner, OGDialog, OGDialogTemplate, useToastContext } from '@librechat/client';
 import type {
   TLibraryDocumentSummary,
   TLibraryHighlight,
   TLibraryProgress,
   TLibraryUnitSummary,
 } from 'librechat-data-provider';
-import { useLibraryDocumentQuery, useLibraryUnitQuery } from '~/data-provider';
+import {
+  useDeleteLibrarySourceMutation,
+  useLibraryDocumentQuery,
+  useLibraryUnitQuery,
+} from '~/data-provider';
+import { NotificationSeverity } from '~/common';
 import ReaderBody, { type ReaderBodyHandle } from './ReaderBody';
 import HighlightsPanel from './HighlightsPanel';
+import PdfPageView from './PdfPageView';
 import TagEditor from './TagEditor';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
@@ -92,6 +98,16 @@ export default function ReaderView() {
   const handle = useRef<ReaderBodyHandle | null>(null);
   /** On a narrow screen the contents and highlights are a sheet over the text instead of side columns. */
   const [sheet, setSheet] = useState<'contents' | 'highlights' | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const { showToast } = useToastContext();
+  const removeSource = useDeleteLibrarySourceMutation({
+    onSuccess: () => setConfirmRemove(false),
+    onError: () =>
+      showToast({
+        message: localize('com_library_source_remove_error'),
+        status: NotificationSeverity.ERROR,
+      }),
+  });
   const registerHandle = useCallback((next: ReaderBodyHandle | null) => {
     handle.current = next;
   }, []);
@@ -109,8 +125,12 @@ export default function ReaderView() {
     ? Math.min(Math.max(requested, 0), lastUnit)
     : Math.min(savedUnit ?? 0, lastUnit);
   const unitQuery = useLibraryUnitQuery(id, isBook ? unitIndex : undefined);
+  /** A PDF whose original is stored can be read as the page itself instead of as text. */
+  const pageView = params.get('view') === 'page' && document?.hasSource === true;
   const selectUnit = (index: number) => {
-    setParams({ unit: String(index) }, { replace: true });
+    setParams(pageView ? { unit: String(index), view: 'page' } : { unit: String(index) }, {
+      replace: true,
+    });
     setSheet(null);
   };
 
@@ -149,7 +169,9 @@ export default function ReaderView() {
   const isOriginalLink = /^https?:\/\//i.test(document.normalizedUrl);
 
   let body: JSX.Element;
-  if (!isBook && 'contentHtml' in document) {
+  if (isPdf && pageView) {
+    body = <PdfPageView documentId={document.id} pageIndex={unitIndex} />;
+  } else if (!isBook && 'contentHtml' in document) {
     body = (
       <ReaderBody
         documentId={document.id}
@@ -262,6 +284,47 @@ export default function ReaderView() {
               {localize('com_library_needs_ocr')}
             </p>
           )}
+          {isPdf && document.hasSource && (
+            <div
+              role="group"
+              aria-label={localize('com_library_view')}
+              className="mx-auto mb-3 flex w-full max-w-2xl items-center gap-2 px-4"
+            >
+              {(['text', 'page'] as const).map((view) => (
+                <Button
+                  key={view}
+                  type="button"
+                  variant="outline-toggle"
+                  size="sm"
+                  aria-pressed={(view === 'page') === pageView}
+                  onClick={() =>
+                    setParams(
+                      view === 'page'
+                        ? { unit: String(unitIndex), view: 'page' }
+                        : { unit: String(unitIndex) },
+                      { replace: true },
+                    )
+                  }
+                >
+                  {localize(view === 'page' ? 'com_library_view_page' : 'com_library_view_text')}
+                </Button>
+              ))}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="ml-auto"
+                onClick={() => setConfirmRemove(true)}
+              >
+                {localize('com_library_source_remove')}
+              </Button>
+            </div>
+          )}
+          {isPdf && pageView && (
+            <p className="text-text-secondary mx-auto mb-2 w-full max-w-2xl px-4 text-xs">
+              {localize('com_library_page_view_note')}
+            </p>
+          )}
           <div className="min-h-0 flex-1">{body}</div>
           {isBook && (
             <div className="border-border-light mx-auto mt-2 flex w-full max-w-2xl items-center justify-between border-t px-4 pt-3">
@@ -294,6 +357,24 @@ export default function ReaderView() {
           <HighlightsPanel highlights={highlights} onFocus={onFocus} />
         </aside>
       </div>
+      <OGDialog open={confirmRemove} onOpenChange={setConfirmRemove}>
+        <OGDialogTemplate
+          showCloseButton={false}
+          title={localize('com_library_source_remove')}
+          className="w-11/12 max-w-lg"
+          main={
+            <p className="text-text-primary text-left text-sm">
+              {localize('com_library_source_remove_confirm')}
+            </p>
+          }
+          selection={{
+            selectHandler: () => removeSource.mutate({ id: document.id }),
+            selectClasses:
+              'bg-surface-destructive hover:bg-surface-destructive-hover text-text-on-status',
+            selectText: localize('com_library_source_remove'),
+          }}
+        />
+      </OGDialog>
       {sheet != null && (
         <div
           role="dialog"

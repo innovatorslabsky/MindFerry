@@ -7,12 +7,15 @@ let mockDocument: { data?: unknown; isLoading: boolean; isError: boolean };
 let mockUnit: { data?: unknown; isLoading: boolean; isError: boolean };
 let mockUnitArgs: unknown[] = [];
 const bodyProps: Array<Record<string, unknown>> = [];
+const mockRemoveSource = jest.fn();
 
 jest.mock('~/hooks', () => ({
   useLocalize: () => (key: string, vars?: Record<string, unknown>) =>
     vars ? `${key}:${Object.values(vars).join(',')}` : key,
 }));
+jest.mock('~/common', () => ({ NotificationSeverity: { ERROR: 'error', SUCCESS: 'success' } }));
 jest.mock('~/data-provider', () => ({
+  useDeleteLibrarySourceMutation: () => ({ mutate: mockRemoveSource }),
   useLibraryDocumentQuery: () => mockDocument,
   useLibraryUnitQuery: (...args: unknown[]) => {
     mockUnitArgs = args;
@@ -26,6 +29,12 @@ jest.mock('../ReaderBody', () => ({
     bodyProps.push(props);
     return <div data-testid="reader-body" />;
   },
+}));
+jest.mock('../PdfPageView', () => ({
+  __esModule: true,
+  default: ({ pageIndex }: { pageIndex: number }) => (
+    <div data-testid="pdf-page" data-page={pageIndex} />
+  ),
 }));
 jest.mock('../TagEditor', () => ({
   __esModule: true,
@@ -55,6 +64,7 @@ const summary = (overrides: Record<string, unknown> = {}) => ({
   toc: [],
   location: 'inbox',
   tags: [],
+  hasSource: false,
   fetchedAt: '',
   createdAt: '',
   updatedAt: '',
@@ -250,6 +260,77 @@ describe('ReaderView: a book', () => {
     mockUnit = unitData(0, 'page');
     renderAt('/library/d1');
     expect(screen.getByText('com_library_needs_ocr')).toBeInTheDocument();
+  });
+});
+
+describe('ReaderView: a PDF with its original stored', () => {
+  const stored = (hasSource: boolean) => ({
+    isLoading: false,
+    isError: false,
+    data: {
+      document: summary({ kind: 'pdf', unitCount: 3, hasSource }),
+      units: [0, 1, 2].map((index) => ({
+        index,
+        kind: 'page',
+        wordCount: 1,
+        contentHash: `u${index}`,
+      })),
+      highlights: [],
+      progress: null,
+    },
+  });
+  const unit = {
+    isLoading: false,
+    isError: false,
+    data: {
+      unit: {
+        index: 1,
+        kind: 'page',
+        documentId: 'd1',
+        wordCount: 1,
+        contentHash: 'u1',
+        text: 'page 1',
+      },
+      highlights: [],
+    },
+  };
+
+  it('offers no page view when the original was not kept', () => {
+    mockDocument = stored(false);
+    mockUnit = unit;
+    renderAt('/library/d1?unit=1');
+    expect(screen.queryByRole('group', { name: 'com_library_view' })).not.toBeInTheDocument();
+    // Even if the address asks for it, there is nothing to show but the text.
+    expect(screen.queryByTestId('pdf-page')).not.toBeInTheDocument();
+  });
+
+  it('reads as text by default and switches to the page, keeping the page number', () => {
+    mockDocument = stored(true);
+    mockUnit = unit;
+    renderAt('/library/d1?unit=1');
+    expect(screen.queryByTestId('pdf-page')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'com_library_view_text' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_view_page' }));
+    expect(screen.getByTestId('pdf-page')).toHaveAttribute('data-page', '1');
+    expect(screen.getByText('com_library_page_view_note')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_next' }));
+    expect(screen.getByTestId('pdf-page')).toHaveAttribute('data-page', '2');
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_view_text' }));
+    expect(screen.queryByTestId('pdf-page')).not.toBeInTheDocument();
+  });
+
+  it('removes the original only after confirming', () => {
+    mockDocument = stored(true);
+    mockUnit = unit;
+    renderAt('/library/d1?unit=1');
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_source_remove' }));
+    expect(mockRemoveSource).not.toHaveBeenCalled();
+    const dialog = screen.getByRole('dialog', { name: '' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'com_library_source_remove' }));
+    expect(mockRemoveSource).toHaveBeenCalledWith({ id: 'd1' });
   });
 });
 

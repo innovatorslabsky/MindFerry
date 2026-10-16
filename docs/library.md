@@ -40,8 +40,11 @@ drawer), leading to `/library`:
   before. Nothing is checked in the background; an item that cannot be read is counted and not retried.
   You can follow up to 50 feeds.
 
-What the screens do not do yet: show a PDF page as the page itself (there is no page image, only its
-text). If the text the browser shows ever differs from
+- a PDF uploaded while `keepPdfOriginals` is on can be switched from **Text** to **Page**: the page
+  is drawn from the stored file in the browser (pdf.js, pixels only). Highlights are made in the text
+  view. **Remove original file** deletes the stored copy and keeps the text, pages and highlights.
+
+If the text the browser shows ever differs from
 the text the server anchored highlights in, highlighting is switched off for that text with a notice,
 rather than saving highlights in the wrong place.
 
@@ -56,7 +59,9 @@ rather than saving highlights in the wrong place.
 | A feed you follow            | `POST /api/library/feeds` `{ url }`; `GET /feeds`; `POST /feeds/:id/refresh`; `DELETE /feeds/:id` | each item as an article in the Feed tab (`location: feed`)          |
 
 The file type is decided from the bytes, never the file name or declared type. The uploaded file is
-not kept: its text, chapters and table of contents are.
+not kept: its text, chapters and table of contents are. The one exception is opt-in: with
+`contextHub.library.keepPdfOriginals: true` the original of each uploaded **PDF** is kept as well
+(see below). An EPUB's original is never kept.
 
 An upload's identity is its bytes. Uploading the same file twice is one document; a revised copy is a
 different document (its highlights do not carry over).
@@ -78,6 +83,29 @@ Each coordinate space is separate:
 
 A PDF page's anchors therefore mean something only against the reflowed text. If a page image view is
 added later it will need its own mapping from the image's text layer to these offsets.
+
+## Keeping original PDFs
+
+```yaml
+contextHub:
+  library:
+    enabled: true
+    keepPdfOriginals: true # default false
+```
+
+Off by default, because it changes what is stored: the whole PDF, not only its text, for every PDF a
+user uploads (stored in 8 MB chunks in `LibrarySource`, so up to 50 MiB per file). Read the storage
+and privacy implications before switching it on for a shared deployment.
+
+- Only PDFs uploaded after the setting is on have an original. Uploading the same file again adds it
+  to one saved earlier. Turning the setting off stops new copies; existing ones stay until removed.
+- `GET /api/library/documents/:id/source` returns the file for its owner only (`application/pdf`,
+  `nosniff`, `Content-Security-Policy: sandbox`, `no-store`). `DELETE` on the same path removes just the
+  original. Deleting the document or the account deletes it too.
+- The page is drawn in the browser by pdf.js (the legacy build, for older browsers). Nothing from the
+  file is run: only pixels. Reading position is saved from the text view, not the page view.
+- The "copy-restricted PDF" flag is still not honoured: a stored original can be viewed and removed
+  by its owner, and no export or share feature exists that would need to withhold it.
 
 ## Known limits
 
