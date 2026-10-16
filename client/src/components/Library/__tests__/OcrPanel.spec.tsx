@@ -24,7 +24,7 @@ jest.mock('~/data-provider', () => ({
   useSaveLibraryUnitTextMutation: () => ({ mutateAsync: mockSave }),
 }));
 jest.mock('~/utils/ocr', () => ({
-  OCR_PAGE_WIDTH: 1700,
+  ...jest.requireActual('~/utils/ocr'),
   createOcrEngine: (...args: unknown[]) => mockCreateEngine(...args),
 }));
 jest.mock('~/utils/pdfPages', () => ({ openPdfPages: (...args: unknown[]) => mockOpen(...args) }));
@@ -40,6 +40,7 @@ const blob = () => {
 const apiError = (code: string) => ({ response: { data: { error: { code } } } });
 
 beforeEach(() => {
+  localStorage.clear();
   mockSource = { data: blob(), isLoading: false, isError: false };
   mockSourceConfigs.length = 0;
   mockSave.mockResolvedValue({});
@@ -112,6 +113,45 @@ describe('OcrPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'com_library_ocr_all:2' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('com_library_ocr_error');
     expect(mockSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts from the document's own language", () => {
+    render(<OcrPanel documentId="d1" blankPages={[0]} currentPage={0} documentLang="vi" />);
+    expect(screen.getByLabelText('com_library_ocr_language')).toHaveValue('vie');
+  });
+
+  it.each([
+    ['zh-CN', 'chi_sim'],
+    ['ja', 'jpn'],
+    ['ko-KR', 'kor'],
+    ['fr', 'fra'],
+    ['es-MX', 'spa'],
+    ['de', 'deu'],
+    [undefined, 'eng'],
+    ['pt', 'eng'],
+  ])('maps the document language %s to %s', (lang, expected) => {
+    render(<OcrPanel documentId="d1" blankPages={[0]} currentPage={0} documentLang={lang} />);
+    expect(screen.getByLabelText('com_library_ocr_language')).toHaveValue(expected);
+  });
+
+  it('reads with the language chosen, and remembers it on this device', async () => {
+    const { unmount } = render(<OcrPanel documentId="d1" blankPages={[0]} currentPage={0} />);
+    fireEvent.change(screen.getByLabelText('com_library_ocr_language'), {
+      target: { value: 'jpn' },
+    });
+    expect(localStorage.getItem('libraryOcrLanguage')).toBe('jpn');
+    fireEvent.click(screen.getByRole('button', { name: /com_library_ocr_all/ }));
+    await waitFor(() => expect(mockCreateEngine).toHaveBeenCalledWith('jpn'));
+    await screen.findByText(/com_library_ocr_done/);
+    unmount();
+    render(<OcrPanel documentId="d2" blankPages={[0]} currentPage={0} documentLang="fr" />);
+    expect(screen.getByLabelText('com_library_ocr_language')).toHaveValue('jpn');
+  });
+
+  it('ignores a remembered language that is not on the list', () => {
+    localStorage.setItem('libraryOcrLanguage', 'klingon');
+    render(<OcrPanel documentId="d1" blankPages={[0]} currentPage={0} documentLang="de" />);
+    expect(screen.getByLabelText('com_library_ocr_language')).toHaveValue('deu');
   });
 
   it('stops after the page being read when cancelled', async () => {

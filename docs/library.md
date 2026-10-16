@@ -109,17 +109,25 @@ A scanned PDF has pictures of pages and no text. When the original file is kept
 (`keepPdfOriginals: true`), the reader shows a panel for the pages with no text: **Read this page** or
 **Read all blank pages**.
 
-- It runs in the person's browser with tesseract.js (English). The page is drawn from the stored
+- It runs in the person's browser with tesseract.js. The page is drawn from the stored
   original, read, and only the resulting text is sent to the server. Nothing is uploaded to a third
   party: the worker, WebAssembly core and language data are served from `/assets/ocr/` by MindFerry
-  itself (about 15 MB, fetched only when OCR is started, then cached by the browser).
+  itself. The whole folder is about 25 MB in the build, but a browser fetches only the core (about 4 MB)
+  and the one language it uses (1 to 3 MB), and only when OCR is started; it then caches them.
 - It needs WebAssembly allowed by the page's content security policy: set `CSP_ALLOW_WASM=true`
   (the same switch HEIC conversion uses). Without it the panel says reading failed.
 - The text is saved with `PUT /api/library/documents/:id/units/:index/text`. A page accepts it **only
   if it has no text of its own** (fewer than 10 characters), so OCR can never replace text that might
   already be highlighted; a second attempt returns 409. Search text, word count and `needsOcr` for the
   document are refreshed, and the page can then be searched and highlighted like any other.
-- Only English is recognised. Accuracy depends on the scan: a clean 150 dpi page reads well, a skewed or
+- A language menu in the panel chooses what to read: English, Tiếng Việt, 简体中文 (Simplified
+  Chinese), Français, 한국어, 日本語, Español and Deutsch. It starts from the document's own language when
+  it declares one, then the last choice made on that device. One language is read at a time; a page
+  mixing scripts reads best in the language of most of its text. Traditional Chinese is not included.
+  Spaces OCR inserts between Chinese or Japanese characters are removed when the text is saved.
+- Adding a language means adding its `@tesseract.js-data/<code>` package to `client/package.json`, the
+  code to `OCR_LANGUAGES` in `client/src/utils/ocr.ts` and to the list in `client/vite.config.ts`.
+- Accuracy depends on the scan: a clean 150 dpi page reads well, a skewed or
   photographed one may not. Reading takes seconds per page and uses the person's CPU.
 - Without a stored original there is nothing to read from, so a scanned PDF stays text-less.
 
@@ -166,7 +174,7 @@ and privacy implications before switching it on for a shared deployment.
 - **Highlights on a PDF follow the reflowed text.** A revised PDF is a different document (its key is
   its bytes), so highlights never carry across versions of the same paper.
 - **Scanned PDFs** (`needsOcr: true`) have almost no text until they are read with OCR (see above), which
-  needs the original file kept, English text and `CSP_ALLOW_WASM=true`.
+  needs the original file kept and `CSP_ALLOW_WASM=true`.
 - **Multi-column PDFs** read in content-stream order, which can interleave columns.
 - **PDFs that forbid copying** are read like any other. Whether to honour that flag is undecided.
 - **Network isolation is the deployment's job.** The parser process cannot read your files, secrets or

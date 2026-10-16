@@ -290,6 +290,7 @@ export default function ReaderView() {
               documentId={document.id}
               blankPages={units.filter((page) => page.wordCount === 0).map((page) => page.index)}
               currentPage={unitIndex}
+              documentLang={document.lang}
             />
           )}
           {isPdf && document.hasSource && (

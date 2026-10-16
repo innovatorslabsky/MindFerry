@@ -247,6 +247,11 @@ export function cleanOcrText(raw: string): string {
       .replace(/[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u2028\u2029]/g, ' ')
       .replace(/[ \t]+\n/g, '\n')
       .replace(/\n{3,}/g, '\n\n')
+      // OCR puts a space between Chinese and Japanese characters, which are not written with spaces.
+      .replace(
+        /(?<=[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}])[ \t]+(?=[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}])/gu,
+        '',
+      )
       .trim()
       .slice(0, MAX_OCR_PAGE_CHARS)
   );

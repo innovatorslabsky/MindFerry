@@ -55,6 +55,15 @@ describe('cleanOcrText', () => {
     );
   });
 
+  it('joins Chinese and Japanese characters OCR spaced apart, but leaves other spacing alone', () => {
+    expect(cleanOcrText('间 隔 重 复 加 强 记 忆')).toBe('间隔重复加强记忆');
+    expect(cleanOcrText('日 本 語 の ひ ら が な')).toBe('日本語のひらがな');
+    expect(cleanOcrText('한국어 문장 and English words 3 times')).toBe(
+      '한국어 문장 and English words 3 times',
+    );
+    expect(cleanOcrText('第 1 章 开 始')).toBe('第 1 章开始');
+  });
+
   it('is capped', () => {
     expect(cleanOcrText('a'.repeat(MAX_OCR_PAGE_CHARS + 50)).length).toBe(MAX_OCR_PAGE_CHARS);
   });

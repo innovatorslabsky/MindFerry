@@ -543,11 +543,16 @@ const OCR_FILES: Array<{ url: string; from: string[] }> = [
     url: 'tesseract-core-simd-lstm.wasm.js',
     from: ['tesseract.js-core', 'tesseract-core-simd-lstm.wasm.js'],
   },
-  {
-    url: 'lang/eng.traineddata.gz',
-    from: ['@tesseract.js-data', 'eng', '4.0.0_best_int', 'eng.traineddata.gz'],
-  },
 ];
+
+/** Language data for OCR: the codes tesseract.js uses, which `OCR_LANGUAGES` in `src/utils/ocr.ts` lists. */
+const OCR_LANGUAGES = ['eng', 'vie', 'chi_sim', 'fra', 'kor', 'jpn', 'spa', 'deu'];
+for (const code of OCR_LANGUAGES) {
+  OCR_FILES.push({
+    url: `lang/${code}.traineddata.gz`,
+    from: ['@tesseract.js-data', code, '4.0.0_best_int', `${code}.traineddata.gz`],
+  });
+}
 
 function ocrSource(parts: string[]): string {
   for (const base of [

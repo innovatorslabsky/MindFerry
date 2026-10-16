@@ -1,10 +1,32 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Spinner } from '@librechat/client';
 import { useLibrarySourceQuery, useSaveLibraryUnitTextMutation } from '~/data-provider';
-import { createOcrEngine, OCR_PAGE_WIDTH } from '~/utils/ocr';
+import {
+  createOcrEngine,
+  isOcrLanguage,
+  OCR_LANGUAGES,
+  OCR_PAGE_WIDTH,
+  ocrLanguageFor,
+} from '~/utils/ocr';
+import type { OcrLanguage } from '~/utils/ocr';
 import { libraryErrorCode } from './errors';
 import { openPdfPages } from '~/utils/pdfPages';
 import { useLocalize } from '~/hooks';
+
+const LANGUAGE_KEY = 'libraryOcrLanguage';
+
+/** The language last chosen on this device, else the document's own. Storage may be unavailable. */
+function initialLanguage(documentLang?: string): OcrLanguage {
+  try {
+    const stored = localStorage.getItem(LANGUAGE_KEY);
+    if (isOcrLanguage(stored)) {
+      return stored;
+    }
+  } catch {
+    // Private windows and blocked storage fall through to the document's language.
+  }
+  return ocrLanguageFor(documentLang);
+}
 
 type Run =
   | { state: 'idle' }
@@ -22,8 +44,11 @@ export default function OcrPanel({
   documentId,
   blankPages,
   currentPage,
+  documentLang,
 }: {
   documentId: string;
+  /** The document's own language, if it declares one; the starting choice for OCR. */
+  documentLang?: string;
   /** Indexes of the pages with no text. */
   blankPages: number[];
   currentPage: number;
@@ -31,6 +56,9 @@ export default function OcrPanel({
   const localize = useLocalize();
   const [run, setRun] = useState<Run>({ state: 'idle' });
   const [wanted, setWanted] = useState(false);
+  const [language, setLanguage] = useState<OcrLanguage>(() => initialLanguage(documentLang));
+  const chosen = useRef(language);
+  chosen.current = language;
   const cancelled = useRef(false);
   const source = useLibrarySourceQuery(documentId, { enabled: wanted });
   const save = useSaveLibraryUnitTextMutation();
@@ -54,7 +82,7 @@ export default function OcrPanel({
       let empty = 0;
       try {
         pdf = await openPdfPages(await blob.arrayBuffer());
-        engine = await createOcrEngine();
+        engine = await createOcrEngine(chosen.current);
         for (let step = 0; step < pages.length && !cancelled.current; step++) {
           const index = pages[step];
           setRun({ state: 'running', page: index + 1, done: step, total: pages.length });
@@ -103,6 +131,33 @@ export default function OcrPanel({
       data-testid="library-ocr"
     >
       {offering && <p>{localize('com_library_ocr_blank', { 0: blankPages.length })}</p>}
+      {offering && (
+        <label className="flex items-center gap-2">
+          <span>{localize('com_library_ocr_language')}</span>
+          <select
+            value={language}
+            onChange={(event) => {
+              const next = event.target.value;
+              if (isOcrLanguage(next)) {
+                setLanguage(next);
+                try {
+                  localStorage.setItem(LANGUAGE_KEY, next);
+                } catch {
+                  // Remembering the choice is a convenience only.
+                }
+              }
+            }}
+            disabled={running}
+            className="border-border-medium bg-surface-primary text-text-primary rounded-md border px-2 py-1 text-sm"
+          >
+            {OCR_LANGUAGES.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {run.state === 'running' && (
         <p className="flex items-center gap-2" role="status">
           <Spinner className="h-4 w-4" />
