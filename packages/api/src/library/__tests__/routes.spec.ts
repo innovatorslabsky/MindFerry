@@ -304,3 +304,92 @@ describe('highlights and progress', () => {
     }
   });
 });
+
+describe('followed feeds', () => {
+  const followed = {
+    status: 'followed' as const,
+    feed: { id: 'f1', feedUrl: 'https://b.test/rss', title: 'B', createdAt: new Date() },
+    refresh: { added: 2, failed: 0, skipped: 0, notModified: false },
+  };
+
+  it('creates a follow with 201, and reports an existing one with 200', async () => {
+    const first = setup({ followFeed: async () => followed });
+    const a = res();
+    await first.handlers.followFeed(req({ body: { url: 'https://b.test' } }), a.response);
+    expect(a.out.status).toBe(201);
+
+    const second = setup({ followFeed: async () => ({ status: 'exists', feed: followed.feed }) });
+    const b = res();
+    await second.handlers.followFeed(req({ body: { url: 'https://b.test' } }), b.response);
+    expect(b.out.status).toBe(200);
+  });
+
+  it('refuses past the follow limit with 409 and a bad url with 400', async () => {
+    const { handlers } = setup({ followFeed: async () => ({ status: 'limit' }) });
+    const a = res();
+    await handlers.followFeed(req({ body: { url: 'https://b.test' } }), a.response);
+    expect(a.out.status).toBe(409);
+    const b = res();
+    await handlers.followFeed(req({ body: { url: 'nope' } }), b.response);
+    expect(b.out.status).toBe(400);
+  });
+
+  it('maps fetch failures like the preview does', async () => {
+    const { handlers } = setup({
+      followFeed: async () => {
+        throw new UnsafeUrlError('blocked');
+      },
+      refreshFeed: async () => {
+        throw new FetchError('down');
+      },
+    });
+    const a = res();
+    await handlers.followFeed(req({ body: { url: 'http://10.0.0.1' } }), a.response);
+    expect(a.out.status).toBe(400);
+    const b = res();
+    await handlers.refreshFeed(req({ params: { id: 'f1' } }), b.response);
+    expect(b.out.status).toBe(502);
+  });
+
+  it("lists, refreshes and unfollows only the signed-in user's feeds", async () => {
+    const ctx = setup({ followFeed: async () => followed });
+    await ctx.feeds.set('mine', {
+      id: 'mine',
+      userId: 'u1',
+      feedUrl: 'https://a.test/rss',
+      title: 'A',
+      seenKeys: [],
+      createdAt: new Date(),
+    });
+    const listed = res();
+    await ctx.handlers.listFeeds(req(), listed.response);
+    expect((listed.out.body as { feeds: unknown[] }).feeds).toHaveLength(1);
+
+    const stranger = res();
+    await ctx.handlers.unfollowFeed(
+      req({ user: { id: 'u2' }, params: { id: 'mine' } }),
+      stranger.response,
+    );
+    expect(stranger.out.status).toBe(404);
+    const missing = res();
+    await ctx.handlers.refreshFeed(
+      req({ user: { id: 'u2' }, params: { id: 'mine' } }),
+      missing.response,
+    );
+    expect(missing.out.status).toBe(404);
+
+    const removed = res();
+    await ctx.handlers.unfollowFeed(req({ params: { id: 'mine' } }), removed.response);
+    expect(removed.out.status).toBe(204);
+  });
+
+  it('filters the document list by tag', async () => {
+    const ctx = setup();
+    const saved = await ctx.service.saveFromHtml('u1', 'https://x.test/a', HTML);
+    await ctx.service.saveFromHtml('u1', 'https://x.test/b', HTML.replace('Memory notes', 'Other'));
+    await ctx.service.update('u1', saved.document.id, { tags: ['psych'] });
+    const out = res();
+    await ctx.handlers.list(req({ query: { tag: 'psych' } }), out.response);
+    expect((out.out.body as { documents: unknown[] }).documents).toHaveLength(1);
+  });
+});

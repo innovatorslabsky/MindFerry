@@ -221,6 +221,10 @@ export interface LibraryHandlers {
   save: Handler;
   upload: Handler;
   previewFeed: Handler;
+  followFeed: Handler;
+  listFeeds: Handler;
+  refreshFeed: Handler;
+  unfollowFeed: Handler;
   getUnit: Handler;
   getResource: Handler;
   list: Handler;
@@ -293,6 +297,52 @@ export function createLibraryHandlers({
     }
   };
 
+  const followFeed: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const service = serviceFor(req);
+    const body = feedBodySchema.safeParse(req.body);
+    if (!body.success) return fail(res, 400, 'invalid_request', 'A valid url is required');
+    try {
+      const outcome = await service.followFeed(userId, body.data.url);
+      if (outcome.status === 'limit') {
+        return fail(res, 409, 'feed_limit', 'You are following as many feeds as allowed');
+      }
+      res.status(outcome.status === 'followed' ? 201 : 200).json(outcome);
+    } catch (error) {
+      feedFailure(res, error);
+    }
+  };
+
+  const listFeeds: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const service = serviceFor(req);
+    res.status(200).json({ feeds: await service.listFeeds(userId) });
+  };
+
+  const refreshFeed: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const service = serviceFor(req);
+    try {
+      const refresh = await service.refreshFeed(userId, param(req, 'id'));
+      if (!refresh) return fail(res, 404, 'not_found', 'Feed not found');
+      res.status(200).json({ refresh });
+    } catch (error) {
+      feedFailure(res, error);
+    }
+  };
+
+  const unfollowFeed: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const service = serviceFor(req);
+    const removed = await service.unfollowFeed(userId, param(req, 'id'));
+    if (!removed) return fail(res, 404, 'not_found', 'Feed not found');
+    res.status(204).end();
+  };
+
   const list: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
@@ -304,8 +354,10 @@ export function createLibraryHandlers({
       return;
     }
     const location = LOCATIONS.find((value) => value === req.query.location);
+    const tag = typeof req.query.tag === 'string' ? req.query.tag.trim().slice(0, 64) : '';
     const documents = await service.list(userId, {
       location,
+      tag: tag || undefined,
       limit,
       skip: clampSkip(req.query.skip),
     });
@@ -445,6 +497,10 @@ export function createLibraryHandlers({
     save,
     upload,
     previewFeed,
+    followFeed,
+    listFeeds,
+    refreshFeed,
+    unfollowFeed,
     getUnit,
     getResource,
     list,

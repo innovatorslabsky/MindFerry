@@ -1,7 +1,7 @@
 import type { WorkerJob, WorkerReply } from './protocol';
 import { ingestUpload } from '../ingest/upload';
 import { saveHtml, saveUrl } from '../ingest/saveDocument';
-import { subscribeToUrl } from '../feed/fetchFeed';
+import { fetchFeed, subscribeToUrl } from '../feed/fetchFeed';
 import { WorkerResultTooLargeError } from './errors';
 
 /** The work an isolated parser does for one job. Kept apart from the process bootstrap so it can be tested. */
@@ -43,6 +43,8 @@ async function run(job: WorkerJob): Promise<unknown> {
       return saveHtml(job.url, job.html);
     case 'parseUpload':
       return ingestUpload(job.bytes, { epub: { maxImagesTotalBytes: MAX_STORED_IMAGE_BYTES } });
+    case 'pollFeed':
+      return fetchFeed(job.url, { etag: job.etag, lastModified: job.lastModified });
     case 'readFeed':
       return subscribeToUrl(job.url);
     default:

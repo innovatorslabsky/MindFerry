@@ -92,6 +92,7 @@ const libraryDocumentSchema: Schema<ILibraryDocument> = new Schema(
 
 libraryDocumentSchema.index({ userId: 1, urlKey: 1 }, { unique: true });
 libraryDocumentSchema.index({ userId: 1, location: 1, updatedAt: -1 });
+libraryDocumentSchema.index({ userId: 1, tags: 1, updatedAt: -1 });
 /** `userId` prefixes the text index so a search is scoped to one user before any scoring. */
 libraryDocumentSchema.index({ userId: 1, title: 'text', text: 'text' });
 

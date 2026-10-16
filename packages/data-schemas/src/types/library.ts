@@ -136,6 +136,8 @@ export interface LibraryDocumentPatch {
 
 export interface LibraryListQuery {
   location?: LibraryLocationValue;
+  /** Only documents carrying this tag. */
+  tag?: string;
   limit: number;
   skip?: number;
 }
@@ -191,4 +193,38 @@ export interface LibraryDataDeleteResult {
   progress: number;
   units: number;
   resources: number;
+  feeds: number;
+}
+
+export interface LibraryFeedRecord {
+  id: string;
+  feedUrl: string;
+  title: string;
+  siteUrl?: string;
+  lastRefreshedAt?: Date;
+  createdAt: Date;
+}
+
+/** What a refresh needs to remember about a feed: its validators and how many items it has seen. */
+export interface LibraryFeedState extends LibraryFeedRecord {
+  etag?: string;
+  lastModified?: string;
+  seenKeys: string[];
+}
+
+export interface LibraryFeedInput {
+  feedUrl: string;
+  title: string;
+  siteUrl?: string;
+}
+
+export type LibraryFeedAddResult =
+  { status: 'added' | 'exists'; feed: LibraryFeedRecord } | { status: 'limit' };
+
+export interface LibraryFeedRefreshRecord {
+  title?: string;
+  etag?: string | null;
+  lastModified?: string | null;
+  /** Keys to add to those already seen. */
+  newKeys: string[];
 }

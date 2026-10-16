@@ -2,6 +2,7 @@ import type {
   LibraryDocumentPatch,
   LibraryDocumentRecord,
   LibraryDocumentSummary,
+  LibraryFeedRecord,
   LibraryHighlightInput,
   LibraryHighlightPatch,
   LibraryHighlightRecord,
@@ -19,7 +20,8 @@ import { createAnchor, resolveAnchor } from './anchor/textQuote';
 import type { FeedFetchResult } from './feed/fetchFeed';
 import { saveHtml, saveUrl } from './ingest/saveDocument';
 import { ingestUpload } from './ingest/upload';
-import { subscribeToUrl } from './feed/fetchFeed';
+import { fetchFeed, subscribeToUrl } from './feed/fetchFeed';
+import { feedItemKey } from './feed/parseFeed';
 import type { LibraryIngest } from './worker/ingest';
 import { uploadToBook } from './book';
 
@@ -27,6 +29,11 @@ type Methods = Pick<
   LibraryMethods,
   | 'saveLibraryDocument'
   | 'saveLibraryBook'
+  | 'addLibraryFeed'
+  | 'listLibraryFeeds'
+  | 'getLibraryFeed'
+  | 'recordLibraryFeedRefresh'
+  | 'deleteLibraryFeed'
   | 'listLibraryUnits'
   | 'getLibraryUnit'
   | 'getLibraryResource'
@@ -82,6 +89,23 @@ export interface FeedPreview {
   }>;
 }
 
+/** What a refresh did. Items the feed no longer lists, or that were already seen, do not appear here. */
+export interface FeedRefreshResult {
+  /** New items saved to the library's Feed tab. */
+  added: number;
+  /** New items that could not be fetched or read; they are not retried. */
+  failed: number;
+  /** New items past the per-refresh cap, or with no address to save. */
+  skipped: number;
+  /** The feed said nothing had changed since the last refresh. */
+  notModified: boolean;
+}
+
+export type FollowFeedOutcome =
+  | { status: 'followed'; feed: LibraryFeedRecord; refresh: FeedRefreshResult }
+  | { status: 'exists'; feed: LibraryFeedRecord }
+  | { status: 'limit' };
+
 export type CreateHighlightOutcome =
   | { status: 'created'; highlight: LibraryHighlightRecord }
   | { status: 'not_found' }
@@ -110,6 +134,12 @@ export interface LibraryService {
     location?: LibraryLocationValue,
   ) => Promise<UploadResult>;
   previewFeed: (url: string) => Promise<FeedPreview>;
+  /** Follows a feed (or the feed a site advertises) and saves its latest few items to the Feed tab. */
+  followFeed: (userId: string, url: string) => Promise<FollowFeedOutcome>;
+  listFeeds: (userId: string) => Promise<LibraryFeedRecord[]>;
+  /** Saves the items that are new since the last refresh. `null` when the feed is not the user's. */
+  refreshFeed: (userId: string, id: string) => Promise<FeedRefreshResult | null>;
+  unfollowFeed: (userId: string, id: string) => Promise<boolean>;
   listUnits: (userId: string, documentId: string) => Promise<LibraryUnitSummary[]>;
   /** One image of a book the person saved. */
   getResource: (
@@ -163,11 +193,22 @@ function toSummary(doc: LibraryDocumentRecord): LibraryDocumentSummary {
   return summary;
 }
 
+/** Most feeds one person may follow. */
+export const MAX_FOLLOWED_FEEDS = 50;
+/** Items saved by one refresh. Each is a fetch of a third-party page, so the number is kept small. */
+export const MAX_ITEMS_PER_REFRESH = 10;
+/** The first refresh, when following, saves only the newest few rather than a feed's whole history. */
+export const MAX_ITEMS_ON_FOLLOW = 5;
+
 export function createLibraryService({ methods, ingest = {} }: LibraryServiceDeps): LibraryService {
   const fetchUrl = ingest.saveUrl ?? ((url: string) => saveUrl(url));
   const fromHtml = ingest.saveHtml ?? (async (url: string, html: string) => saveHtml(url, html));
   const readUpload = ingest.ingestUpload ?? ((bytes: Uint8Array) => ingestUpload(bytes));
   const readFeed = ingest.subscribeToUrl ?? ((url: string) => subscribeToUrl(url));
+  const pollFeed =
+    ingest.fetchFeed ??
+    ((url: string, validators: { etag?: string | null; lastModified?: string | null }) =>
+      fetchFeed(url, validators));
 
   async function persist(
     userId: string,
@@ -194,6 +235,55 @@ export function createLibraryService({ methods, ingest = {} }: LibraryServiceDep
       ? await reanchor(userId, saved.document)
       : { kept: 0, orphaned: 0 };
     return { document: toSummary(saved.document), created: saved.created, reanchored };
+  }
+
+  /** Saves the items of a feed read that have not been seen, newest first, and remembers them all. */
+  async function saveNewItems(
+    userId: string,
+    feedId: string,
+    result: FeedFetchResult,
+    seenKeys: string[],
+    cap: number,
+  ): Promise<FeedRefreshResult> {
+    const outcome: FeedRefreshResult = {
+      added: 0,
+      failed: 0,
+      skipped: 0,
+      notModified: result.notModified,
+    };
+    const feed = result.feed;
+    if (!feed) {
+      await methods.recordLibraryFeedRefresh(userId, feedId, {
+        etag: result.etag,
+        lastModified: result.lastModified,
+        newKeys: [],
+      });
+      return outcome;
+    }
+    const seen = new Set(seenKeys);
+    const fresh = feed.items
+      .map((item) => ({ item, key: feedItemKey(feed.feedUrl, item.guid) }))
+      .filter(({ key }) => !seen.has(key));
+    for (const { item } of fresh) {
+      if (!item.url || outcome.added + outcome.failed >= cap) {
+        outcome.skipped++;
+        continue;
+      }
+      try {
+        await persist(userId, await fetchUrl(item.url), 'feed');
+        outcome.added++;
+      } catch {
+        // One unreadable article is not a failed refresh; it is counted, and not tried again.
+        outcome.failed++;
+      }
+    }
+    await methods.recordLibraryFeedRefresh(userId, feedId, {
+      title: feed.title,
+      etag: result.etag,
+      lastModified: result.lastModified,
+      newKeys: fresh.map(({ key }) => key),
+    });
+    return outcome;
   }
 
   /**
@@ -265,6 +355,48 @@ export function createLibraryService({ methods, ingest = {} }: LibraryServiceDep
           summary: item.summaryHtml ? stripTags(item.summaryHtml).slice(0, 400) : null,
         })),
       };
+    },
+
+    async followFeed(userId: string, url: string): Promise<FollowFeedOutcome> {
+      const result = await readFeed(url);
+      const feed = result.feed;
+      if (!feed) {
+        throw new Error('The feed did not return any content');
+      }
+      const added = await methods.addLibraryFeed(
+        userId,
+        { feedUrl: feed.feedUrl, title: feed.title, siteUrl: feed.siteUrl ?? undefined },
+        MAX_FOLLOWED_FEEDS,
+      );
+      if (added.status === 'limit') {
+        return { status: 'limit' };
+      }
+      if (added.status === 'exists') {
+        return { status: 'exists', feed: added.feed };
+      }
+      // The feed was just read, so its items are used rather than read a second time.
+      const refresh = await saveNewItems(userId, added.feed.id, result, [], MAX_ITEMS_ON_FOLLOW);
+      return { status: 'followed', feed: added.feed, refresh };
+    },
+
+    listFeeds(userId: string) {
+      return methods.listLibraryFeeds(userId);
+    },
+
+    async refreshFeed(userId: string, id: string): Promise<FeedRefreshResult | null> {
+      const state = await methods.getLibraryFeed(userId, id);
+      if (!state) {
+        return null;
+      }
+      const result = await pollFeed(state.feedUrl, {
+        etag: state.etag,
+        lastModified: state.lastModified,
+      });
+      return saveNewItems(userId, id, result, state.seenKeys, MAX_ITEMS_PER_REFRESH);
+    },
+
+    unfollowFeed(userId: string, id: string) {
+      return methods.deleteLibraryFeed(userId, id);
     },
 
     listUnits(userId: string, documentId: string) {

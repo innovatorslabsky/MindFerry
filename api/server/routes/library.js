@@ -88,6 +88,10 @@ router.post(
   handlers.upload,
 );
 router.post('/feeds/preview', ...save, handlers.previewFeed);
+router.post('/feeds', ...save, handlers.followFeed);
+router.get('/feeds', ...browse, handlers.listFeeds);
+router.post('/feeds/:id/refresh', ...save, handlers.refreshFeed);
+router.delete('/feeds/:id', ...browse, handlers.unfollowFeed);
 router.get('/documents', ...browse, handlers.list);
 router.get('/documents/:id', ...browse, handlers.get);
 router.patch('/documents/:id', ...browse, handlers.patch);

@@ -2,6 +2,7 @@ import type {
   LibraryBookInput,
   LibraryDocumentInput,
   LibraryDocumentRecord,
+  LibraryFeedState,
   LibraryHighlightRecord,
   LibraryMethods,
   LibraryProgressRecord,
@@ -18,6 +19,7 @@ export function createFakeLibraryMethods() {
   const progress = new Map<string, LibraryProgressRecord & { userId: string }>();
   const units = new Map<string, LibraryUnitRecord & { userId: string }>();
   const resources = new Map<string, LibraryResourceRecord & { userId: string }>();
+  const feeds = new Map<string, LibraryFeedState & { userId: string }>();
 
   const methods: LibraryMethods = {
     async saveLibraryDocument(userId, input: LibraryDocumentInput) {
@@ -106,7 +108,12 @@ export function createFakeLibraryMethods() {
     },
     async listLibraryDocuments(userId, query) {
       return [...documents.values()]
-        .filter((d) => d.userId === userId && (!query.location || d.location === query.location))
+        .filter(
+          (d) =>
+            d.userId === userId &&
+            (!query.location || d.location === query.location) &&
+            (!query.tag || d.tags.includes(query.tag)),
+        )
         .slice(0, query.limit);
     },
     async searchLibraryDocuments(userId, query, limit) {
@@ -201,9 +208,41 @@ export function createFakeLibraryMethods() {
       progress.set(`${userId}:${documentId}`, record);
       return { ...record };
     },
+    async addLibraryFeed(userId, input, maxFeeds) {
+      const mine = [...feeds.values()].filter((f) => f.userId === userId);
+      const existing = mine.find((f) => f.feedUrl === input.feedUrl);
+      if (existing) return { status: 'exists', feed: { ...existing } };
+      if (mine.length >= maxFeeds) return { status: 'limit' };
+      const feed = { ...input, userId, id: nextId(), seenKeys: [], createdAt: new Date() };
+      feeds.set(feed.id, feed);
+      return { status: 'added', feed: { ...feed } };
+    },
+    async listLibraryFeeds(userId) {
+      return [...feeds.values()].filter((f) => f.userId === userId).map((f) => ({ ...f }));
+    },
+    async getLibraryFeed(userId, id) {
+      const feed = feeds.get(id);
+      return feed && feed.userId === userId ? { ...feed, seenKeys: [...feed.seenKeys] } : null;
+    },
+    async recordLibraryFeedRefresh(userId, id, refresh) {
+      const feed = feeds.get(id);
+      if (!feed || feed.userId !== userId) return false;
+      if (refresh.title) feed.title = refresh.title;
+      if (refresh.etag !== undefined) feed.etag = refresh.etag ?? undefined;
+      if (refresh.lastModified !== undefined) feed.lastModified = refresh.lastModified ?? undefined;
+      feed.seenKeys.push(...refresh.newKeys);
+      feed.lastRefreshedAt = new Date();
+      return true;
+    },
+    async deleteLibraryFeed(userId, id) {
+      const feed = feeds.get(id);
+      if (!feed || feed.userId !== userId) return false;
+      feeds.delete(id);
+      return true;
+    },
     async deleteAllLibraryData() {
-      return { documents: 0, highlights: 0, progress: 0, units: 0, resources: 0 };
+      return { documents: 0, highlights: 0, progress: 0, units: 0, resources: 0, feeds: 0 };
     },
   };
-  return { methods, documents, highlights, progress };
+  return { methods, documents, highlights, progress, feeds };
 }

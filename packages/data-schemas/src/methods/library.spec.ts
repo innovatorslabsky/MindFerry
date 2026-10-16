@@ -6,6 +6,7 @@ import libraryHighlightSchema from '~/schema/libraryHighlight';
 import libraryProgressSchema from '~/schema/libraryProgress';
 import libraryUnitSchema from '~/schema/libraryUnit';
 import libraryResourceSchema from '~/schema/libraryResource';
+import libraryFeedSchema from '~/schema/libraryFeed';
 import { createLibraryMethods, type LibraryMethods } from './library';
 
 let mongoServer: MongoMemoryServer;
@@ -52,6 +53,9 @@ beforeAll(async () => {
   }
   if (!mongoose.models.LibraryResource) {
     mongoose.model('LibraryResource', libraryResourceSchema);
+  }
+  if (!mongoose.models.LibraryFeed) {
+    mongoose.model('LibraryFeed', libraryFeedSchema);
   }
   methods = createLibraryMethods(mongoose);
   await mongoose.connect(mongoServer.getUri());
@@ -255,6 +259,7 @@ describe('deletion', () => {
       progress: 1,
       units: 0,
       resources: 0,
+      feeds: 0,
     });
     expect(await methods.listLibraryDocuments(userB, { limit: 10 })).toHaveLength(1);
     expect(await methods.listLibraryHighlights(userB)).toHaveLength(1);
@@ -540,5 +545,123 @@ describe('book images', () => {
         }),
       ),
     ).rejects.toThrow();
+  });
+});
+
+describe('tags', () => {
+  it('lists only documents carrying a tag, for the caller only', async () => {
+    const a = await methods.saveLibraryDocument(userA, doc({ urlKey: 'a', title: 'A' }));
+    const b = await methods.saveLibraryDocument(userA, doc({ urlKey: 'b', title: 'B' }));
+    const other = await methods.saveLibraryDocument(userB, doc({ urlKey: 'c', title: 'C' }));
+    await methods.updateLibraryDocument(userA, a.document.id, { tags: ['memory', 'ai'] });
+    await methods.updateLibraryDocument(userA, b.document.id, { tags: ['ai'] });
+    await methods.updateLibraryDocument(userB, other.document.id, { tags: ['memory'] });
+    const memory = await methods.listLibraryDocuments(userA, { tag: 'memory', limit: 10 });
+    expect(memory.map((d) => d.title)).toEqual(['A']);
+    const ai = await methods.listLibraryDocuments(userA, { tag: 'ai', limit: 10 });
+    expect(ai.map((d) => d.title).sort()).toEqual(['A', 'B']);
+    expect(await methods.listLibraryDocuments(userA, { tag: 'none', limit: 10 })).toEqual([]);
+  });
+
+  it('combines a tag with a location', async () => {
+    const a = await methods.saveLibraryDocument(userA, doc({ urlKey: 'a', title: 'A' }));
+    const b = await methods.saveLibraryDocument(userA, doc({ urlKey: 'b', title: 'B' }));
+    for (const saved of [a, b]) {
+      await methods.updateLibraryDocument(userA, saved.document.id, { tags: ['ai'] });
+    }
+    await methods.updateLibraryDocument(userA, b.document.id, { location: 'archive' });
+    const found = await methods.listLibraryDocuments(userA, {
+      tag: 'ai',
+      location: 'archive',
+      limit: 10,
+    });
+    expect(found.map((d) => d.title)).toEqual(['B']);
+  });
+});
+
+describe('followed feeds', () => {
+  const feed = (overrides = {}) => ({
+    feedUrl: 'https://example.test/feed.xml',
+    title: 'Notes',
+    siteUrl: 'https://example.test/',
+    ...overrides,
+  });
+
+  it('follows a feed once, however many times it is added', async () => {
+    const first = await methods.addLibraryFeed(userA, feed(), 10);
+    expect(first).toMatchObject({ status: 'added', feed: { title: 'Notes' } });
+    const again = await methods.addLibraryFeed(userA, feed({ title: 'Renamed' }), 10);
+    expect(again).toMatchObject({ status: 'exists', feed: { title: 'Notes' } });
+    expect(await methods.listLibraryFeeds(userA)).toHaveLength(1);
+  });
+
+  it('lets two people follow the same feed, privately', async () => {
+    await methods.addLibraryFeed(userA, feed(), 10);
+    const b = await methods.addLibraryFeed(userB, feed(), 10);
+    expect(b.status).toBe('added');
+    expect(await methods.listLibraryFeeds(userA)).toHaveLength(1);
+    expect(await methods.listLibraryFeeds(userB)).toHaveLength(1);
+  });
+
+  it('stops following at the limit, but still recognises one already followed', async () => {
+    await methods.addLibraryFeed(userA, feed({ feedUrl: 'https://a.test/f' }), 2);
+    await methods.addLibraryFeed(userA, feed({ feedUrl: 'https://b.test/f' }), 2);
+    expect(await methods.addLibraryFeed(userA, feed({ feedUrl: 'https://c.test/f' }), 2)).toEqual({
+      status: 'limit',
+    });
+    expect(
+      (await methods.addLibraryFeed(userA, feed({ feedUrl: 'https://a.test/f' }), 2)).status,
+    ).toBe('exists');
+    expect(await methods.listLibraryFeeds(userA)).toHaveLength(2);
+  });
+
+  it('remembers what a refresh saw: validators, new keys, and a capped list of keys', async () => {
+    const added = await methods.addLibraryFeed(userA, feed(), 10);
+    const id = (added as { feed: { id: string } }).feed.id;
+    expect(
+      await methods.recordLibraryFeedRefresh(userA, id, {
+        etag: 'W/"1"',
+        lastModified: 'Mon',
+        newKeys: ['k1', 'k2'],
+        title: 'Notes (renamed)',
+      }),
+    ).toBe(true);
+    const state = await methods.getLibraryFeed(userA, id);
+    expect(state).toMatchObject({
+      title: 'Notes (renamed)',
+      etag: 'W/"1"',
+      lastModified: 'Mon',
+      seenKeys: ['k1', 'k2'],
+    });
+    expect(state?.lastRefreshedAt).toBeInstanceOf(Date);
+    await methods.recordLibraryFeedRefresh(userA, id, { etag: null, newKeys: ['k3'] });
+    const next = await methods.getLibraryFeed(userA, id);
+    expect(next?.seenKeys).toEqual(['k1', 'k2', 'k3']);
+    expect(next).not.toHaveProperty('etag');
+    expect(next?.lastModified).toBe('Mon');
+    const many = Array.from({ length: 520 }, (_, i) => `n${i}`);
+    await methods.recordLibraryFeedRefresh(userA, id, { newKeys: many });
+    const capped = await methods.getLibraryFeed(userA, id);
+    expect(capped?.seenKeys).toHaveLength(500);
+    expect(capped?.seenKeys.at(-1)).toBe('n519');
+  });
+
+  it('will not read, refresh or delete another user\u2019s feed', async () => {
+    const added = await methods.addLibraryFeed(userA, feed(), 10);
+    const id = (added as { feed: { id: string } }).feed.id;
+    expect(await methods.getLibraryFeed(userB, id)).toBeNull();
+    expect(await methods.recordLibraryFeedRefresh(userB, id, { newKeys: ['x'] })).toBe(false);
+    expect(await methods.deleteLibraryFeed(userB, id)).toBe(false);
+    expect(await methods.getLibraryFeed(userA, id)).not.toBeNull();
+    expect(await methods.deleteLibraryFeed(userA, id)).toBe(true);
+    expect(await methods.deleteLibraryFeed(userA, 'nope')).toBe(false);
+    expect(await methods.getLibraryFeed(userA, 'nope')).toBeNull();
+  });
+
+  it('is removed with the rest of a user\u2019s library', async () => {
+    await methods.addLibraryFeed(userA, feed(), 10);
+    await methods.addLibraryFeed(userB, feed(), 10);
+    expect(await methods.deleteAllLibraryData(userA)).toMatchObject({ feeds: 1 });
+    expect(await methods.listLibraryFeeds(userB)).toHaveLength(1);
   });
 });

@@ -11,13 +11,15 @@ export type WorkerJob =
   | { op: 'fetchArticle'; url: string }
   | { op: 'extractHtml'; url: string; html: string }
   | { op: 'parseUpload'; bytes: Uint8Array }
-  | { op: 'readFeed'; url: string };
+  | { op: 'readFeed'; url: string }
+  | { op: 'pollFeed'; url: string; etag?: string | null; lastModified?: string | null };
 
 export interface WorkerResultByOp {
   fetchArticle: DocumentDraft;
   extractHtml: DocumentDraft;
   parseUpload: UploadDraft;
   readFeed: FeedFetchResult;
+  pollFeed: FeedFetchResult;
 }
 
 export type WorkerReply =

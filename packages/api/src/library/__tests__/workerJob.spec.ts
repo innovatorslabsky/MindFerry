@@ -131,11 +131,13 @@ describe('createIsolatedIngest', () => {
     await ingest.saveHtml('https://example.test/b', '<p>x</p>');
     await ingest.ingestUpload(bytes);
     await ingest.subscribeToUrl('https://example.test/feed');
+    await ingest.fetchFeed('https://example.test/feed', { etag: 'v1' });
     expect(jobs).toEqual([
       { op: 'fetchArticle', url: 'https://example.test/a' },
       { op: 'extractHtml', url: 'https://example.test/b', html: '<p>x</p>' },
       { op: 'parseUpload', bytes },
       { op: 'readFeed', url: 'https://example.test/feed' },
+      { op: 'pollFeed', url: 'https://example.test/feed', etag: 'v1', lastModified: undefined },
     ]);
   });
 });

@@ -8,6 +8,11 @@ import type {
   LibraryDocumentRecord,
   LibraryDocumentSaveResult,
   LibraryDocumentSummary,
+  LibraryFeedAddResult,
+  LibraryFeedInput,
+  LibraryFeedRecord,
+  LibraryFeedRefreshRecord,
+  LibraryFeedState,
   LibraryHighlightInput,
   LibraryHighlightPatch,
   LibraryHighlightRecord,
@@ -24,6 +29,7 @@ import type { ILibraryHighlight } from '~/schema/libraryHighlight';
 import type { ILibraryProgress } from '~/schema/libraryProgress';
 import type { ILibraryUnit } from '~/schema/libraryUnit';
 import type { ILibraryResource } from '~/schema/libraryResource';
+import type { ILibraryFeed } from '~/schema/libraryFeed';
 import { tenantSafeBulkWrite } from '~/utils/tenantBulkWrite';
 import logger from '~/config/winston';
 
@@ -99,10 +105,27 @@ export interface LibraryMethods {
     contentHash: string,
     unitIndex?: number,
   ) => Promise<LibraryProgressRecord | null>;
+  /** Follows a feed. Following one already followed changes nothing; past `maxFeeds` nothing is added. */
+  addLibraryFeed: (
+    userId: string,
+    input: LibraryFeedInput,
+    maxFeeds: number,
+  ) => Promise<LibraryFeedAddResult>;
+  listLibraryFeeds: (userId: string) => Promise<LibraryFeedRecord[]>;
+  /** One followed feed with what a refresh needs; `null` when it is not the user's. */
+  getLibraryFeed: (userId: string, id: string) => Promise<LibraryFeedState | null>;
+  recordLibraryFeedRefresh: (
+    userId: string,
+    id: string,
+    refresh: LibraryFeedRefreshRecord,
+  ) => Promise<boolean>;
+  deleteLibraryFeed: (userId: string, id: string) => Promise<boolean>;
   deleteAllLibraryData: (userId: string) => Promise<LibraryDataDeleteResult>;
 }
 
 const UNIT_INSERT_BATCH = 100;
+/** Items remembered per feed. Older keys drop off, so an item old enough to drop is old enough not to return. */
+const MAX_SEEN_KEYS = 500;
 /** Images are large; a few per write keeps each insert well under the wire-protocol message limit. */
 const RESOURCE_INSERT_BATCH = 4;
 
@@ -170,6 +193,26 @@ function toHighlightRecord(doc: ILibraryHighlight): LibraryHighlightRecord {
     orphaned: doc.orphaned,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
+  };
+}
+
+function toFeedRecord(doc: ILibraryFeed): LibraryFeedRecord {
+  return {
+    id: (doc._id as Types.ObjectId).toString(),
+    feedUrl: doc.feedUrl,
+    title: doc.title,
+    ...(doc.siteUrl === undefined ? {} : { siteUrl: doc.siteUrl }),
+    ...(doc.lastRefreshedAt === undefined ? {} : { lastRefreshedAt: doc.lastRefreshedAt }),
+    createdAt: doc.createdAt,
+  };
+}
+
+function toFeedState(doc: ILibraryFeed): LibraryFeedState {
+  return {
+    ...toFeedRecord(doc),
+    ...(doc.etag === undefined ? {} : { etag: doc.etag }),
+    ...(doc.lastModified === undefined ? {} : { lastModified: doc.lastModified }),
+    seenKeys: doc.seenKeys ?? [],
   };
 }
 
@@ -384,6 +427,9 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     const filter: Record<string, unknown> = { userId: toObjectId(userId) };
     if (query.location) {
       filter.location = query.location;
+    }
+    if (query.tag) {
+      filter.tags = query.tag;
     }
     const docs = (await LibraryDocument.find(filter, SUMMARY_PROJECTION)
       .sort({ updatedAt: -1, _id: -1 })
@@ -624,14 +670,113 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     return toProgressRecord(doc);
   }
 
+  async function addLibraryFeed(
+    userId: string,
+    input: LibraryFeedInput,
+    maxFeeds: number,
+  ): Promise<LibraryFeedAddResult> {
+    const owner = toObjectId(userId);
+    const LibraryFeed = mongoose.models.LibraryFeed;
+    const existing = (await LibraryFeed.findOne({
+      userId: owner,
+      feedUrl: input.feedUrl,
+    }).lean()) as unknown as ILibraryFeed | null;
+    if (existing) {
+      return { status: 'exists', feed: toFeedRecord(existing) };
+    }
+    if ((await LibraryFeed.countDocuments({ userId: owner })) >= maxFeeds) {
+      return { status: 'limit' };
+    }
+    const created = await LibraryFeed.findOneAndUpdate(
+      { userId: owner, feedUrl: input.feedUrl },
+      {
+        $setOnInsert: {
+          userId: owner,
+          feedUrl: input.feedUrl,
+          title: input.title,
+          ...(input.siteUrl ? { siteUrl: input.siteUrl } : {}),
+          seenKeys: [],
+        },
+      },
+      { upsert: true, new: true },
+    ).lean();
+    return { status: 'added', feed: toFeedRecord(created as unknown as ILibraryFeed) };
+  }
+
+  async function listLibraryFeeds(userId: string): Promise<LibraryFeedRecord[]> {
+    const docs = (await mongoose.models.LibraryFeed.find({ userId: toObjectId(userId) })
+      .sort({ createdAt: -1, _id: -1 })
+      .lean()) as unknown as ILibraryFeed[];
+    return docs.map(toFeedRecord);
+  }
+
+  async function getLibraryFeed(userId: string, id: string): Promise<LibraryFeedState | null> {
+    if (!Types.ObjectId.isValid(id)) {
+      return null;
+    }
+    const doc = (await mongoose.models.LibraryFeed.findOne({
+      _id: toObjectId(id),
+      userId: toObjectId(userId),
+    }).lean()) as unknown as ILibraryFeed | null;
+    return doc ? toFeedState(doc) : null;
+  }
+
+  async function recordLibraryFeedRefresh(
+    userId: string,
+    id: string,
+    refresh: LibraryFeedRefreshRecord,
+  ): Promise<boolean> {
+    if (!Types.ObjectId.isValid(id)) {
+      return false;
+    }
+    const filter = { _id: toObjectId(id), userId: toObjectId(userId) };
+    const LibraryFeed = mongoose.models.LibraryFeed;
+    const set: Record<string, unknown> = { lastRefreshedAt: new Date() };
+    const unset: Record<string, 1> = {};
+    if (refresh.title) {
+      set.title = refresh.title;
+    }
+    if (refresh.etag === null) {
+      unset.etag = 1;
+    } else if (refresh.etag !== undefined) {
+      set.etag = refresh.etag;
+    }
+    if (refresh.lastModified === null) {
+      unset.lastModified = 1;
+    } else if (refresh.lastModified !== undefined) {
+      set.lastModified = refresh.lastModified;
+    }
+    const update: Record<string, unknown> = {
+      $set: set,
+      ...(refresh.newKeys.length > 0
+        ? { $push: { seenKeys: { $each: refresh.newKeys, $slice: -MAX_SEEN_KEYS } } }
+        : {}),
+      ...(Object.keys(unset).length > 0 ? { $unset: unset } : {}),
+    };
+    const result = await LibraryFeed.updateOne(filter, update);
+    return result.matchedCount > 0;
+  }
+
+  async function deleteLibraryFeed(userId: string, id: string): Promise<boolean> {
+    if (!Types.ObjectId.isValid(id)) {
+      return false;
+    }
+    const result = await mongoose.models.LibraryFeed.deleteOne({
+      _id: toObjectId(id),
+      userId: toObjectId(userId),
+    });
+    return result.deletedCount > 0;
+  }
+
   async function deleteAllLibraryData(userId: string): Promise<LibraryDataDeleteResult> {
     const owner = toObjectId(userId);
-    const [documents, highlights, progress, units, resources] = await Promise.all([
+    const [documents, highlights, progress, units, resources, feeds] = await Promise.all([
       mongoose.models.LibraryDocument.deleteMany({ userId: owner }),
       mongoose.models.LibraryHighlight.deleteMany({ userId: owner }),
       mongoose.models.LibraryProgress.deleteMany({ userId: owner }),
       mongoose.models.LibraryUnit.deleteMany({ userId: owner }),
       mongoose.models.LibraryResource.deleteMany({ userId: owner }),
+      mongoose.models.LibraryFeed.deleteMany({ userId: owner }),
     ]);
     return {
       documents: documents.deletedCount,
@@ -639,6 +784,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       progress: progress.deletedCount,
       units: units.deletedCount,
       resources: resources.deletedCount,
+      feeds: feeds.deletedCount,
     };
   }
 
@@ -660,6 +806,11 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     reanchorLibraryHighlights,
     getLibraryProgress,
     setLibraryProgress,
+    addLibraryFeed,
+    listLibraryFeeds,
+    getLibraryFeed,
+    recordLibraryFeedRefresh,
+    deleteLibraryFeed,
     deleteAllLibraryData,
   };
 }

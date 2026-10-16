@@ -43,9 +43,10 @@ describe('createLibraryIngest', () => {
     expect(createLibraryIngest({ ...base, mode: 'inline' })).toEqual({});
   });
 
-  it('process mode supplies all four isolated parsers', () => {
+  it('process mode supplies every isolated parser', () => {
     const ingest = createLibraryIngest(base, '/nonexistent/entry.cjs');
     expect(Object.keys(ingest).sort()).toEqual([
+      'fetchFeed',
       'ingestUpload',
       'saveHtml',
       'saveUrl',

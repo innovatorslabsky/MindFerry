@@ -9,6 +9,11 @@ export interface LibraryIngest {
   saveHtml: (url: string, html: string) => Promise<DocumentDraft>;
   ingestUpload: (bytes: Uint8Array) => Promise<UploadDraft>;
   subscribeToUrl: (url: string) => Promise<FeedFetchResult>;
+  /** Re-reads a feed already followed, with the validators from the last read. */
+  fetchFeed: (
+    url: string,
+    validators: { etag?: string | null; lastModified?: string | null },
+  ) => Promise<FeedFetchResult>;
 }
 
 /** Runs every parse in a separate, restricted process. */
@@ -19,5 +24,7 @@ export function createIsolatedIngest(runner: ProcessRunner): LibraryIngest {
       (await runner.run({ op: 'extractHtml', url, html })) as DocumentDraft,
     ingestUpload: async (bytes) => (await runner.run({ op: 'parseUpload', bytes })) as UploadDraft,
     subscribeToUrl: async (url) => (await runner.run({ op: 'readFeed', url })) as FeedFetchResult,
+    fetchFeed: async (url, { etag, lastModified }) =>
+      (await runner.run({ op: 'pollFeed', url, etag, lastModified })) as FeedFetchResult,
   };
 }
