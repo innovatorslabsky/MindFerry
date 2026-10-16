@@ -6,23 +6,45 @@ connected to the Context Hub can search and read what you saved. Off by default.
 ```yaml
 contextHub:
   library:
-    enabled: true     # the library API; the MCP tools also need contextHub.mcp.enabled
-    isolation:        # all optional; these are the defaults
-      mode: process   # or "inline" (single trusted user only, see below)
+    enabled: true # the library API; the MCP tools also need contextHub.mcp.enabled
+    isolation: # all optional; these are the defaults
+      mode: process # or "inline" (single trusted user only, see below)
       maxConcurrent: 2
       maxQueue: 16
       timeoutMs: 60000
       memoryMb: 768
 ```
 
+## Using it
+
+With `contextHub.library.enabled: true` a Library entry appears in the sidebar (and in the mobile
+drawer), leading to `/library`:
+
+- paste an article address and press **Save**, or **Upload PDF or EPUB**;
+- the **Inbox / Later / Archive** buttons filter the list; typing in the search box searches the
+  title and text of everything instead; each row can be moved or deleted;
+- opening an article shows it cleanly with a **Highlights** panel beside it. Select text and pick a
+  colour to highlight it; add a note under a highlight; delete it from the panel. Highlights stay put
+  after reloading, and if a saved page is saved again with different text they are moved, or marked
+  as not found, never lost;
+- the reader remembers where you stopped (a text position, not a scroll distance) and returns there;
+- an EPUB shows its contents and is read a chapter at a time, with highlights per chapter; a PDF is
+  read a page at a time as reflowed text.
+
+What the screens do not do yet: highlight PDF pages (they need a page view that reproduces the exact
+text layer), show EPUB images, show the highlights panel on narrow screens, edit tags, or subscribe
+to feeds (the feed preview endpoint has no screen). If the text the browser shows ever differs from
+the text the server anchored highlights in, highlighting is switched off for that text with a notice,
+rather than saving highlights in the wrong place.
+
 ## What you can save
 
-| Source | How | Stored as |
-| --- | --- | --- |
-| A web page | `POST /api/library/documents` with `{ url }` — the server fetches it | one text (`kind: article`) |
-| A page you already have open | the same call with `{ url, html }` — no fetch happens | one text |
-| A PDF or EPUB | `POST /api/library/uploads`, multipart field `file`, up to 50 MiB | one **unit** per page (PDF) or chapter (EPUB), `kind: pdf` / `epub` |
-| An RSS, Atom or JSON feed | `POST /api/library/feeds/preview` with `{ url }` | **nothing** — it lists items; save the ones you want by URL |
+| Source                       | How                                                                  | Stored as                                                           |
+| ---------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| A web page                   | `POST /api/library/documents` with `{ url }` — the server fetches it | one text (`kind: article`)                                          |
+| A page you already have open | the same call with `{ url, html }` — no fetch happens                | one text                                                            |
+| A PDF or EPUB                | `POST /api/library/uploads`, multipart field `file`, up to 50 MiB    | one **unit** per page (PDF) or chapter (EPUB), `kind: pdf` / `epub` |
+| An RSS, Atom or JSON feed    | `POST /api/library/feeds/preview` with `{ url }`                     | **nothing** — it lists items; save the ones you want by URL         |
 
 The file type is decided from the bytes, never the file name or declared type. The uploaded file is
 not kept: its text, chapters and table of contents are.

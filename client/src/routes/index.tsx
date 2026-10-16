@@ -48,6 +48,16 @@ const loadInsightsView = () =>
     Component: m.default,
   }));
 
+const loadLibraryView = () =>
+  importWithRecovery(() => import('~/components/Library')).then((m) => ({
+    Component: m.LibraryListRoute,
+  }));
+
+const loadLibraryReader = () =>
+  importWithRecovery(() => import('~/components/Library')).then((m) => ({
+    Component: m.LibraryReaderRoute,
+  }));
+
 const loadProjectsView = () =>
   importWithRecovery(() => import('~/components/Projects')).then((m) => ({
     Component: m.ProjectsView,
@@ -184,6 +194,14 @@ export const router = createBrowserRouter(
                 {
                   path: 'skills/:skillId/edit',
                   lazy: loadSkillsView,
+                },
+                {
+                  path: 'library',
+                  lazy: loadLibraryView,
+                },
+                {
+                  path: 'library/:id',
+                  lazy: loadLibraryReader,
                 },
                 {
                   path: 'projects',

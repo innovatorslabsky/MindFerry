@@ -20,6 +20,7 @@ import { filesDialogTriggerAtom, showFilesDialogAtom } from '~/store/filesDialog
 import { ChatContext, ChatFormProvider, ActivePanelProvider } from '~/Providers';
 import { MobileHeader, MobileBottomBar, MobileShortcutTargets } from './mobile';
 import AgentMarketplaceButton from '~/components/Nav/AgentMarketplaceButton';
+import LibraryButton from '~/components/Nav/LibraryButton';
 import { MyFilesModal } from '~/components/Chat/Input/Files/MyFilesModal';
 import useUnifiedSidebarLinks from '~/hooks/Nav/useUnifiedSidebarLinks';
 import useSidebarToggle from '~/hooks/Nav/useSidebarToggle';
@@ -259,6 +260,7 @@ function UnifiedSidebar({
               does not scroll away with the chats. */}
           <div className="shrink-0 px-3 pt-2 empty:hidden">
             <AgentMarketplaceButton layout="row" onNavigate={handleCollapse} />
+            <LibraryButton layout="row" onNavigate={handleCollapse} />
           </div>
           <nav
             id="chat-history-nav"

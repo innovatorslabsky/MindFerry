@@ -1,0 +1,180 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { QueryKeys, dataService } from 'librechat-data-provider';
+import type { UseMutationResult } from '@tanstack/react-query';
+import type t from 'librechat-data-provider';
+
+/** Saving, uploading or deleting changes what every list shows. */
+function useRefreshLibraryLists() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries([QueryKeys.libraryDocuments]);
+}
+
+/** Saves a page by address, or from HTML the browser already holds. */
+export const useSaveLibraryDocumentMutation = (
+  options?: t.MutationOptions<t.TLibrarySaveResponse, t.TLibrarySaveRequest>,
+): UseMutationResult<t.TLibrarySaveResponse, unknown, t.TLibrarySaveRequest, unknown> => {
+  const refresh = useRefreshLibraryLists();
+  const queryClient = useQueryClient();
+  return useMutation((request: t.TLibrarySaveRequest) => dataService.saveLibraryDocument(request), {
+    ...options,
+    onSuccess: (data, variables, context) => {
+      refresh();
+      // A page saved again may have been re-read, so an open copy is stale.
+      queryClient.invalidateQueries([QueryKeys.libraryDocument, data.document.id]);
+      queryClient.invalidateQueries([QueryKeys.libraryUnit, data.document.id]);
+      options?.onSuccess?.(data, variables, context);
+    },
+  });
+};
+
+export const useUploadLibraryFileMutation = (
+  options?: t.MutationOptions<t.TLibrarySaveResponse, FormData>,
+): UseMutationResult<t.TLibrarySaveResponse, unknown, FormData, unknown> => {
+  const refresh = useRefreshLibraryLists();
+  return useMutation((form: FormData) => dataService.uploadLibraryFile(form), {
+    ...options,
+    onSuccess: (data, variables, context) => {
+      refresh();
+      options?.onSuccess?.(data, variables, context);
+    },
+  });
+};
+
+export type UpdateLibraryDocumentVariables = {
+  id: string;
+  patch: { location?: t.TLibraryLocation; tags?: string[] };
+};
+
+export const useUpdateLibraryDocumentMutation = (
+  options?: t.MutationOptions<
+    { document: t.TLibraryDocumentSummary },
+    UpdateLibraryDocumentVariables
+  >,
+): UseMutationResult<
+  { document: t.TLibraryDocumentSummary },
+  unknown,
+  UpdateLibraryDocumentVariables,
+  unknown
+> => {
+  const refresh = useRefreshLibraryLists();
+  const queryClient = useQueryClient();
+  return useMutation(
+    ({ id, patch }: UpdateLibraryDocumentVariables) => dataService.updateLibraryDocument(id, patch),
+    {
+      ...options,
+      onSuccess: (data, variables, context) => {
+        refresh();
+        queryClient.invalidateQueries([QueryKeys.libraryDocument, variables.id]);
+        options?.onSuccess?.(data, variables, context);
+      },
+    },
+  );
+};
+
+export const useDeleteLibraryDocumentMutation = (
+  options?: t.MutationOptions<void, { id: string }>,
+): UseMutationResult<void, unknown, { id: string }, unknown> => {
+  const refresh = useRefreshLibraryLists();
+  const queryClient = useQueryClient();
+  return useMutation(({ id }: { id: string }) => dataService.deleteLibraryDocument(id), {
+    ...options,
+    onSuccess: (data, variables, context) => {
+      refresh();
+      queryClient.removeQueries([QueryKeys.libraryDocument, variables.id]);
+      queryClient.removeQueries([QueryKeys.libraryUnit, variables.id]);
+      options?.onSuccess?.(data, variables, context);
+    },
+  });
+};
+
+export const usePreviewLibraryFeedMutation = (
+  options?: t.MutationOptions<{ feed: t.TLibraryFeedPreview }, string>,
+): UseMutationResult<{ feed: t.TLibraryFeedPreview }, unknown, string, unknown> =>
+  useMutation((url: string) => dataService.previewLibraryFeed(url), options);
+
+/** The reading position is a quiet write: nothing refetches because of it. */
+export const useSetLibraryProgressMutation = (): UseMutationResult<
+  { progress: t.TLibraryProgress },
+  unknown,
+  { id: string; textOffset: number; unitIndex?: number },
+  unknown
+> =>
+  useMutation(({ id, ...body }: { id: string; textOffset: number; unitIndex?: number }) =>
+    dataService.setLibraryProgress(id, body),
+  );
+
+/** A highlight belongs to the open document or unit, so only that one is refreshed. */
+function useRefreshHighlights() {
+  const queryClient = useQueryClient();
+  return (documentId: string) => {
+    queryClient.invalidateQueries([QueryKeys.libraryDocument, documentId]);
+    queryClient.invalidateQueries([QueryKeys.libraryUnit, documentId]);
+  };
+}
+
+export const useCreateLibraryHighlightMutation = (
+  options?: t.MutationOptions<{ highlight: t.TLibraryHighlight }, t.TLibraryCreateHighlight>,
+): UseMutationResult<
+  { highlight: t.TLibraryHighlight },
+  unknown,
+  t.TLibraryCreateHighlight,
+  unknown
+> => {
+  const refresh = useRefreshHighlights();
+  return useMutation(
+    (data: t.TLibraryCreateHighlight) => dataService.createLibraryHighlight(data),
+    {
+      ...options,
+      onSuccess: (data, variables, context) => {
+        refresh(variables.documentId);
+        options?.onSuccess?.(data, variables, context);
+      },
+    },
+  );
+};
+
+export type UpdateLibraryHighlightVariables = {
+  id: string;
+  documentId: string;
+  patch: t.TLibraryPatchHighlight;
+};
+
+export const useUpdateLibraryHighlightMutation = (
+  options?: t.MutationOptions<{ highlight: t.TLibraryHighlight }, UpdateLibraryHighlightVariables>,
+): UseMutationResult<
+  { highlight: t.TLibraryHighlight },
+  unknown,
+  UpdateLibraryHighlightVariables,
+  unknown
+> => {
+  const refresh = useRefreshHighlights();
+  return useMutation(
+    ({ id, patch }: UpdateLibraryHighlightVariables) =>
+      dataService.updateLibraryHighlight(id, patch),
+    {
+      ...options,
+      onSuccess: (data, variables, context) => {
+        refresh(variables.documentId);
+        options?.onSuccess?.(data, variables, context);
+      },
+    },
+  );
+};
+
+export type DeleteLibraryHighlightVariables = { id: string; documentId: string };
+
+export const useDeleteLibraryHighlightMutation = (
+  options?: t.MutationOptions<void, DeleteLibraryHighlightVariables>,
+): UseMutationResult<void, unknown, DeleteLibraryHighlightVariables, unknown> => {
+  const refresh = useRefreshHighlights();
+  return useMutation(
+    ({ id }: DeleteLibraryHighlightVariables) => dataService.deleteLibraryHighlight(id),
+    {
+      ...options,
+      onSuccess: (data, variables, context) => {
+        refresh(variables.documentId);
+        options?.onSuccess?.(data, variables, context);
+      },
+    },
+  );
+};

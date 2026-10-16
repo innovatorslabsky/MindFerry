@@ -3326,6 +3326,8 @@ export type TStartupConfig = {
   /** Whether the operator has turned on the context hub archive
    *  (`contextHub.enabled`), independent of its MCP surface. */
   contextHubEnabled?: boolean;
+  /** Whether the operator has turned on the reading library (`contextHub.library.enabled`). */
+  libraryEnabled?: boolean;
   /** Conversation-owned code-environment decision protocol supported by the API.
    * Clients must not emit selection-less decisions unless this is advertised. */
   codeEnvironmentDecisionVersion?: typeof CODE_ENVIRONMENT_DECISION_VERSION;

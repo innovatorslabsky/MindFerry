@@ -1,0 +1,64 @@
+import { useRecoilValue } from 'recoil';
+import { useQuery } from '@tanstack/react-query';
+import { QueryKeys, dataService } from 'librechat-data-provider';
+import type { QueryObserverResult, UseQueryOptions } from '@tanstack/react-query';
+import type t from 'librechat-data-provider';
+import store from '~/store';
+
+/** The person's saved documents, or matches for `q`. Text is not included: a list never needs it. */
+export const useLibraryDocumentsQuery = (
+  params: t.TLibraryListParams = {},
+  config?: UseQueryOptions<t.TLibraryListResponse>,
+): QueryObserverResult<t.TLibraryListResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+  return useQuery<t.TLibraryListResponse>(
+    [
+      QueryKeys.libraryDocuments,
+      params.q ?? '',
+      params.location ?? '',
+      params.limit ?? null,
+      params.skip ?? null,
+    ],
+    () => dataService.listLibraryDocuments(params),
+    {
+      refetchOnWindowFocus: false,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
+/** One document with its highlights and reading position. A book comes back as a listing of units. */
+export const useLibraryDocumentQuery = (
+  id: string | undefined,
+  config?: UseQueryOptions<t.TLibraryDocumentResponse>,
+): QueryObserverResult<t.TLibraryDocumentResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+  return useQuery<t.TLibraryDocumentResponse>(
+    [QueryKeys.libraryDocument, id],
+    () => dataService.getLibraryDocument(id as string),
+    {
+      refetchOnWindowFocus: false,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled && id != null,
+    },
+  );
+};
+
+/** One chapter or page of a book, with the highlights made in it. */
+export const useLibraryUnitQuery = (
+  id: string | undefined,
+  index: number | undefined,
+  config?: UseQueryOptions<t.TLibraryUnitResponse>,
+): QueryObserverResult<t.TLibraryUnitResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+  return useQuery<t.TLibraryUnitResponse>(
+    [QueryKeys.libraryUnit, id, index],
+    () => dataService.getLibraryUnit(id as string, index as number),
+    {
+      refetchOnWindowFocus: false,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled && id != null && index != null,
+    },
+  );
+};

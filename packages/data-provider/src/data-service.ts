@@ -1027,6 +1027,80 @@ export function listHubThreads(params: {
   return request.get(`${endpoints.hubThreads()}${suffix}`);
 }
 
+export function listLibraryDocuments(
+  params: t.TLibraryListParams = {},
+): Promise<t.TLibraryListResponse> {
+  const query = new URLSearchParams();
+  if (params.q) {
+    query.set('q', params.q);
+  }
+  if (params.location) {
+    query.set('location', params.location);
+  }
+  if (params.limit) {
+    query.set('limit', String(params.limit));
+  }
+  if (params.skip) {
+    query.set('skip', String(params.skip));
+  }
+  return request.get(endpoints.libraryDocuments(query.toString()));
+}
+
+export function getLibraryDocument(id: string): Promise<t.TLibraryDocumentResponse> {
+  return request.get(endpoints.libraryDocument(id));
+}
+
+export function getLibraryUnit(id: string, index: number): Promise<t.TLibraryUnitResponse> {
+  return request.get(endpoints.libraryUnit(id, index));
+}
+
+export function saveLibraryDocument(data: t.TLibrarySaveRequest): Promise<t.TLibrarySaveResponse> {
+  return request.post(endpoints.libraryDocuments(), data);
+}
+
+export function uploadLibraryFile(data: FormData): Promise<t.TLibrarySaveResponse> {
+  return request.postMultiPart(endpoints.libraryUploads(), data);
+}
+
+export function updateLibraryDocument(
+  id: string,
+  patch: { location?: t.TLibraryLocation; tags?: string[] },
+): Promise<{ document: t.TLibraryDocumentSummary }> {
+  return request.patch(endpoints.libraryDocument(id), patch);
+}
+
+export function deleteLibraryDocument(id: string): Promise<void> {
+  return request.delete(endpoints.libraryDocument(id));
+}
+
+export function previewLibraryFeed(url: string): Promise<{ feed: t.TLibraryFeedPreview }> {
+  return request.post(endpoints.libraryFeedPreview(), { url });
+}
+
+export function setLibraryProgress(
+  id: string,
+  data: { textOffset: number; unitIndex?: number },
+): Promise<{ progress: t.TLibraryProgress }> {
+  return request.put(endpoints.libraryProgress(id), data);
+}
+
+export function createLibraryHighlight(
+  data: t.TLibraryCreateHighlight,
+): Promise<{ highlight: t.TLibraryHighlight }> {
+  return request.post(endpoints.libraryHighlights(), data);
+}
+
+export function updateLibraryHighlight(
+  id: string,
+  patch: t.TLibraryPatchHighlight,
+): Promise<{ highlight: t.TLibraryHighlight }> {
+  return request.patch(endpoints.libraryHighlight(id), patch);
+}
+
+export function deleteLibraryHighlight(id: string): Promise<void> {
+  return request.delete(endpoints.libraryHighlight(id));
+}
+
 export function continueHubThread(
   id: string,
   target: t.THubContinueRequest = {},

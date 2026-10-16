@@ -202,6 +202,27 @@ export const hubThreads = () => `${BASE_URL}/api/hub/threads`;
 
 export const hubThread = (id: string) => `${BASE_URL}/api/hub/threads/${encodeURIComponent(id)}`;
 
+export const libraryDocuments = (params?: string) =>
+  `${BASE_URL}/api/library/documents${params ? `?${params}` : ''}`;
+
+export const libraryDocument = (id: string) =>
+  `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}`;
+
+export const libraryUnit = (id: string, index: number) =>
+  `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/units/${index}`;
+
+export const libraryProgress = (id: string) =>
+  `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/progress`;
+
+export const libraryUploads = () => `${BASE_URL}/api/library/uploads`;
+
+export const libraryFeedPreview = () => `${BASE_URL}/api/library/feeds/preview`;
+
+export const libraryHighlights = () => `${BASE_URL}/api/library/highlights`;
+
+export const libraryHighlight = (id: string) =>
+  `${BASE_URL}/api/library/highlights/${encodeURIComponent(id)}`;
+
 export const hubNotes = () => `${BASE_URL}/api/hub/notes`;
 
 export const hubNote = (id: string) => `${BASE_URL}/api/hub/notes/${encodeURIComponent(id)}`;

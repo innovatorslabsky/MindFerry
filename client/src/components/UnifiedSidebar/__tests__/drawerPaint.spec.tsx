@@ -4,6 +4,9 @@ import type { ReactNode } from 'react';
 import { DRAWER_UNPAINTED, MOBILE_DRAWER_ID } from '../constants';
 import UnifiedSidebar from '../UnifiedSidebar';
 
+/** The library entry reads the startup config, which these tests do not provide; it is covered by its own spec. */
+jest.mock('~/components/Nav/LibraryButton', () => ({ __esModule: true, default: () => null }));
+
 /**
  * A closed drawer is translated off the viewport, which hides it without taking
  * it out of the paint: iOS Safari composites the scroller inside it separately

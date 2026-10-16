@@ -1,0 +1,270 @@
+import { useCallback, useMemo, useRef } from 'react';
+import type { CSSProperties } from 'react';
+import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Button, Spinner } from '@librechat/client';
+import type {
+  TLibraryDocumentSummary,
+  TLibraryHighlight,
+  TLibraryProgress,
+  TLibraryUnitSummary,
+} from 'librechat-data-provider';
+import { useLibraryDocumentQuery, useLibraryUnitQuery } from '~/data-provider';
+import ReaderBody, { type ReaderBodyHandle } from './ReaderBody';
+import HighlightsPanel from './HighlightsPanel';
+import { useLocalize } from '~/hooks';
+import { cn } from '~/utils';
+
+const EMPTY: readonly TLibraryHighlight[] = [];
+
+/** Only a position recorded against exactly this text still means anything. */
+function resumeOffset(progress: TLibraryProgress | null, hash: string, unit?: number): number {
+  if (!progress || progress.contentHash !== hash || progress.unitIndex !== unit) {
+    return 0;
+  }
+  return progress.textOffset;
+}
+
+function Contents({
+  document,
+  units,
+  current,
+  onSelect,
+}: {
+  document: TLibraryDocumentSummary;
+  units: TLibraryUnitSummary[];
+  current: number;
+  onSelect: (index: number) => void;
+}) {
+  const localize = useLocalize();
+  const unitLabel = (unit: TLibraryUnitSummary) =>
+    localize(unit.kind === 'page' ? 'com_library_unit_page' : 'com_library_unit_chapter', {
+      0: unit.index + 1,
+    });
+  const entries =
+    document.toc.length > 0
+      ? document.toc.map((entry) => ({
+          key: `${entry.depth}-${entry.title}-${entry.unitIndex ?? 'x'}-${entry.fragment ?? ''}`,
+          title: entry.title,
+          depth: entry.depth,
+          index: entry.unitIndex,
+        }))
+      : units.map((unit) => ({
+          key: String(unit.index),
+          title: unit.title || unitLabel(unit),
+          depth: 0,
+          index: unit.index,
+        }));
+  return (
+    <nav aria-label={localize('com_library_contents')} className="flex h-full flex-col">
+      <h2 className="text-text-primary border-border-light border-b px-3 py-3 text-sm font-semibold">
+        {localize('com_library_contents')}
+      </h2>
+      <ul className="min-h-0 flex-1 overflow-y-auto py-1">
+        {entries.map((entry) => (
+          <li key={entry.key}>
+            <button
+              type="button"
+              disabled={entry.index == null}
+              onClick={() => entry.index != null && onSelect(entry.index)}
+              aria-current={entry.index === current ? 'true' : undefined}
+              className={cn(
+                'hover:bg-surface-hover w-full truncate py-1.5 pr-3 pl-(--indent) text-left text-sm disabled:opacity-50',
+                entry.index === current ? 'text-text-primary font-medium' : 'text-text-secondary',
+              )}
+              style={{ '--indent': `${0.75 + entry.depth * 0.75}rem` } as CSSProperties}
+            >
+              {entry.title}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
+/** One document: an article, or a book read a chapter or page at a time. */
+export default function ReaderView() {
+  const localize = useLocalize();
+  const { id } = useParams<{ id: string }>();
+  const [params, setParams] = useSearchParams();
+  const handle = useRef<ReaderBodyHandle | null>(null);
+  const registerHandle = useCallback((next: ReaderBodyHandle | null) => {
+    handle.current = next;
+  }, []);
+
+  const documentQuery = useLibraryDocumentQuery(id);
+  const data = documentQuery.data;
+  const document = data?.document;
+  const isBook = document != null && document.kind !== 'article';
+  const units = data?.units;
+
+  const requested = Number.parseInt(params.get('unit') ?? '', 10);
+  const lastUnit = Math.max(0, (document?.unitCount ?? 1) - 1);
+  const savedUnit = data?.progress?.unitIndex;
+  const unitIndex = Number.isInteger(requested)
+    ? Math.min(Math.max(requested, 0), lastUnit)
+    : Math.min(savedUnit ?? 0, lastUnit);
+  const unitQuery = useLibraryUnitQuery(id, isBook ? unitIndex : undefined);
+  const selectUnit = (index: number) => setParams({ unit: String(index) }, { replace: true });
+
+  const highlights = useMemo(() => {
+    if (!data) {
+      return EMPTY;
+    }
+    return isBook ? (unitQuery.data?.highlights ?? EMPTY) : data.highlights;
+  }, [data, isBook, unitQuery.data]);
+
+  const onFocus = useCallback((highlight: TLibraryHighlight) => {
+    handle.current?.focusHighlight(highlight);
+  }, []);
+
+  if (documentQuery.isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Spinner className="h-6 w-6" />
+      </div>
+    );
+  }
+  if (documentQuery.isError || !document || !data) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+        <p className="text-text-secondary text-sm">{localize('com_library_not_found')}</p>
+        <Button asChild variant="outline">
+          <Link to="/library">{localize('com_library_back')}</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  const unit = isBook ? unitQuery.data?.unit : undefined;
+  const isPdf = document.kind === 'pdf';
+  const isOriginalLink = /^https?:\/\//i.test(document.normalizedUrl);
+
+  let body: JSX.Element;
+  if (!isBook && 'contentHtml' in document) {
+    body = (
+      <ReaderBody
+        documentId={document.id}
+        html={document.contentHtml}
+        anchorText={document.text}
+        contentHash={document.contentHash}
+        highlights={highlights}
+        resumeAt={resumeOffset(data.progress, document.contentHash)}
+        registerHandle={registerHandle}
+      />
+    );
+  } else if (!unit) {
+    body = (
+      <div className="flex h-full items-center justify-center">
+        {unitQuery.isError ? (
+          <p className="text-text-secondary text-sm">{localize('com_library_load_error')}</p>
+        ) : (
+          <Spinner className="h-6 w-6" />
+        )}
+      </div>
+    );
+  } else if (isPdf) {
+    body = (
+      <ReaderBody
+        key={`${document.id}:${unit.index}`}
+        documentId={document.id}
+        plainText={unit.readableText ?? unit.text}
+        anchorText={unit.readableText ?? unit.text}
+        contentHash={unit.contentHash}
+        highlights={EMPTY}
+        unit={{ kind: 'page', index: unit.index }}
+        highlightingDisabledReason={localize('com_library_pdf_no_highlight')}
+        resumeAt={resumeOffset(data.progress, unit.contentHash, unit.index)}
+        registerHandle={registerHandle}
+      />
+    );
+  } else {
+    body = (
+      <ReaderBody
+        key={`${document.id}:${unit.index}`}
+        documentId={document.id}
+        html={unit.contentHtml}
+        anchorText={unit.text}
+        contentHash={unit.contentHash}
+        highlights={highlights}
+        unit={{ kind: 'chapter', index: unit.index }}
+        resumeAt={resumeOffset(data.progress, unit.contentHash, unit.index)}
+        registerHandle={registerHandle}
+      />
+    );
+  }
+
+  return (
+    <div
+      className="bg-surface-primary flex h-full min-h-0 w-full flex-col"
+      data-testid="library-reader"
+    >
+      <header className="border-border-light flex items-center gap-2 border-b px-3 py-2">
+        <Button asChild variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+          <Link to="/library" aria-label={localize('com_library_back')}>
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        </Button>
+        <div className="min-w-0 flex-1">
+          <h1 className="text-text-primary truncate text-sm font-semibold">{document.title}</h1>
+          <p className="text-text-secondary truncate text-xs">
+            {[document.siteName, document.byline].filter(Boolean).join(' · ')}
+          </p>
+        </div>
+        {isOriginalLink && (
+          <Button asChild variant="ghost" size="sm" className="shrink-0">
+            <a href={document.normalizedUrl} target="_blank" rel="noopener noreferrer nofollow">
+              <ExternalLink className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              {localize('com_library_open_original')}
+            </a>
+          </Button>
+        )}
+      </header>
+      <div className="flex min-h-0 flex-1">
+        {isBook && units && (
+          <aside className="border-border-light hidden w-60 shrink-0 border-r md:block">
+            <Contents document={document} units={units} current={unitIndex} onSelect={selectUnit} />
+          </aside>
+        )}
+        <main className="flex min-w-0 flex-1 flex-col py-6">
+          {isBook && document.needsOcr && (
+            <p className="text-text-secondary bg-surface-secondary mx-auto mb-4 max-w-2xl rounded-lg px-3 py-2 text-sm">
+              {localize('com_library_needs_ocr')}
+            </p>
+          )}
+          <div className="min-h-0 flex-1">{body}</div>
+          {isBook && (
+            <div className="border-border-light mx-auto mt-2 flex w-full max-w-2xl items-center justify-between border-t px-4 pt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={unitIndex <= 0}
+                onClick={() => selectUnit(unitIndex - 1)}
+              >
+                {localize('com_library_previous')}
+              </Button>
+              <span className="text-text-secondary text-xs">
+                {localize(isPdf ? 'com_library_unit_page' : 'com_library_unit_chapter', {
+                  0: unitIndex + 1,
+                })}{' '}
+                / {document.unitCount}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={unitIndex >= lastUnit}
+                onClick={() => selectUnit(unitIndex + 1)}
+              >
+                {localize('com_library_next')}
+              </Button>
+            </div>
+          )}
+        </main>
+        <aside className="border-border-light hidden w-72 shrink-0 border-l lg:block">
+          <HighlightsPanel highlights={highlights} onFocus={onFocus} />
+        </aside>
+      </div>
+    </div>
+  );
+}
