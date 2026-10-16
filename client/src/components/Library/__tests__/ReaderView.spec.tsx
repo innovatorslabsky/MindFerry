@@ -30,6 +30,12 @@ jest.mock('../ReaderBody', () => ({
     return <div data-testid="reader-body" />;
   },
 }));
+jest.mock('../OcrPanel', () => ({
+  __esModule: true,
+  default: ({ blankPages, currentPage }: { blankPages: number[]; currentPage: number }) => (
+    <div data-testid="ocr-panel" data-blank={blankPages.join(',')} data-current={currentPage} />
+  ),
+}));
 jest.mock('../PdfPageView', () => ({
   __esModule: true,
   default: ({ pageIndex }: { pageIndex: number }) => (
@@ -302,6 +308,31 @@ describe('ReaderView: a PDF with its original stored', () => {
     expect(screen.queryByRole('group', { name: 'com_library_view' })).not.toBeInTheDocument();
     // Even if the address asks for it, there is nothing to show but the text.
     expect(screen.queryByTestId('pdf-page')).not.toBeInTheDocument();
+  });
+
+  it('offers OCR for the blank pages only, when the original is stored', () => {
+    mockDocument = {
+      ...stored(true),
+      data: {
+        ...stored(true).data,
+        units: [
+          { index: 0, kind: 'page', wordCount: 0, contentHash: 'u0' },
+          { index: 1, kind: 'page', wordCount: 5, contentHash: 'u1' },
+          { index: 2, kind: 'page', wordCount: 0, contentHash: 'u2' },
+        ],
+      },
+    };
+    mockUnit = unit;
+    renderAt('/library/d1?unit=1');
+    expect(screen.getByTestId('ocr-panel')).toHaveAttribute('data-blank', '0,2');
+    expect(screen.getByTestId('ocr-panel')).toHaveAttribute('data-current', '1');
+  });
+
+  it('offers no OCR when the original was not kept', () => {
+    mockDocument = stored(false);
+    mockUnit = unit;
+    renderAt('/library/d1?unit=1');
+    expect(screen.queryByTestId('ocr-panel')).not.toBeInTheDocument();
   });
 
   it('reads as text by default and switches to the page, keeping the page number', () => {

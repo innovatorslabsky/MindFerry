@@ -19,15 +19,12 @@ const require = createRequire(import.meta.url);
  * the shim specifiers to absolute paths via CJS require.resolve anchored to the client directory.
  */
 const NODE_POLYFILL_SHIMS: Record<string, string> = {
-  'vite-plugin-node-polyfills/shims/process': require.resolve(
-    'vite-plugin-node-polyfills/shims/process',
-  ),
-  'vite-plugin-node-polyfills/shims/buffer': require.resolve(
-    'vite-plugin-node-polyfills/shims/buffer',
-  ),
-  'vite-plugin-node-polyfills/shims/global': require.resolve(
-    'vite-plugin-node-polyfills/shims/global',
-  ),
+  'vite-plugin-node-polyfills/shims/process':
+    require.resolve('vite-plugin-node-polyfills/shims/process'),
+  'vite-plugin-node-polyfills/shims/buffer':
+    require.resolve('vite-plugin-node-polyfills/shims/buffer'),
+  'vite-plugin-node-polyfills/shims/global':
+    require.resolve('vite-plugin-node-polyfills/shims/global'),
 };
 
 // https://vitejs.dev/config/
@@ -90,6 +87,7 @@ export default defineConfig(({ command }) => ({
       },
     },
     copyPublicAssets(),
+    serveOcrAssets(),
     VitePWA({
       injectRegister: 'auto', // 'auto' | 'manual' | 'disabled'
       registerType: 'autoUpdate', // 'prompt' | 'autoUpdate'
@@ -520,6 +518,77 @@ export function copyPublicAssets(): Plugin {
           ),
         ),
       );
+    },
+  };
+}
+
+/**
+ * The files the library's in-browser OCR needs at run time: tesseract.js's worker and WebAssembly
+ * core, and the English language data. They are served from this app's own origin (nothing is
+ * fetched from a CDN, so the page works offline and leaks nothing about what is being read) under
+ * `assets/ocr/`, and are only requested when someone starts OCR. In a build they are copied into
+ * the output; in development they are served straight from `node_modules`.
+ */
+const OCR_FILES: Array<{ url: string; from: string[] }> = [
+  { url: 'worker.min.js', from: ['tesseract.js', 'dist', 'worker.min.js'] },
+  {
+    url: 'tesseract-core-lstm.wasm.js',
+    from: ['tesseract.js-core', 'tesseract-core-lstm.wasm.js'],
+  },
+  {
+    url: 'tesseract-core-relaxedsimd-lstm.wasm.js',
+    from: ['tesseract.js-core', 'tesseract-core-relaxedsimd-lstm.wasm.js'],
+  },
+  {
+    url: 'tesseract-core-simd-lstm.wasm.js',
+    from: ['tesseract.js-core', 'tesseract-core-simd-lstm.wasm.js'],
+  },
+  {
+    url: 'lang/eng.traineddata.gz',
+    from: ['@tesseract.js-data', 'eng', '4.0.0_best_int', 'eng.traineddata.gz'],
+  },
+];
+
+function ocrSource(parts: string[]): string {
+  for (const base of [
+    path.resolve(import.meta.dirname, '../node_modules'),
+    path.resolve(import.meta.dirname, 'node_modules'),
+  ]) {
+    const candidate = path.join(base, ...parts);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  throw new Error(`OCR asset not found in node_modules: ${parts.join('/')}`);
+}
+
+export function serveOcrAssets(): Plugin {
+  let outDir = path.resolve(import.meta.dirname, 'dist');
+  return {
+    name: 'serve-ocr-assets',
+    configResolved(config) {
+      outDir = path.resolve(config.root, config.build.outDir);
+    },
+    configureServer(server) {
+      server.middlewares.use('/assets/ocr', (req, res, next) => {
+        const name = (req.url ?? '').split('?')[0].replace(/^\//, '');
+        const file = OCR_FILES.find((entry) => entry.url === name);
+        if (!file) {
+          return next();
+        }
+        res.setHeader(
+          'Content-Type',
+          name.endsWith('.js') ? 'text/javascript' : 'application/gzip',
+        );
+        fs.createReadStream(ocrSource(file.from)).pipe(res);
+      });
+    },
+    async writeBundle() {
+      for (const file of OCR_FILES) {
+        const target = path.join(outDir, 'assets', 'ocr', file.url);
+        await fs.promises.mkdir(path.dirname(target), { recursive: true });
+        await fs.promises.copyFile(ocrSource(file.from), target);
+      }
     },
   };
 }

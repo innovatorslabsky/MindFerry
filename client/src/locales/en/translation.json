@@ -3501,7 +3501,7 @@
   "com_library_chapters": "{{0}} chapters",
   "com_library_kind_pdf": "PDF",
   "com_library_kind_epub": "EPUB",
-  "com_library_needs_ocr": "This PDF is mostly images, so there is little text to read or search.",
+  "com_library_needs_ocr": "This PDF is mostly images, so there is little text to read or search. Text can be read from its pages when the original file is kept.",
   "com_library_truncated": "Only the first pages were read.",
   "com_library_move_inbox": "Move to inbox",
   "com_library_move_later": "Read later",
@@ -3591,5 +3591,14 @@
   "com_library_folder_exists": "A folder with that name already exists.",
   "com_library_folder_limit": "You have as many folders as allowed.",
   "com_library_error_folder_exists": "A folder with that name already exists.",
-  "com_library_error_folder_limit": "You have as many folders as allowed."
+  "com_library_error_folder_limit": "You have as many folders as allowed.",
+  "com_library_ocr_blank": "Pages with no text: {{0}}. Read them with OCR so they can be searched and highlighted. It runs in your browser, nothing is uploaded, and it can take a little while per page.",
+  "com_library_ocr_this": "Read this page",
+  "com_library_ocr_all": "Read all blank pages ({{0}})",
+  "com_library_ocr_progress": "Reading page {{0}} ({{1}} of {{2}})…",
+  "com_library_ocr_cancel": "Stop",
+  "com_library_ocr_done": "Done. Pages with text found: {{0}}. Pages with none: {{1}}.",
+  "com_library_ocr_error": "Text couldn't be read from this page. Your administrator may need to allow WebAssembly (CSP_ALLOW_WASM).",
+  "com_library_error_has_text": "That page already has text.",
+  "com_library_error_empty_text": "No text was found on that page."
 }

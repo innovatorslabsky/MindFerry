@@ -12,7 +12,13 @@ export interface PdfPageRender {
 export interface PdfPages {
   numPages: number;
   /** Draws one page (1-based) at `cssWidth` CSS pixels wide, sharp on high-density screens. */
-  render: (pageNumber: number, canvas: HTMLCanvasElement, cssWidth: number) => PdfPageRender;
+  render: (
+    pageNumber: number,
+    canvas: HTMLCanvasElement,
+    cssWidth: number,
+    /** Pixels per CSS pixel; the screen's by default. OCR passes 1 and asks for a large width. */
+    pixelRatio?: number,
+  ) => PdfPageRender;
   destroy: () => Promise<void>;
 }
 
@@ -39,7 +45,7 @@ export async function openPdfPages(data: ArrayBuffer): Promise<PdfPages> {
   const pdf = await task.promise;
   return {
     numPages: pdf.numPages,
-    render(pageNumber, canvas, cssWidth) {
+    render(pageNumber, canvas, cssWidth, pixelRatio) {
       let cancelled = false;
       let current: { cancel: () => void } | undefined;
       const promise = (async () => {
@@ -48,7 +54,7 @@ export async function openPdfPages(data: ArrayBuffer): Promise<PdfPages> {
           return;
         }
         const base = page.getViewport({ scale: 1 });
-        const ratio = window.devicePixelRatio || 1;
+        const ratio = pixelRatio ?? (window.devicePixelRatio || 1);
         const scale = cssWidth / base.width;
         const viewport = page.getViewport({ scale: scale * ratio });
         canvas.width = Math.floor(viewport.width);

@@ -18,6 +18,7 @@ import { NotificationSeverity } from '~/common';
 import ReaderBody, { type ReaderBodyHandle } from './ReaderBody';
 import HighlightsPanel from './HighlightsPanel';
 import PdfPageView from './PdfPageView';
+import OcrPanel from './OcrPanel';
 import TagEditor from './TagEditor';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
@@ -283,6 +284,13 @@ export default function ReaderView() {
             <p className="text-text-secondary bg-surface-secondary mx-auto mb-4 max-w-2xl rounded-lg px-3 py-2 text-sm">
               {localize('com_library_needs_ocr')}
             </p>
+          )}
+          {isPdf && document.hasSource && units && (
+            <OcrPanel
+              documentId={document.id}
+              blankPages={units.filter((page) => page.wordCount === 0).map((page) => page.index)}
+              currentPage={unitIndex}
+            />
           )}
           {isPdf && document.hasSource && (
             <div

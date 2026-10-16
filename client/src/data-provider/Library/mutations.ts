@@ -296,3 +296,32 @@ export const useDeleteLibraryFolderMutation = (
     },
   });
 };
+
+/** Text read by OCR from one scanned page. The page's text, and the document's, change with it. */
+export const useSaveLibraryUnitTextMutation = (
+  options?: t.MutationOptions<
+    { unit: t.TLibraryUnit; needsOcr: boolean },
+    { id: string; index: number; text: string }
+  >,
+): UseMutationResult<
+  { unit: t.TLibraryUnit; needsOcr: boolean },
+  unknown,
+  { id: string; index: number; text: string },
+  unknown
+> => {
+  const refresh = useRefreshLibraryLists();
+  const queryClient = useQueryClient();
+  return useMutation(
+    ({ id, index, text }: { id: string; index: number; text: string }) =>
+      dataService.saveLibraryUnitText(id, index, text),
+    {
+      ...options,
+      onSuccess: (data, variables, context) => {
+        refresh();
+        queryClient.invalidateQueries([QueryKeys.libraryUnit, variables.id, variables.index]);
+        queryClient.invalidateQueries([QueryKeys.libraryDocument, variables.id]);
+        options?.onSuccess?.(data, variables, context);
+      },
+    },
+  );
+};

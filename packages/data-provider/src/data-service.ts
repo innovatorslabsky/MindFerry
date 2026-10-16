@@ -1118,6 +1118,15 @@ export function unfollowLibraryFeed(id: string): Promise<void> {
   return request.delete(endpoints.libraryFeed(id));
 }
 
+/** Text read from the image of a scanned page. Only a page with no text of its own accepts it. */
+export function saveLibraryUnitText(
+  id: string,
+  index: number,
+  text: string,
+): Promise<{ unit: t.TLibraryUnit; needsOcr: boolean }> {
+  return request.put(endpoints.libraryUnitText(id, index), { text });
+}
+
 /** The original file of a PDF, when the deployment keeps them. */
 export async function getLibrarySource(id: string): Promise<Blob> {
   const response = await request.getResponse(endpoints.librarySource(id), {

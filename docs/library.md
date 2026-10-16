@@ -101,7 +101,27 @@ by any model, and nothing leaves the server:
 
 The tags are set once. Saving the same page again, or editing the tags, is never overwritten. Turn it
 off with `contextHub.library.autoTag: false` (default on). Scanned PDFs have no text to count, so they get
-only `pdf`; there is no OCR yet.
+only `pdf` (reading them with OCR does not add keyword tags afterwards).
+
+## Reading scanned PDFs (OCR)
+
+A scanned PDF has pictures of pages and no text. When the original file is kept
+(`keepPdfOriginals: true`), the reader shows a panel for the pages with no text: **Read this page** or
+**Read all blank pages**.
+
+- It runs in the person's browser with tesseract.js (English). The page is drawn from the stored
+  original, read, and only the resulting text is sent to the server. Nothing is uploaded to a third
+  party: the worker, WebAssembly core and language data are served from `/assets/ocr/` by MindFerry
+  itself (about 15 MB, fetched only when OCR is started, then cached by the browser).
+- It needs WebAssembly allowed by the page's content security policy: set `CSP_ALLOW_WASM=true`
+  (the same switch HEIC conversion uses). Without it the panel says reading failed.
+- The text is saved with `PUT /api/library/documents/:id/units/:index/text`. A page accepts it **only
+  if it has no text of its own** (fewer than 10 characters), so OCR can never replace text that might
+  already be highlighted; a second attempt returns 409. Search text, word count and `needsOcr` for the
+  document are refreshed, and the page can then be searched and highlighted like any other.
+- Only English is recognised. Accuracy depends on the scan: a clean 150 dpi page reads well, a skewed or
+  photographed one may not. Reading takes seconds per page and uses the person's CPU.
+- Without a stored original there is nothing to read from, so a scanned PDF stays text-less.
 
 ## Folders
 
@@ -145,7 +165,8 @@ and privacy implications before switching it on for a shared deployment.
   and the book's own CSS are not kept.
 - **Highlights on a PDF follow the reflowed text.** A revised PDF is a different document (its key is
   its bytes), so highlights never carry across versions of the same paper.
-- **Scanned PDFs** (`needsOcr: true`) have almost no text and are not searchable. There is no OCR.
+- **Scanned PDFs** (`needsOcr: true`) have almost no text until they are read with OCR (see above), which
+  needs the original file kept, English text and `CSP_ALLOW_WASM=true`.
 - **Multi-column PDFs** read in content-stream order, which can interleave columns.
 - **PDFs that forbid copying** are read like any other. Whether to honour that flag is undecided.
 - **Network isolation is the deployment's job.** The parser process cannot read your files, secrets or

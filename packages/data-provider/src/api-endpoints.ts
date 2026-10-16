@@ -214,6 +214,9 @@ export const libraryUnit = (id: string, index: number) =>
 export const libraryResource = (id: string, path: string) =>
   `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/resources?path=${encodeURIComponent(path)}`;
 
+export const libraryUnitText = (id: string, index: number) =>
+  `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/units/${index}/text`;
+
 export const librarySource = (id: string) =>
   `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/source`;
 
