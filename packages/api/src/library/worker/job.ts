@@ -8,6 +8,9 @@ import { WorkerResultTooLargeError } from './errors';
 
 export const DEFAULT_MAX_RESULT_CHARS = 60_000_000;
 
+/** Images kept per book. The parser drops further ones, and chapters stop pointing at them. */
+export const MAX_STORED_IMAGE_BYTES = 40 * 1024 * 1024;
+
 /** Counts the text a result carries without serializing it a second time. */
 export function approxChars(value: unknown, budget: number): number {
   let total = 0;
@@ -17,7 +20,9 @@ export function approxChars(value: unknown, budget: number): number {
     if (typeof current === 'string') {
       total += current.length;
     } else if (current instanceof Uint8Array) {
-      total += current.byteLength;
+      // Binary is not text and is bounded by the parsers' own limits (images, entry sizes), so it
+      // is left out of the text budget rather than letting a few pictures use it up.
+      continue;
     } else if (Array.isArray(current)) {
       stack.push(...current);
     } else if (current !== null && typeof current === 'object') {
@@ -36,13 +41,8 @@ async function run(job: WorkerJob): Promise<unknown> {
       return saveUrl(job.url);
     case 'extractHtml':
       return saveHtml(job.url, job.html);
-    case 'parseUpload': {
-      const draft = await ingestUpload(job.bytes);
-      // Image bytes are not stored, so they are not sent back across the boundary either.
-      return draft.kind === 'epub'
-        ? { kind: 'epub', draft: { ...draft.draft, resources: [] } }
-        : draft;
-    }
+    case 'parseUpload':
+      return ingestUpload(job.bytes, { epub: { maxImagesTotalBytes: MAX_STORED_IMAGE_BYTES } });
     case 'readFeed':
       return subscribeToUrl(job.url);
     default:

@@ -5,6 +5,7 @@ import type {
   LibraryHighlightRecord,
   LibraryMethods,
   LibraryProgressRecord,
+  LibraryResourceRecord,
   LibraryUnitRecord,
 } from '@librechat/data-schemas';
 
@@ -16,6 +17,7 @@ export function createFakeLibraryMethods() {
   const highlights = new Map<string, LibraryHighlightRecord & { userId: string }>();
   const progress = new Map<string, LibraryProgressRecord & { userId: string }>();
   const units = new Map<string, LibraryUnitRecord & { userId: string }>();
+  const resources = new Map<string, LibraryResourceRecord & { userId: string }>();
 
   const methods: LibraryMethods = {
     async saveLibraryDocument(userId, input: LibraryDocumentInput) {
@@ -45,7 +47,7 @@ export function createFakeLibraryMethods() {
       return { document: { ...document }, created: true, contentChanged: false };
     },
     async saveLibraryBook(userId, input: LibraryBookInput) {
-      const { units: incoming, ...rest } = input;
+      const { units: incoming, resources: images = [], ...rest } = input;
       const saved = await methods.saveLibraryDocument(userId, {
         ...rest,
         unitCount: incoming.length,
@@ -53,6 +55,17 @@ export function createFakeLibraryMethods() {
       if (saved.created || saved.contentChanged) {
         for (const key of [...units.keys()]) {
           if (key.startsWith(`${saved.document.id}:`)) units.delete(key);
+        }
+        for (const key of [...resources.keys()]) {
+          if (key.startsWith(`${saved.document.id}:`)) resources.delete(key);
+        }
+        for (const image of images) {
+          resources.set(`${saved.document.id}:${image.path}`, {
+            path: image.path,
+            mediaType: image.mediaType,
+            bytes: Buffer.from(image.bytes),
+            userId,
+          });
         }
         for (const unit of incoming) {
           units.set(`${saved.document.id}:${unit.index}`, {
@@ -64,6 +77,12 @@ export function createFakeLibraryMethods() {
         }
       }
       return saved;
+    },
+    async getLibraryResource(userId, documentId, path) {
+      const found = resources.get(`${documentId}:${path}`);
+      return found && found.userId === userId
+        ? { path: found.path, mediaType: found.mediaType, bytes: found.bytes }
+        : null;
     },
     async listLibraryUnits(userId, documentId) {
       return [...units.values()]
@@ -183,7 +202,7 @@ export function createFakeLibraryMethods() {
       return { ...record };
     },
     async deleteAllLibraryData() {
-      return { documents: 0, highlights: 0, progress: 0, units: 0 };
+      return { documents: 0, highlights: 0, progress: 0, units: 0, resources: 0 };
     },
   };
   return { methods, documents, highlights, progress };

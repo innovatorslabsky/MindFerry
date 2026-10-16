@@ -5,6 +5,7 @@ import libraryDocumentSchema from '~/schema/libraryDocument';
 import libraryHighlightSchema from '~/schema/libraryHighlight';
 import libraryProgressSchema from '~/schema/libraryProgress';
 import libraryUnitSchema from '~/schema/libraryUnit';
+import libraryResourceSchema from '~/schema/libraryResource';
 import { createLibraryMethods, type LibraryMethods } from './library';
 
 let mongoServer: MongoMemoryServer;
@@ -48,6 +49,9 @@ beforeAll(async () => {
   }
   if (!mongoose.models.LibraryUnit) {
     mongoose.model('LibraryUnit', libraryUnitSchema);
+  }
+  if (!mongoose.models.LibraryResource) {
+    mongoose.model('LibraryResource', libraryResourceSchema);
   }
   methods = createLibraryMethods(mongoose);
   await mongoose.connect(mongoServer.getUri());
@@ -250,6 +254,7 @@ describe('deletion', () => {
       highlights: 1,
       progress: 1,
       units: 0,
+      resources: 0,
     });
     expect(await methods.listLibraryDocuments(userB, { limit: 10 })).toHaveLength(1);
     expect(await methods.listLibraryHighlights(userB)).toHaveLength(1);
@@ -323,7 +328,7 @@ describe('books (EPUB and PDF)', () => {
     expect(await methods.getLibraryUnit(userA, 'nope', 0)).toBeNull();
   });
 
-  it('keeps PDF pages with both the anchor text and the readable text', async () => {
+  it('keeps a PDF page as one text, with no HTML', async () => {
     const { document } = await methods.saveLibraryBook(
       userA,
       book({
@@ -335,8 +340,7 @@ describe('books (EPUB and PDF)', () => {
           {
             index: 0,
             kind: 'page',
-            text: 'exact anchor text',
-            readableText: 'exact anchor text, reflowed',
+            text: 'reflowed page text',
             wordCount: 3,
             contentHash: 'e'.repeat(64),
           },
@@ -347,8 +351,7 @@ describe('books (EPUB and PDF)', () => {
     const page = await methods.getLibraryUnit(userA, document.id, 0);
     expect(page).toMatchObject({
       kind: 'page',
-      text: 'exact anchor text',
-      readableText: 'exact anchor text, reflowed',
+      text: 'reflowed page text',
       contentHtml: '',
     });
   });
@@ -425,5 +428,117 @@ describe('books (EPUB and PDF)', () => {
       highlight(document.id, { unit: { kind: 'chapter', index: 1 } }),
     );
     expect(created?.unit).toEqual({ kind: 'chapter', index: 1 });
+  });
+});
+
+describe('book images', () => {
+  const PNG = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 1, 2, 3]);
+  const JPG = Uint8Array.from([255, 216, 255, 224, 9, 9, 9]);
+  const withImages = (overrides: Partial<LibraryBookInput> = {}) =>
+    book({
+      resources: [
+        { path: 'OEBPS/images/a.png', mediaType: 'image/png', bytes: PNG },
+        { path: 'OEBPS/images/b.jpg', mediaType: 'image/jpeg', bytes: JPG },
+      ],
+      ...overrides,
+    });
+
+  it('stores images with the book and reads one back, byte for byte', async () => {
+    const { document } = await methods.saveLibraryBook(userA, withImages());
+    const png = await methods.getLibraryResource(userA, document.id, 'OEBPS/images/a.png');
+    expect(png?.mediaType).toBe('image/png');
+    expect(Buffer.isBuffer(png?.bytes)).toBe(true);
+    expect([...(png?.bytes as Buffer)]).toEqual([...PNG]);
+    const jpg = await methods.getLibraryResource(userA, document.id, 'OEBPS/images/b.jpg');
+    expect(jpg?.mediaType).toBe('image/jpeg');
+  });
+
+  it('answers nothing for an unknown path, a bad id, or another user\u2019s book', async () => {
+    const { document } = await methods.saveLibraryBook(userA, withImages());
+    expect(
+      await methods.getLibraryResource(userA, document.id, 'OEBPS/images/nope.png'),
+    ).toBeNull();
+    expect(await methods.getLibraryResource(userA, 'nope', 'OEBPS/images/a.png')).toBeNull();
+    expect(await methods.getLibraryResource(userA, document.id, '')).toBeNull();
+    expect(await methods.getLibraryResource(userB, document.id, 'OEBPS/images/a.png')).toBeNull();
+  });
+
+  it('keeps the same image path in two books apart', async () => {
+    const first = await methods.saveLibraryBook(userA, withImages());
+    const second = await methods.saveLibraryBook(
+      userA,
+      withImages({
+        urlKey: 'book2',
+        normalizedUrl: 'upload://book2',
+        resources: [
+          {
+            path: 'OEBPS/images/a.png',
+            mediaType: 'image/gif',
+            bytes: Uint8Array.from([71, 73, 70]),
+          },
+        ],
+      }),
+    );
+    expect(
+      (await methods.getLibraryResource(userA, first.document.id, 'OEBPS/images/a.png'))?.mediaType,
+    ).toBe('image/png');
+    expect(
+      (await methods.getLibraryResource(userA, second.document.id, 'OEBPS/images/a.png'))
+        ?.mediaType,
+    ).toBe('image/gif');
+  });
+
+  it('does not rewrite images on an identical save, and repairs a missing one', async () => {
+    await methods.saveLibraryBook(userA, withImages());
+    await methods.saveLibraryBook(userA, withImages());
+    expect(await mongoose.models.LibraryResource.countDocuments({})).toBe(2);
+    await mongoose.models.LibraryResource.deleteOne({ path: 'OEBPS/images/b.jpg' });
+    await methods.saveLibraryBook(userA, withImages());
+    expect(await mongoose.models.LibraryResource.countDocuments({})).toBe(2);
+  });
+
+  it('replaces the images when the book changes', async () => {
+    const { document } = await methods.saveLibraryBook(userA, withImages());
+    await methods.saveLibraryBook(userA, withImages({ contentHash: HASH2, resources: [] }));
+    expect(await methods.getLibraryResource(userA, document.id, 'OEBPS/images/a.png')).toBeNull();
+  });
+
+  it('stores many images in several writes', async () => {
+    const many = Array.from({ length: 11 }, (_, i) => ({
+      path: `OEBPS/images/${i}.png`,
+      mediaType: 'image/png' as const,
+      bytes: PNG,
+    }));
+    const { document } = await methods.saveLibraryBook(userA, withImages({ resources: many }));
+    expect(await mongoose.models.LibraryResource.countDocuments({})).toBe(11);
+    expect(
+      await methods.getLibraryResource(userA, document.id, 'OEBPS/images/10.png'),
+    ).not.toBeNull();
+  });
+
+  it('removes a book\u2019s images with it, and all of a user\u2019s on deleteAll', async () => {
+    const a = await methods.saveLibraryBook(userA, withImages());
+    await methods.saveLibraryBook(userB, withImages());
+    expect(await methods.deleteLibraryDocument(userA, a.document.id)).toBe(true);
+    expect(await mongoose.models.LibraryResource.countDocuments({})).toBe(2);
+    expect(await methods.deleteAllLibraryData(userB)).toMatchObject({ resources: 2 });
+    expect(await mongoose.models.LibraryResource.countDocuments({})).toBe(0);
+  });
+
+  it('refuses a media type that is not a raster image', async () => {
+    await expect(
+      methods.saveLibraryBook(
+        userA,
+        withImages({
+          resources: [
+            {
+              path: 'x.svg',
+              mediaType: 'image/svg+xml' as 'image/png',
+              bytes: Uint8Array.from([60, 115]),
+            },
+          ],
+        }),
+      ),
+    ).rejects.toThrow();
   });
 });

@@ -10,6 +10,7 @@ import type {
   LibraryMethods,
   LibraryProgressRecord,
   LibraryReanchor,
+  LibraryResourceRecord,
   LibraryUnitRecord,
   LibraryUnitSummary,
 } from '@librechat/data-schemas';
@@ -28,6 +29,7 @@ type Methods = Pick<
   | 'saveLibraryBook'
   | 'listLibraryUnits'
   | 'getLibraryUnit'
+  | 'getLibraryResource'
   | 'getLibraryDocument'
   | 'listLibraryDocuments'
   | 'searchLibraryDocuments'
@@ -109,6 +111,12 @@ export interface LibraryService {
   ) => Promise<UploadResult>;
   previewFeed: (url: string) => Promise<FeedPreview>;
   listUnits: (userId: string, documentId: string) => Promise<LibraryUnitSummary[]>;
+  /** One image of a book the person saved. */
+  getResource: (
+    userId: string,
+    documentId: string,
+    path: string,
+  ) => Promise<LibraryResourceRecord | null>;
   getUnit: (userId: string, documentId: string, index: number) => Promise<LibraryUnitRecord | null>;
   list: (userId: string, query: LibraryListQuery) => Promise<LibraryDocumentSummary[]>;
   search: (userId: string, query: string, limit: number) => Promise<LibraryDocumentSummary[]>;
@@ -261,6 +269,10 @@ export function createLibraryService({ methods, ingest = {} }: LibraryServiceDep
 
     listUnits(userId: string, documentId: string) {
       return methods.listLibraryUnits(userId, documentId);
+    },
+
+    getResource(userId: string, documentId: string, path: string) {
+      return methods.getLibraryResource(userId, documentId, path);
     },
 
     getUnit(userId: string, documentId: string, index: number) {

@@ -40,6 +40,7 @@ export { default as libraryDocumentSchema } from './libraryDocument';
 export { default as libraryHighlightSchema } from './libraryHighlight';
 export { default as libraryProgressSchema } from './libraryProgress';
 export { default as libraryUnitSchema } from './libraryUnit';
+export { default as libraryResourceSchema } from './libraryResource';
 export { default as systemGrantSchema } from './systemGrant';
 export { default as auditLogSchema } from './auditLog';
 export { default as configSchema } from './config';

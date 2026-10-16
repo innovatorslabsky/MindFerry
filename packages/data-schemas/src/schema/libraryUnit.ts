@@ -13,10 +13,8 @@ export interface ILibraryUnit extends Document {
   title?: string;
   /** Sanitized chapter HTML; empty for a PDF page. Anchors are `textContent` offsets of this. */
   contentHtml: string;
-  /** The anchor space: a chapter's `textContent`, or a page's concatenated text items. */
+  /** The anchor space: a chapter's `textContent`, or a PDF page's reflowed text as the reader shows it. */
   text: string;
-  /** A PDF page's reflowed text, for reading and search. Not an anchor space. Absent for a chapter. */
-  readableText?: string;
   wordCount: number;
   contentHash: string;
   tenantId?: string;
@@ -30,7 +28,6 @@ const libraryUnitSchema: Schema<ILibraryUnit> = new Schema({
   title: { type: String },
   contentHtml: { type: String, default: '' },
   text: { type: String, default: '' },
-  readableText: { type: String },
   wordCount: { type: Number, required: true, default: 0 },
   contentHash: { type: String, required: true },
   tenantId: { type: String, index: true },

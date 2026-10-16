@@ -83,7 +83,6 @@ export interface LibraryUnitInput {
   title?: string;
   contentHtml?: string;
   text: string;
-  readableText?: string;
   wordCount: number;
   contentHash: string;
 }
@@ -101,11 +100,26 @@ export interface LibraryUnitRecord extends LibraryUnitSummary {
   documentId: string;
   contentHtml: string;
   text: string;
-  readableText?: string;
+}
+
+export type LibraryImageMediaType = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
+
+export interface LibraryResourceInput {
+  path: string;
+  mediaType: LibraryImageMediaType;
+  bytes: Uint8Array;
+}
+
+export interface LibraryResourceRecord {
+  path: string;
+  mediaType: LibraryImageMediaType;
+  bytes: Buffer;
 }
 
 export interface LibraryBookInput extends LibraryDocumentInput {
   units: LibraryUnitInput[];
+  /** Images the chapters refer to. Replaced together with the units. */
+  resources?: LibraryResourceInput[];
 }
 
 export interface LibraryDocumentSaveResult {
@@ -176,4 +190,5 @@ export interface LibraryDataDeleteResult {
   highlights: number;
   progress: number;
   units: number;
+  resources: number;
 }

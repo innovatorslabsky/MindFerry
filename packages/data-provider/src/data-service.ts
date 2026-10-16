@@ -1077,6 +1077,14 @@ export function previewLibraryFeed(url: string): Promise<{ feed: t.TLibraryFeedP
   return request.post(endpoints.libraryFeedPreview(), { url });
 }
 
+/** One image of a saved book, as a Blob. The request carries the session's credentials, which an `<img src>` cannot. */
+export async function getLibraryResource(id: string, path: string): Promise<Blob> {
+  const response = await request.getResponse(endpoints.libraryResource(id, path), {
+    responseType: 'blob',
+  });
+  return response.data as Blob;
+}
+
 export function setLibraryProgress(
   id: string,
   data: { textOffset: number; unitIndex?: number },

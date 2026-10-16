@@ -1,5 +1,6 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useToastContext } from '@librechat/client';
+import { dataService } from 'librechat-data-provider';
 import type { TLibraryHighlight, TLibraryHighlightColor } from 'librechat-data-provider';
 import {
   HIGHLIGHT_COLORS,
@@ -26,7 +27,7 @@ type ReaderBodyProps = {
   documentId: string;
   /** Sanitized HTML from the server. Rendered as it is: offsets only mean something against it. */
   html?: string;
-  /** For text with no markup of its own, such as a PDF page, shown as paragraphs. */
+  /** For text with no markup of its own, such as a PDF page: shown as one block, line breaks kept. */
   plainText?: string;
   /** The text highlights are anchored in, which the rendered text must equal. */
   anchorText: string;
@@ -80,10 +81,6 @@ function ReaderBody({
   });
   const setProgress = useSetLibraryProgressMutation();
 
-  const paragraphs = useMemo(
-    () => (plainText ? plainText.split(/\n{2,}/).filter((p) => p.trim().length > 0) : []),
-    [plainText],
-  );
   const canHighlight = highlightingDisabledReason == null && aligned;
 
   /** Whether what the browser built is the text the server anchors in. */
@@ -101,6 +98,41 @@ function ReaderBody({
   }, [aligned, highlights, html]);
 
   useEffect(() => releaseHighlights, []);
+
+  /**
+   * A book's pictures are fetched with the session's credentials, which an `<img src>` cannot send, and
+   * shown from object URLs. Only an attribute changes, so the text, and with it every highlight offset,
+   * stays as it was. A picture that cannot be fetched is simply left out.
+   */
+  useEffect(() => {
+    const root = content.current;
+    if (!root || unit?.kind !== 'chapter') {
+      return;
+    }
+    let cancelled = false;
+    const urls: string[] = [];
+    for (const image of Array.from(root.querySelectorAll('img[data-epub-resource]'))) {
+      const path = image.getAttribute('data-epub-resource');
+      if (!path || image.getAttribute('src')) {
+        continue;
+      }
+      dataService
+        .getLibraryResource(documentId, path)
+        .then((blob) => {
+          if (cancelled) {
+            return;
+          }
+          const url = URL.createObjectURL(blob);
+          urls.push(url);
+          image.setAttribute('src', url);
+        })
+        .catch(() => undefined);
+    }
+    return () => {
+      cancelled = true;
+      urls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [documentId, html, unit?.kind]);
 
   useEffect(() => {
     const root = content.current;
@@ -218,13 +250,13 @@ function ReaderBody({
       ) : (
         <div
           ref={content}
-          className="library-prose mx-auto max-w-2xl px-4 pb-24"
+          className="library-prose mx-auto max-w-2xl px-4 pb-24 whitespace-pre-wrap"
           data-testid="library-reader-content"
+          onMouseUp={onSelectionEnd}
+          onKeyUp={onSelectionEnd}
         >
-          {paragraphs.map((paragraph, index) => (
-            // Page text has no stable ids; its order is its identity.
-            <p key={index}>{paragraph}</p>
-          ))}
+          {/* One text node, so the text on screen is exactly the text highlights are anchored in. */}
+          {plainText}
         </div>
       )}
       {pending && (

@@ -62,11 +62,11 @@ function pdfToBook(
     units: draft.pages.map((page) => ({
       index: page.index,
       kind: 'page',
-      // `anchorText` is the highlight coordinate space; the reflowed text is for reading and search.
-      text: page.anchorText,
-      readableText: page.text,
+      // The reflowed text is what the reader shows, so it is also where highlights are anchored: the
+      // browser can reproduce exactly this string, which it could not do for the raw text items.
+      text: page.text,
       wordCount: page.wordCount,
-      contentHash: page.contentHash,
+      contentHash: createHash('sha256').update(page.text).digest('hex'),
     })),
   };
 }
@@ -91,6 +91,7 @@ function epubToBook(
     wordCount: draft.wordCount,
     readingMinutes: draft.readingMinutes,
     toc: tocFromEpub(draft),
+    resources: draft.resources.map(({ path, mediaType, bytes }) => ({ path, mediaType, bytes })),
     fetchedAt: now,
     units: draft.chapters.map((chapter) => ({
       index: chapter.index,

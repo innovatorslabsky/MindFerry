@@ -9,10 +9,10 @@ import type { WorkerJob } from '../worker/protocol';
 const html = `<html><head><title>Notes</title></head><body><article><h1>Notes</h1><p>${'Memory decays over time. '.repeat(20)}</p><p>${'A second paragraph for length. '.repeat(20)}</p></article></body></html>`;
 
 describe('approxChars', () => {
-  it('counts text and bytes through nesting without serializing', () => {
+  it('counts text through nesting without serializing, and leaves binary out of the text budget', () => {
     expect(
-      approxChars({ a: 'abc', b: ['de', { c: 'f' }], d: new Uint8Array(10), e: 5 }, 1_000),
-    ).toBe(16);
+      approxChars({ a: 'abc', b: ['de', { c: 'f' }], d: new Uint8Array(1_000_000), e: 5 }, 1_000),
+    ).toBe(6);
   });
 
   it('stops counting once past the budget', () => {
@@ -41,7 +41,7 @@ describe('handleJob', () => {
       });
   });
 
-  it('parses a PDF and an EPUB, and sends no image bytes back', async () => {
+  it('parses a PDF and an EPUB, sending back the images the book really contains', async () => {
     const pdf = await handleJob(
       {
         op: 'parseUpload',
@@ -53,8 +53,20 @@ describe('handleJob', () => {
     const epub = await handleJob({ op: 'parseUpload', bytes: epub3() }, DEFAULT_MAX_RESULT_CHARS);
     expect(epub.ok).toBe(true);
     if (epub.ok) {
-      const draft = (epub.result as { draft: { resources: unknown[]; chapters: unknown[] } }).draft;
-      expect(draft.resources).toEqual([]);
+      const draft = (
+        epub.result as {
+          draft: {
+            resources: Array<{ path: string; mediaType: string; bytes: Uint8Array }>;
+            chapters: unknown[];
+          };
+        }
+      ).draft;
+      expect(draft.resources.length).toBeGreaterThan(0);
+      expect(
+        draft.resources.every((r) => r.mediaType === 'image/png' && r.bytes.byteLength > 0),
+      ).toBe(true);
+      // Only raster images that passed the content check; the fixture's fake .png is not among them.
+      expect(draft.resources.map((r) => r.path)).not.toContain('OEBPS/images/fake.png');
       expect(draft.chapters.length).toBeGreaterThan(0);
     }
   });

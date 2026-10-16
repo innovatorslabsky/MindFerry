@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { Response } from 'express';
 import type { ServerRequest } from '../../types/http';
 import { createFakeLibraryMethods } from './helpers/fakeLibraryMethods';
@@ -53,7 +54,7 @@ describe('saveUpload', () => {
     expect(units.map((unit) => unit.kind)).toEqual(['chapter', 'chapter']);
   });
 
-  it('stores a PDF as a book with a page per unit, anchored on the exact text', async () => {
+  it('stores a PDF as a book with a page per unit', async () => {
     const { service } = setup();
     const saved = await service.saveUpload(user, PDF);
     expect(saved.document).toMatchObject({ kind: 'pdf', title: 'A Test Paper', unitCount: 2 });
@@ -64,17 +65,17 @@ describe('saveUpload', () => {
     const page = await service.getUnit(user, saved.document.id, 1);
     expect(page?.kind).toBe('page');
     expect(page?.text).toContain('spaced repetition');
-    expect(page?.readableText).toContain('spaced repetition');
   });
 
-  it('keeps the highlight coordinate space apart from the reflowed text on a PDF page', async () => {
+  it('anchors a PDF page on the reflowed text the reader shows, hashed by that same text', async () => {
     const { service } = setup();
     const saved = await service.saveUpload(user, PDF);
     const first = (await service.getUnit(user, saved.document.id, 0))!;
-    // Anchors are offsets into the page's concatenated text items; the reflowed text joins the two
-    // lines with a space. They must stay different strings, or a client's selection drifts.
-    expect(first.text).toContain('readingsecond');
-    expect(first.readableText).toContain('reading second');
+    // The browser can reproduce the reflowed text (lines joined) but not the raw text items
+    // (`readingsecond`), so highlights must live in the former or a selection could never match.
+    expect(first.text).toContain('reading second');
+    expect(first.text).not.toContain('readingsecond');
+    expect(first.contentHash).toBe(createHash('sha256').update(first.text).digest('hex'));
   });
 
   it('treats the same file as the same document, and a different file as a new one', async () => {
@@ -413,5 +414,75 @@ describe('book routes', () => {
       unsafe.response,
     );
     expect(unsafe.out.status).toBe(400);
+  });
+});
+
+describe('EPUB images', () => {
+  it('keeps the images a book really contains, and none that failed the content check', async () => {
+    const { service } = setup();
+    const saved = await service.saveUpload(user, epub3());
+    const id = saved.document.id;
+    const image = await service.getResource(user, id, 'OEBPS/images/img1.png');
+    expect(image?.mediaType).toBe('image/png');
+    expect(image?.bytes.length).toBeGreaterThan(0);
+    expect(await service.getResource(user, id, 'OEBPS/images/fake.png')).toBeNull();
+  });
+
+  it('will not hand an image to another user, or one that is not in the book', async () => {
+    const { service } = setup();
+    const saved = await service.saveUpload(other, epub3());
+    expect(await service.getResource(user, saved.document.id, 'OEBPS/images/img1.png')).toBeNull();
+    expect(await service.getResource(other, saved.document.id, '../../etc/passwd')).toBeNull();
+  });
+
+  it('serves an image with headers that stop it being treated as anything else', async () => {
+    const ctx = setup();
+    const handlers = createLibraryHandlers({ service: ctx.service });
+    const saved = await ctx.service.saveUpload(user, epub3());
+    const headers: Record<string, string> = {};
+    let ended: Buffer | undefined;
+    let status = 0;
+    const response = {
+      setHeader: (name: string, value: string) => {
+        headers[name] = value;
+      },
+      status(code: number) {
+        status = code;
+        return response;
+      },
+      json: () => response,
+      end(body?: Buffer) {
+        ended = body;
+        return response;
+      },
+    } as unknown as Response;
+    await handlers.getResource(
+      req({ params: { id: saved.document.id }, query: { path: 'OEBPS/images/img1.png' } }),
+      response,
+    );
+    expect(status).toBe(200);
+    expect(headers['Content-Type']).toBe('image/png');
+    expect(headers['X-Content-Type-Options']).toBe('nosniff');
+    expect(headers['Content-Security-Policy']).toContain('sandbox');
+    expect(headers['Cache-Control']).toMatch(/^private/);
+    expect(ended?.length).toBe(Number(headers['Content-Length']));
+  });
+
+  it('answers 404 for a missing image, a missing path, and another user\u2019s book', async () => {
+    const ctx = setup();
+    const handlers = createLibraryHandlers({ service: ctx.service });
+    const saved = await ctx.service.saveUpload(user, epub3());
+    for (const [who, query] of [
+      [user, { path: 'OEBPS/images/missing.png' }],
+      [user, {}],
+      [other, { path: 'OEBPS/images/img1.png' }],
+    ] as const) {
+      const { response, out } = res();
+      await handlers.getResource(
+        req({ user: { id: who }, params: { id: saved.document.id }, query }),
+        response,
+      );
+      expect(out.status).toBe(404);
+    }
   });
 });

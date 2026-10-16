@@ -211,6 +211,9 @@ export const libraryDocument = (id: string) =>
 export const libraryUnit = (id: string, index: number) =>
   `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/units/${index}`;
 
+export const libraryResource = (id: string, path: string) =>
+  `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/resources?path=${encodeURIComponent(path)}`;
+
 export const libraryProgress = (id: string) =>
   `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/progress`;
 

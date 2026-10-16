@@ -93,6 +93,7 @@ router.get('/documents/:id', ...browse, handlers.get);
 router.patch('/documents/:id', ...browse, handlers.patch);
 router.delete('/documents/:id', ...browse, handlers.remove);
 router.get('/documents/:id/units/:index', ...browse, handlers.getUnit);
+router.get('/documents/:id/resources', ...browse, handlers.getResource);
 router.put('/documents/:id/progress', ...browse, handlers.setProgress);
 
 router.post('/highlights', ...browse, handlers.createHighlight);

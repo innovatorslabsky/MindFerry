@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Highlighter, List, X } from 'lucide-react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Button, Spinner } from '@librechat/client';
 import type {
@@ -89,6 +89,8 @@ export default function ReaderView() {
   const { id } = useParams<{ id: string }>();
   const [params, setParams] = useSearchParams();
   const handle = useRef<ReaderBodyHandle | null>(null);
+  /** On a narrow screen the contents and highlights are a sheet over the text instead of side columns. */
+  const [sheet, setSheet] = useState<'contents' | 'highlights' | null>(null);
   const registerHandle = useCallback((next: ReaderBodyHandle | null) => {
     handle.current = next;
   }, []);
@@ -106,7 +108,10 @@ export default function ReaderView() {
     ? Math.min(Math.max(requested, 0), lastUnit)
     : Math.min(savedUnit ?? 0, lastUnit);
   const unitQuery = useLibraryUnitQuery(id, isBook ? unitIndex : undefined);
-  const selectUnit = (index: number) => setParams({ unit: String(index) }, { replace: true });
+  const selectUnit = (index: number) => {
+    setParams({ unit: String(index) }, { replace: true });
+    setSheet(null);
+  };
 
   const highlights = useMemo(() => {
     if (!data) {
@@ -117,6 +122,7 @@ export default function ReaderView() {
 
   const onFocus = useCallback((highlight: TLibraryHighlight) => {
     handle.current?.focusHighlight(highlight);
+    setSheet(null);
   }, []);
 
   if (documentQuery.isLoading) {
@@ -169,12 +175,11 @@ export default function ReaderView() {
       <ReaderBody
         key={`${document.id}:${unit.index}`}
         documentId={document.id}
-        plainText={unit.readableText ?? unit.text}
-        anchorText={unit.readableText ?? unit.text}
+        plainText={unit.text}
+        anchorText={unit.text}
         contentHash={unit.contentHash}
-        highlights={EMPTY}
+        highlights={highlights}
         unit={{ kind: 'page', index: unit.index }}
-        highlightingDisabledReason={localize('com_library_pdf_no_highlight')}
         resumeAt={resumeOffset(data.progress, unit.contentHash, unit.index)}
         registerHandle={registerHandle}
       />
@@ -212,6 +217,28 @@ export default function ReaderView() {
             {[document.siteName, document.byline].filter(Boolean).join(' · ')}
           </p>
         </div>
+        {isBook && units && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0 md:hidden"
+            aria-label={localize('com_library_contents')}
+            aria-expanded={sheet === 'contents'}
+            onClick={() => setSheet(sheet === 'contents' ? null : 'contents')}
+          >
+            <List className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0 lg:hidden"
+          aria-label={localize('com_library_highlights')}
+          aria-expanded={sheet === 'highlights'}
+          onClick={() => setSheet(sheet === 'highlights' ? null : 'highlights')}
+        >
+          <Highlighter className="h-4 w-4" aria-hidden="true" />
+        </Button>
         {isOriginalLink && (
           <Button asChild variant="ghost" size="sm" className="shrink-0">
             <a href={document.normalizedUrl} target="_blank" rel="noopener noreferrer nofollow">
@@ -265,6 +292,35 @@ export default function ReaderView() {
           <HighlightsPanel highlights={highlights} onFocus={onFocus} />
         </aside>
       </div>
+      {sheet != null && (
+        <div
+          role="dialog"
+          aria-label={localize(
+            sheet === 'contents' ? 'com_library_contents' : 'com_library_highlights',
+          )}
+          className={cn(
+            'border-border-medium bg-surface-primary fixed inset-x-0 bottom-0 z-40 flex max-h-[70vh] min-h-[40vh] flex-col rounded-t-xl border-t shadow-xl',
+            // The side columns take over at these widths, so the sheet must not be a second copy.
+            sheet === 'contents' ? 'md:hidden' : 'lg:hidden',
+          )}
+          data-testid="library-sheet"
+        >
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute top-1 right-1 h-8 w-8"
+            aria-label={localize('com_ui_close')}
+            onClick={() => setSheet(null)}
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </Button>
+          {sheet === 'contents' && isBook && units ? (
+            <Contents document={document} units={units} current={unitIndex} onSelect={selectUnit} />
+          ) : (
+            <HighlightsPanel highlights={highlights} onFocus={onFocus} />
+          )}
+        </div>
+      )}
     </div>
   );
 }

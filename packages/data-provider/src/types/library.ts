@@ -54,13 +54,11 @@ export type TLibraryUnitSummary = {
   contentHash: string;
 };
 
-/** One chapter or page. An EPUB chapter anchors on `text`/`contentHtml`; a PDF page anchors on `text`. */
+/** One chapter or page. An EPUB chapter anchors on `text`/`contentHtml`; a PDF page anchors on its reflowed `text`. */
 export type TLibraryUnit = TLibraryUnitSummary & {
   documentId: string;
   contentHtml: string;
   text: string;
-  /** A PDF page's reflowed text, for reading. Not a highlight coordinate space. */
-  readableText?: string;
 };
 
 export type TLibraryAnchor = {

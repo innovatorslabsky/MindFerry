@@ -14,6 +14,8 @@ import type {
   LibraryListQuery,
   LibraryProgressRecord,
   LibraryReanchor,
+  LibraryResourceInput,
+  LibraryResourceRecord,
   LibraryUnitRecord,
   LibraryUnitSummary,
 } from '~/types';
@@ -21,6 +23,7 @@ import type { ILibraryDocument } from '~/schema/libraryDocument';
 import type { ILibraryHighlight } from '~/schema/libraryHighlight';
 import type { ILibraryProgress } from '~/schema/libraryProgress';
 import type { ILibraryUnit } from '~/schema/libraryUnit';
+import type { ILibraryResource } from '~/schema/libraryResource';
 import { tenantSafeBulkWrite } from '~/utils/tenantBulkWrite';
 import logger from '~/config/winston';
 
@@ -36,6 +39,12 @@ export interface LibraryMethods {
    */
   saveLibraryBook: (userId: string, input: LibraryBookInput) => Promise<LibraryDocumentSaveResult>;
   getLibraryDocument: (userId: string, id: string) => Promise<LibraryDocumentRecord | null>;
+  /** One image of a book. `null` when the path is not one of the user's own book's images. */
+  getLibraryResource: (
+    userId: string,
+    documentId: string,
+    path: string,
+  ) => Promise<LibraryResourceRecord | null>;
   /** Chapter or page titles and sizes, in order, without their text. */
   listLibraryUnits: (userId: string, documentId: string) => Promise<LibraryUnitSummary[]>;
   getLibraryUnit: (
@@ -94,6 +103,8 @@ export interface LibraryMethods {
 }
 
 const UNIT_INSERT_BATCH = 100;
+/** Images are large; a few per write keeps each insert well under the wire-protocol message limit. */
+const RESOURCE_INSERT_BATCH = 4;
 
 const SUMMARY_PROJECTION = { contentHtml: 0, text: 0 } as const;
 
@@ -178,7 +189,6 @@ function toUnitRecord(doc: ILibraryUnit): LibraryUnitRecord {
     documentId: doc.documentId.toString(),
     contentHtml: doc.contentHtml ?? '',
     text: doc.text ?? '',
-    ...(doc.readableText === undefined ? {} : { readableText: doc.readableText }),
   };
 }
 
@@ -228,7 +238,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     userId: string,
     input: LibraryBookInput,
   ): Promise<LibraryDocumentSaveResult> {
-    const { units, ...documentInput } = input;
+    const { units, resources = [], ...documentInput } = input;
     const saved = await saveLibraryDocument(userId, {
       ...documentInput,
       kind: input.kind ?? (units[0]?.kind === 'page' ? 'pdf' : 'epub'),
@@ -236,12 +246,19 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     });
     // Same file, same units: nothing to rewrite. A new or changed book replaces its units whole,
     // so a failed earlier attempt that left only some of them is repaired by the next save.
-    const stored = await mongoose.models.LibraryUnit.countDocuments({
-      userId: toObjectId(userId),
-      documentId: toObjectId(saved.document.id),
-    });
-    if (saved.created || saved.contentChanged || stored !== units.length) {
+    const scope = { userId: toObjectId(userId), documentId: toObjectId(saved.document.id) };
+    const [storedUnits, storedResources] = await Promise.all([
+      mongoose.models.LibraryUnit.countDocuments(scope),
+      mongoose.models.LibraryResource.countDocuments(scope),
+    ]);
+    if (
+      saved.created ||
+      saved.contentChanged ||
+      storedUnits !== units.length ||
+      storedResources !== resources.length
+    ) {
       await replaceUnits(userId, saved.document.id, units);
+      await replaceResources(userId, saved.document.id, resources);
     }
     return saved;
   }
@@ -267,6 +284,51 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     }
   }
 
+  async function replaceResources(
+    userId: string,
+    documentId: string,
+    resources: LibraryResourceInput[],
+  ): Promise<void> {
+    const owner = toObjectId(userId);
+    const docId = toObjectId(documentId);
+    const LibraryResource = mongoose.models.LibraryResource;
+    await LibraryResource.deleteMany({ userId: owner, documentId: docId });
+    for (let i = 0; i < resources.length; i += RESOURCE_INSERT_BATCH) {
+      await LibraryResource.insertMany(
+        resources.slice(i, i + RESOURCE_INSERT_BATCH).map((resource) => ({
+          path: resource.path,
+          mediaType: resource.mediaType,
+          bytes: Buffer.from(resource.bytes),
+          size: resource.bytes.byteLength,
+          userId: owner,
+          documentId: docId,
+        })),
+      );
+    }
+  }
+
+  async function getLibraryResource(
+    userId: string,
+    documentId: string,
+    path: string,
+  ): Promise<LibraryResourceRecord | null> {
+    if (!Types.ObjectId.isValid(documentId) || typeof path !== 'string' || path.length === 0) {
+      return null;
+    }
+    const doc = (await mongoose.models.LibraryResource.findOne({
+      userId: toObjectId(userId),
+      documentId: toObjectId(documentId),
+      path,
+    }).lean()) as unknown as ILibraryResource | null;
+    if (!doc) {
+      return null;
+    }
+    // A lean read hands back the driver's Binary wrapper rather than a Buffer.
+    const raw = doc.bytes as unknown as Buffer | { buffer: Uint8Array };
+    const bytes = Buffer.isBuffer(raw) ? raw : Buffer.from(raw.buffer);
+    return { path: doc.path, mediaType: doc.mediaType, bytes };
+  }
+
   async function listLibraryUnits(
     userId: string,
     documentId: string,
@@ -276,7 +338,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     }
     const docs = (await mongoose.models.LibraryUnit.find(
       { userId: toObjectId(userId), documentId: toObjectId(documentId) },
-      { contentHtml: 0, text: 0, readableText: 0 },
+      { contentHtml: 0, text: 0 },
     )
       .sort({ index: 1 })
       .lean()) as unknown as ILibraryUnit[];
@@ -392,6 +454,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       mongoose.models.LibraryHighlight.deleteMany({ userId: owner, documentId }),
       mongoose.models.LibraryProgress.deleteMany({ userId: owner, documentId }),
       mongoose.models.LibraryUnit.deleteMany({ userId: owner, documentId }),
+      mongoose.models.LibraryResource.deleteMany({ userId: owner, documentId }),
     ]);
     return true;
   }
@@ -563,17 +626,19 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
 
   async function deleteAllLibraryData(userId: string): Promise<LibraryDataDeleteResult> {
     const owner = toObjectId(userId);
-    const [documents, highlights, progress, units] = await Promise.all([
+    const [documents, highlights, progress, units, resources] = await Promise.all([
       mongoose.models.LibraryDocument.deleteMany({ userId: owner }),
       mongoose.models.LibraryHighlight.deleteMany({ userId: owner }),
       mongoose.models.LibraryProgress.deleteMany({ userId: owner }),
       mongoose.models.LibraryUnit.deleteMany({ userId: owner }),
+      mongoose.models.LibraryResource.deleteMany({ userId: owner }),
     ]);
     return {
       documents: documents.deletedCount,
       highlights: highlights.deletedCount,
       progress: progress.deletedCount,
       units: units.deletedCount,
+      resources: resources.deletedCount,
     };
   }
 
@@ -583,6 +648,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     getLibraryDocument,
     listLibraryUnits,
     getLibraryUnit,
+    getLibraryResource,
     listLibraryDocuments,
     searchLibraryDocuments,
     updateLibraryDocument,

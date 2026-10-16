@@ -3525,7 +3525,6 @@
   "com_library_color_purple": "purple",
   "com_library_highlight_error": "Couldn't save that highlight. Try again.",
   "com_library_highlighting_off": "Highlighting is off for this text because it doesn't match what was saved. Reload the page.",
-  "com_library_pdf_no_highlight": "Highlighting isn't available for PDF pages yet.",
   "com_library_orphaned": "This passage could not be found in the current text.",
   "com_library_note": "Note",
   "com_library_add_note": "Add a note",

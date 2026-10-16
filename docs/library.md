@@ -28,12 +28,13 @@ drawer), leading to `/library`:
   after reloading, and if a saved page is saved again with different text they are moved, or marked
   as not found, never lost;
 - the reader remembers where you stopped (a text position, not a scroll distance) and returns there;
-- an EPUB shows its contents and is read a chapter at a time, with highlights per chapter; a PDF is
-  read a page at a time as reflowed text.
+- an EPUB shows its contents and its pictures and is read a chapter at a time; a PDF is read a page at
+  a time as reflowed text; both keep their highlights per chapter or page;
+- on a narrow screen the contents and the highlights open as a sheet over the text from buttons in the
+  header, instead of as side columns.
 
-What the screens do not do yet: highlight PDF pages (they need a page view that reproduces the exact
-text layer), show EPUB images, show the highlights panel on narrow screens, edit tags, or subscribe
-to feeds (the feed preview endpoint has no screen). If the text the browser shows ever differs from
+What the screens do not do yet: show a PDF page as the page itself (there is no page image, only its
+text), edit tags, or subscribe to feeds (the feed preview endpoint has no screen). If the text the browser shows ever differs from
 the text the server anchored highlights in, highlighting is switched off for that text with a notice,
 rather than saving highlights in the wrong place.
 
@@ -62,14 +63,23 @@ Each coordinate space is separate:
 
 - an article: the text of the sanitized `contentHtml`;
 - an EPUB chapter: the text of that chapter's `contentHtml`;
-- a PDF page: the page's text items joined with nothing between them (`text`). The page also has a
-  reflowed `readableText` for reading and search. **A client must build its selection offsets from
-  the first, not the second.**
+- a PDF page: the page's reflowed text (lines joined into paragraphs, hyphenation repaired), which is
+  exactly what the reader shows. It is shown as one block of preformatted text, so the characters on
+  screen are the characters anchored. (The raw text items are not used: they run words together, and a
+  browser cannot reproduce them without the PDF.)
+
+A PDF page's anchors therefore mean something only against the reflowed text. If a page image view is
+added later it will need its own mapping from the image's text layer to these offsets.
 
 ## Known limits
 
-- **Images in EPUBs are not served.** Chapter HTML carries `data-epub-resource` markers where images
-  were; the image bytes are not stored yet.
+- **EPUB images** are stored with the book (raster formats only, typed from their bytes; at most 40 MiB
+  per book, and a larger picture or one over the budget is left out) and served from
+  `GET /api/library/documents/:id/resources?path=`. The reader fetches each with the session's
+  credentials, because an `<img src>` cannot send them, and shows it from an object URL. SVG, fonts
+  and the book's own CSS are not kept.
+- **Highlights on a PDF follow the reflowed text.** A revised PDF is a different document (its key is
+  its bytes), so highlights never carry across versions of the same paper.
 - **Scanned PDFs** (`needsOcr: true`) have almost no text and are not searchable. There is no OCR.
 - **Multi-column PDFs** read in content-stream order, which can interleave columns.
 - **PDFs that forbid copying** are read like any other. Whether to honour that flag is undecided.
@@ -80,8 +90,6 @@ Each coordinate space is separate:
 - **Feeds are not subscribed to.** There is no polling schedule yet.
 - **Pages that need JavaScript** to render cannot be fetched by URL; save them from the browser with
   `{ url, html }` instead.
-- The PDF text layer contract (the client must reproduce `text` from pdf.js spans) has been checked
-  on the server only, not in a real browser.
 - Saving by URL stores third-party text for the user. Take legal advice before offering that
   publicly.
 

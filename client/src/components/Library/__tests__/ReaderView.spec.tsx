@@ -1,6 +1,6 @@
 import React from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { mockClient } from 'test/libraryMocks';
 
 let mockDocument: { data?: unknown; isLoading: boolean; isError: boolean };
@@ -169,7 +169,6 @@ describe('ReaderView: a book', () => {
         contentHash: `u${index}`,
         contentHtml: `<p>chapter ${index}</p>`,
         text: `chapter ${index}`,
-        readableText: `page ${index} reflowed`,
       },
       highlights: [highlight(`u${index}-a`, index), highlight(`u${index}-b`, index)],
     },
@@ -215,17 +214,19 @@ describe('ReaderView: a book', () => {
     expect(mockUnitArgs.slice(1)).toEqual([2]);
   });
 
-  it('shows a PDF page as reading text with highlighting off, and says why', () => {
+  it('shows a PDF page as reading text with that page\u2019s own highlights, anchored on its text', () => {
     mockDocument = book('pdf');
     mockUnit = unitData(1, 'page');
     renderAt('/library/d1');
     expect(bodyProps.at(-1)).toMatchObject({
-      plainText: 'page 1 reflowed',
-      highlightingDisabledReason: 'com_library_pdf_no_highlight',
+      plainText: 'chapter 1',
+      anchorText: 'chapter 1',
+      contentHash: 'u1',
       unit: { kind: 'page', index: 1 },
     });
     expect(bodyProps.at(-1)?.html).toBeUndefined();
-    expect(bodyProps.at(-1)?.highlights).toEqual([]);
+    expect(bodyProps.at(-1)?.highlightingDisabledReason).toBeUndefined();
+    expect(bodyProps.at(-1)?.highlights).toHaveLength(2);
   });
 
   it('waits for a chapter that is still loading, and says when it could not load', () => {
@@ -264,5 +265,92 @@ describe('ReaderView: when there is nothing to show', () => {
     mockDocument = { isLoading: false, isError: false, data: undefined };
     renderAt('/library/d1');
     expect(screen.getByText('com_library_not_found')).toBeInTheDocument();
+  });
+});
+
+describe('ReaderView: narrow screens', () => {
+  beforeEach(() => {
+    mockDocument = {
+      isLoading: false,
+      isError: false,
+      data: {
+        document: summary({
+          kind: 'epub',
+          unitCount: 2,
+          toc: [{ title: 'Intro', depth: 0, unitIndex: 0 }],
+        }),
+        units: [0, 1].map((index) => ({
+          index,
+          kind: 'chapter',
+          wordCount: 1,
+          contentHash: `u${index}`,
+        })),
+        highlights: [],
+        progress: null,
+      },
+    };
+    mockUnit = {
+      isLoading: false,
+      isError: false,
+      data: {
+        unit: {
+          index: 0,
+          kind: 'chapter',
+          documentId: 'd1',
+          wordCount: 1,
+          contentHash: 'u0',
+          contentHtml: '<p>x</p>',
+          text: 'x',
+        },
+        highlights: [highlight('a', 0), highlight('b', 0), highlight('c', 0)],
+      },
+    };
+  });
+
+  it('opens the highlights as a sheet from the header, and closes it again', () => {
+    renderAt('/library/d1');
+    expect(screen.queryByTestId('library-sheet')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_highlights' }));
+    const sheet = screen.getByTestId('library-sheet');
+    expect(sheet).toHaveAttribute('aria-label', 'com_library_highlights');
+    expect(sheet).toHaveClass('lg:hidden');
+    expect(sheet).toHaveTextContent('3');
+    fireEvent.click(screen.getByRole('button', { name: 'com_ui_close' }));
+    expect(screen.queryByTestId('library-sheet')).not.toBeInTheDocument();
+  });
+
+  it('opens the contents as a sheet, and picking a chapter closes it', () => {
+    renderAt('/library/d1');
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_contents' }));
+    const sheet = screen.getByTestId('library-sheet');
+    expect(sheet).toHaveClass('md:hidden');
+    mockUnit = { ...mockUnit };
+    fireEvent.click(within(sheet).getByText('Intro'));
+    expect(screen.queryByTestId('library-sheet')).not.toBeInTheDocument();
+  });
+
+  it('shows one sheet at a time', () => {
+    renderAt('/library/d1');
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_contents' }));
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_highlights' }));
+    expect(screen.getAllByTestId('library-sheet')).toHaveLength(1);
+    expect(screen.getByTestId('library-sheet')).toHaveAttribute(
+      'aria-label',
+      'com_library_highlights',
+    );
+  });
+
+  it('offers no contents button for an article', () => {
+    mockDocument = {
+      isLoading: false,
+      isError: false,
+      data: {
+        document: { ...summary(), contentHtml: '<p>x</p>', text: 'x' },
+        highlights: [],
+        progress: null,
+      },
+    };
+    renderAt('/library/d1');
+    expect(screen.queryByRole('button', { name: 'com_library_contents' })).not.toBeInTheDocument();
   });
 });

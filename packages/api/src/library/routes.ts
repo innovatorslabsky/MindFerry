@@ -222,6 +222,7 @@ export interface LibraryHandlers {
   upload: Handler;
   previewFeed: Handler;
   getUnit: Handler;
+  getResource: Handler;
   list: Handler;
   get: Handler;
   patch: Handler;
@@ -346,6 +347,23 @@ export function createLibraryHandlers({
     res.status(200).json({ unit, highlights });
   };
 
+  const getResource: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const service = serviceFor(req);
+    const path = typeof req.query.path === 'string' ? req.query.path : '';
+    const resource = await service.getResource(userId, param(req, 'id'), path);
+    if (!resource) return fail(res, 404, 'not_found', 'Image not found');
+    // Only raster images are ever stored, typed from their bytes. These headers keep the browser from
+    // treating the response as anything else, or running anything it might contain, even if opened directly.
+    res.setHeader('Content-Type', resource.mediaType);
+    res.setHeader('Content-Length', String(resource.bytes.length));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.status(200).end(resource.bytes);
+  };
+
   const patch: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
@@ -428,6 +446,7 @@ export function createLibraryHandlers({
     upload,
     previewFeed,
     getUnit,
+    getResource,
     list,
     get,
     patch,

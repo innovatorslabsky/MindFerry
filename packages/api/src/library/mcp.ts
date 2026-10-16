@@ -151,7 +151,7 @@ export function registerLibraryMcpTools(
           );
         }
         // A PDF page is read as reflowed text; its exact text is only the highlight coordinate space.
-        body = record.readableText ?? record.text;
+        body = record.text;
         where = ` · ${unitName} ${unit}`;
       }
       const start = Math.min(offset ?? 0, body.length);

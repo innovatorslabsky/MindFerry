@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { mockClient } from 'test/libraryMocks';
 
 const mockCreate = jest.fn();
@@ -14,6 +14,11 @@ jest.mock('~/common', () => ({ NotificationSeverity: { ERROR: 'error', SUCCESS: 
 jest.mock('~/data-provider', () => ({
   useCreateLibraryHighlightMutation: () => ({ mutate: mockCreate }),
   useSetLibraryProgressMutation: () => ({ mutate: mockProgress }),
+}));
+const mockGetResource = jest.fn();
+jest.mock('librechat-data-provider', () => ({
+  ...jest.requireActual('librechat-data-provider'),
+  dataService: { getLibraryResource: (...args: unknown[]) => mockGetResource(...args) },
 }));
 jest.mock('@librechat/client', () => ({
   ...mockClient,
@@ -111,15 +116,38 @@ describe('ReaderBody: showing text', () => {
     expect(content.textContent).toBe(TEXT);
   });
 
-  it('shows plain text such as a PDF page as paragraphs', () => {
+  it('shows plain text such as a PDF page as one block with its line breaks kept', () => {
+    const page = 'First paragraph.\n\nSecond paragraph.';
+    renderBody({ html: undefined, plainText: page, anchorText: page });
+    const content = screen.getByTestId('library-reader-content');
+    // One text node, so the text on screen is exactly the text highlights are anchored in.
+    expect(content.textContent).toBe(page);
+    expect(content.childNodes).toHaveLength(1);
+    expect(content).toHaveClass('whitespace-pre-wrap');
+    expect(screen.queryByTestId('library-highlighting-off')).not.toBeInTheDocument();
+  });
+
+  it('highlights plain text too, with offsets that count its line breaks', () => {
+    const page = 'First paragraph.\n\nSecond paragraph.';
     renderBody({
       html: undefined,
-      plainText: 'First paragraph.\n\nSecond paragraph.',
-      anchorText: 'First paragraph.\n\nSecond paragraph.',
-      highlightingDisabledReason: 'not for PDFs',
+      plainText: page,
+      anchorText: page,
+      unit: { kind: 'page', index: 3 },
+      highlights: [
+        highlight({ anchor: { exact: 'Second', prefix: '', suffix: '', start: 18, end: 24 } }),
+      ],
     });
-    expect(screen.getAllByText(/paragraph\./)).toHaveLength(2);
-    expect(screen.getByRole('note')).toHaveTextContent('not for PDFs');
+    expect(screen.getByTestId('library-reader-content').querySelector('mark')?.textContent).toBe(
+      'Second',
+    );
+    select(18, 24);
+    fireEvent.click(screen.getByLabelText('com_library_highlight_with:com_library_color_red'));
+    expect(mockCreate.mock.calls[0][0]).toMatchObject({
+      anchor: { exact: 'Second', start: 18, end: 24 },
+      unit: { kind: 'page', index: 3 },
+      color: 'red',
+    });
   });
 });
 
@@ -215,5 +243,64 @@ describe('ReaderBody: remembering the position', () => {
       jest.advanceTimersByTime(1600);
     });
     expect(mockProgress).not.toHaveBeenCalled();
+  });
+});
+
+describe('ReaderBody: book pictures', () => {
+  const CHAPTER =
+    '<p>Before</p><img alt="fig" data-epub-resource="OEBPS/images/a.png"><p>After</p>';
+  const CHAPTER_TEXT = 'BeforeAfter';
+
+  beforeEach(() => {
+    mockGetResource.mockResolvedValue(new Blob(['png'], { type: 'image/png' }));
+    URL.createObjectURL = jest.fn(() => 'blob:fake-url');
+    URL.revokeObjectURL = jest.fn();
+  });
+
+  it('fetches a chapter\u2019s pictures with the session and shows them, leaving the text alone', async () => {
+    renderBody({
+      html: CHAPTER,
+      anchorText: CHAPTER_TEXT,
+      unit: { kind: 'chapter', index: 0 },
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('library-reader-content').querySelector('img')?.getAttribute('src'),
+      ).toBe('blob:fake-url'),
+    );
+    expect(mockGetResource).toHaveBeenCalledWith('d1', 'OEBPS/images/a.png');
+    expect(screen.getByTestId('library-reader-content').textContent).toBe(CHAPTER_TEXT);
+    expect(screen.queryByTestId('library-highlighting-off')).not.toBeInTheDocument();
+  });
+
+  it('leaves a picture out when it cannot be fetched, without complaint', async () => {
+    mockGetResource.mockRejectedValue(new Error('404'));
+    renderBody({ html: CHAPTER, anchorText: CHAPTER_TEXT, unit: { kind: 'chapter', index: 0 } });
+    await waitFor(() => expect(mockGetResource).toHaveBeenCalled());
+    expect(
+      screen.getByTestId('library-reader-content').querySelector('img')?.getAttribute('src'),
+    ).toBeNull();
+    expect(mockToast).not.toHaveBeenCalled();
+  });
+
+  it('does not fetch pictures for an article or a page', () => {
+    renderBody({ html: CHAPTER, anchorText: CHAPTER_TEXT });
+    renderBody({
+      html: CHAPTER,
+      anchorText: CHAPTER_TEXT,
+      unit: { kind: 'page', index: 0 },
+    });
+    expect(mockGetResource).not.toHaveBeenCalled();
+  });
+
+  it('lets go of its object URLs when the chapter goes away', async () => {
+    const { unmount } = renderBody({
+      html: CHAPTER,
+      anchorText: CHAPTER_TEXT,
+      unit: { kind: 'chapter', index: 0 },
+    });
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
+    unmount();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:fake-url');
   });
 });
