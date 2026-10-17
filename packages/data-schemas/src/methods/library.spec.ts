@@ -910,3 +910,21 @@ describe('OCR text for a scanned page', () => {
     expect(results.map((r) => r.status).sort()).toEqual(['has_text', 'saved']);
   });
 });
+
+describe('listLibraryDocumentsByIds', () => {
+  it("returns only the user's own documents among those asked for, without their text", async () => {
+    const a = await methods.saveLibraryDocument(userA, doc({ urlKey: 'x1' }));
+    const b = await methods.saveLibraryDocument(userA, doc({ urlKey: 'x2' }));
+    const other = await methods.saveLibraryDocument(userB, doc({ urlKey: 'x3' }));
+    const found = await methods.listLibraryDocumentsByIds(userA, [
+      a.document.id,
+      b.document.id,
+      other.document.id,
+      'not-an-id',
+      a.document.id,
+    ]);
+    expect(found.map((d) => d.id).sort()).toEqual([a.document.id, b.document.id].sort());
+    expect(found[0]).not.toHaveProperty('text');
+    expect(await methods.listLibraryDocumentsByIds(userA, [])).toEqual([]);
+  });
+});

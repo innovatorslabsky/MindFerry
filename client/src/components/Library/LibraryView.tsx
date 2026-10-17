@@ -24,6 +24,7 @@ import {
 } from '~/data-provider';
 import { NotificationSeverity } from '~/common';
 import { useDebounce } from '~/hooks/Input';
+import ExportButtons from './ExportButtons';
 import { libraryErrorKey } from './errors';
 import FeedsPanel from './FeedsPanel';
 import { useLocalize } from '~/hooks';
@@ -367,6 +368,10 @@ export default function LibraryView() {
             ))}
           </div>
         )}
+
+        <div className="flex justify-end">
+          <ExportButtons />
+        </div>
 
         {!query && location !== 'feed' && (
           <FolderBar folders={folderList} value={folder} onChange={setFolder} />

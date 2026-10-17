@@ -245,6 +245,7 @@ export interface LibraryHandlers {
   getResource: Handler;
   saveUnitText: Handler;
   getSource: Handler;
+  exportHighlights: Handler;
   removeSource: Handler;
   list: Handler;
   get: Handler;
@@ -505,6 +506,25 @@ export function createLibraryHandlers({
     }
   };
 
+  const exportHighlights: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const service = serviceFor(req);
+    const requested = req.query.format;
+    const format = requested === 'csv' || requested === 'markdown' ? requested : undefined;
+    if (!format) return fail(res, 400, 'invalid_request', 'format must be markdown or csv');
+    const documentId = typeof req.query.documentId === 'string' ? req.query.documentId : undefined;
+    const file = await service.exportHighlights(userId, format, documentId);
+    if (!file) return fail(res, 404, 'not_found', 'Document not found');
+    // A download, never something a browser should display or run, whatever the text contains.
+    res.setHeader('Content-Type', file.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.status(200).end(file.body);
+  };
+
   const getSource: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
@@ -624,6 +644,7 @@ export function createLibraryHandlers({
     getResource,
     saveUnitText,
     getSource,
+    exportHighlights,
     removeSource,
     list,
     get,

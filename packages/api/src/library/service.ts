@@ -22,6 +22,8 @@ import type {
 import type { DocumentDraft } from './ingest/saveDocument';
 import type { FeedFetchResult } from './feed/fetchFeed';
 import type { LibraryIngest } from './worker/ingest';
+import type { ExportFormat } from './export';
+import { EXPORT_MAX_HIGHLIGHTS, highlightsToCsv, highlightsToMarkdown } from './export';
 import { createAnchor, resolveAnchor } from './anchor/textQuote';
 import { fetchFeed, subscribeToUrl } from './feed/fetchFeed';
 import { saveHtml, saveUrl } from './ingest/saveDocument';
@@ -52,6 +54,7 @@ type Methods = Pick<
   | 'getLibrarySource'
   | 'deleteLibrarySource'
   | 'getLibraryDocument'
+  | 'listLibraryDocumentsByIds'
   | 'listLibraryDocuments'
   | 'searchLibraryDocuments'
   | 'updateLibraryDocument'
@@ -189,6 +192,15 @@ export interface LibraryService {
     index: number,
     text: string,
   ) => Promise<SaveUnitTextOutcome>;
+  /**
+   * The person's highlights as a file, for one document or for everything. `null` when a named
+   * document is not theirs. Never more than `EXPORT_MAX_HIGHLIGHTS`.
+   */
+  exportHighlights: (
+    userId: string,
+    format: ExportFormat,
+    documentId?: string,
+  ) => Promise<HighlightsExport | null>;
   createFolder: (userId: string, name: string) => Promise<LibraryFolderCreateResult>;
   listFolders: (userId: string) => Promise<LibraryFolderRecord[]>;
   renameFolder: (userId: string, id: string, name: string) => Promise<LibraryFolderRenameResult>;
@@ -255,6 +267,27 @@ export function cleanOcrText(raw: string): string {
       .trim()
       .slice(0, MAX_OCR_PAGE_CHARS)
   );
+}
+
+export interface HighlightsExport {
+  /** ASCII only, so it is safe in a `Content-Disposition` header. */
+  filename: string;
+  contentType: string;
+  body: string;
+  count: number;
+}
+
+/** A file name stem from a title: lower-case ASCII words, never empty. */
+export function filenameStem(title: string): string {
+  const stem = title
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 50)
+    .replace(/-+$/g, '');
+  return stem || 'document';
 }
 
 /** Most folders one person may have. */
@@ -546,6 +579,42 @@ export function createLibraryService({
         },
         MIN_PAGE_TEXT_CHARS,
       );
+    },
+
+    async exportHighlights(userId: string, format: ExportFormat, documentId?: string) {
+      const highlights = await methods.listLibraryHighlights(
+        userId,
+        documentId,
+        EXPORT_MAX_HIGHLIGHTS,
+      );
+      const documents = await methods.listLibraryDocumentsByIds(userId, [
+        ...(documentId ? [documentId] : []),
+        ...highlights.map((highlight) => highlight.documentId),
+      ]);
+      if (documentId && documents.length === 0) {
+        return null;
+      }
+      const rows = highlights.map((highlight) => ({
+        documentId: highlight.documentId,
+        text: highlight.anchor.exact,
+        note: highlight.note,
+        color: highlight.color,
+        tags: highlight.tags,
+        orphaned: highlight.orphaned,
+        unit: highlight.unit,
+        createdAt: highlight.createdAt,
+      }));
+      const extension = format === 'csv' ? 'csv' : 'md';
+      const stem = documentId ? `highlights-${filenameStem(documents[0].title)}` : 'highlights';
+      return {
+        filename: `mindferry-${stem}.${extension}`,
+        contentType: format === 'csv' ? 'text/csv; charset=utf-8' : 'text/markdown; charset=utf-8',
+        body:
+          format === 'csv'
+            ? highlightsToCsv(documents, rows)
+            : highlightsToMarkdown(documents, rows),
+        count: rows.length,
+      };
     },
 
     createFolder(userId: string, name: string) {

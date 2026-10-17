@@ -363,7 +363,7 @@ export default function ReaderView() {
           )}
         </main>
         <aside className="border-border-light hidden w-72 shrink-0 border-l lg:block">
-          <HighlightsPanel highlights={highlights} onFocus={onFocus} />
+          <HighlightsPanel documentId={document.id} highlights={highlights} onFocus={onFocus} />
         </aside>
       </div>
       <OGDialog open={confirmRemove} onOpenChange={setConfirmRemove}>
@@ -409,7 +409,7 @@ export default function ReaderView() {
           {sheet === 'contents' && isBook && units ? (
             <Contents document={document} units={units} current={unitIndex} onSelect={selectUnit} />
           ) : (
-            <HighlightsPanel highlights={highlights} onFocus={onFocus} />
+            <HighlightsPanel documentId={document.id} highlights={highlights} onFocus={onFocus} />
           )}
         </div>
       )}

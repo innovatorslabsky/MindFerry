@@ -38,6 +38,12 @@ jest.mock('@librechat/client', () => ({
   useToastContext: () => ({ showToast: mockToast }),
 }));
 
+jest.mock('../ExportButtons', () => ({
+  __esModule: true,
+  default: ({ documentId }: { documentId?: string }) => (
+    <div data-testid="export-buttons" data-document={documentId ?? ''} />
+  ),
+}));
 jest.mock('../FolderBar', () => ({
   __esModule: true,
   NO_FOLDER: 'none',
@@ -176,6 +182,13 @@ describe('LibraryView: the Feed tab and tags', () => {
     expect(mockQueryParams).toMatchObject({ location: 'inbox', tag: 'psych' });
     fireEvent.click(screen.getByLabelText('com_library_tag_filter_clear:psych'));
     expect(mockQueryParams).toMatchObject({ location: 'inbox', tag: undefined });
+  });
+});
+
+describe('LibraryView: export', () => {
+  it('offers to export everything, not one document', () => {
+    renderView();
+    expect(screen.getByTestId('export-buttons')).toHaveAttribute('data-document', '');
   });
 });
 

@@ -325,3 +325,21 @@ export const useSaveLibraryUnitTextMutation = (
     },
   );
 };
+
+/** Fetches the export with the person's session and hands it to the browser as a download. */
+export const useExportLibraryHighlightsMutation = (
+  options?: t.MutationOptions<
+    { blob: Blob; filename: string },
+    { format: 'markdown' | 'csv'; documentId?: string }
+  >,
+): UseMutationResult<
+  { blob: Blob; filename: string },
+  unknown,
+  { format: 'markdown' | 'csv'; documentId?: string },
+  unknown
+> =>
+  useMutation(
+    ({ format, documentId }: { format: 'markdown' | 'csv'; documentId?: string }) =>
+      dataService.exportLibraryHighlights(format, documentId),
+    options,
+  );

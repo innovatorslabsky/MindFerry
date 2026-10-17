@@ -227,6 +227,9 @@ export const libraryUploads = () => `${BASE_URL}/api/library/uploads`;
 
 export const libraryFeedPreview = () => `${BASE_URL}/api/library/feeds/preview`;
 
+export const libraryExport = (format: 'markdown' | 'csv', documentId?: string) =>
+  `${BASE_URL}/api/library/export?format=${format}${documentId ? `&documentId=${encodeURIComponent(documentId)}` : ''}`;
+
 export const libraryFolders = () => `${BASE_URL}/api/library/folders`;
 
 export const libraryFolder = (id: string) =>

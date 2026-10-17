@@ -106,6 +106,15 @@ export function createFakeLibraryMethods() {
       const unit = units.get(`${documentId}:${index}`);
       return unit && unit.userId === userId ? { ...unit } : null;
     },
+    async listLibraryDocumentsByIds(userId, ids) {
+      return ids
+        .map((id) => documents.get(id))
+        .filter(
+          (d, i, all): d is NonNullable<typeof d> =>
+            !!d && d.userId === userId && all.indexOf(d) === i,
+        )
+        .map(({ text: _text, contentHtml: _html, ...summary }) => ({ ...summary }));
+    },
     async getLibraryDocument(userId, id) {
       const doc = documents.get(id);
       return doc && doc.userId === userId ? { ...doc } : null;

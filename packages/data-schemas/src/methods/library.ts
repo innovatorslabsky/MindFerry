@@ -80,6 +80,8 @@ export interface LibraryMethods {
     input: LibraryUnitTextInput,
     minChars: number,
   ) => Promise<LibraryUnitTextResult>;
+  /** The listing entries (no text) of the given documents that belong to the user, in no set order. */
+  listLibraryDocumentsByIds: (userId: string, ids: string[]) => Promise<LibraryDocumentSummary[]>;
   /** Creates a folder; one with the same name (ignoring case) is returned as it is. */
   createLibraryFolder: (
     userId: string,
@@ -757,6 +759,21 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     return docs.map(toSummary);
   }
 
+  async function listLibraryDocumentsByIds(
+    userId: string,
+    ids: string[],
+  ): Promise<LibraryDocumentSummary[]> {
+    const valid = [...new Set(ids)].filter((id) => Types.ObjectId.isValid(id));
+    if (valid.length === 0) {
+      return [];
+    }
+    const docs = (await mongoose.models.LibraryDocument.find(
+      { userId: toObjectId(userId), _id: { $in: valid.map(toObjectId) } },
+      SUMMARY_PROJECTION,
+    ).lean()) as unknown as ILibraryDocument[];
+    return docs.map(toSummary);
+  }
+
   async function searchLibraryDocuments(
     userId: string,
     query: string,
@@ -1135,6 +1152,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     saveLibraryDocument,
     saveLibraryBook,
     getLibraryDocument,
+    listLibraryDocumentsByIds,
     listLibraryUnits,
     getLibraryUnit,
     getLibraryResource,

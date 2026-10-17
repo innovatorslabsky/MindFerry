@@ -1083,6 +1083,22 @@ export function previewLibraryFeed(url: string): Promise<{ feed: t.TLibraryFeedP
   return request.post(endpoints.libraryFeedPreview(), { url });
 }
 
+/** The person's highlights as a file, for one document or for everything. */
+export async function exportLibraryHighlights(
+  format: 'markdown' | 'csv',
+  documentId?: string,
+): Promise<{ blob: Blob; filename: string }> {
+  const response = await request.getResponse(endpoints.libraryExport(format, documentId), {
+    responseType: 'blob',
+  });
+  const disposition = String(response.headers?.['content-disposition'] ?? '');
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1];
+  return {
+    blob: response.data as Blob,
+    filename: filename ?? `mindferry-highlights.${format === 'csv' ? 'csv' : 'md'}`,
+  };
+}
+
 export function listLibraryFolders(): Promise<{ folders: t.TLibraryFolder[] }> {
   return request.get(endpoints.libraryFolders());
 }

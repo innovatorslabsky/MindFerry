@@ -48,8 +48,10 @@ jest.mock('../TagEditor', () => ({
 }));
 jest.mock('../HighlightsPanel', () => ({
   __esModule: true,
-  default: ({ highlights }: { highlights: unknown[] }) => (
-    <div data-testid="highlights-panel">{highlights.length}</div>
+  default: ({ highlights, documentId }: { highlights: unknown[]; documentId: string }) => (
+    <div data-testid="highlights-panel" data-document={documentId}>
+      {highlights.length}
+    </div>
   ),
 }));
 
@@ -381,6 +383,22 @@ describe('ReaderView: when there is nothing to show', () => {
     mockDocument = { isLoading: false, isError: false, data: undefined };
     renderAt('/library/d1');
     expect(screen.getByText('com_library_not_found')).toBeInTheDocument();
+  });
+});
+
+describe('ReaderView: export', () => {
+  it('gives the highlights panel the open document, so it can export it whole', () => {
+    mockDocument = {
+      data: {
+        document: { ...summary(), contentHtml: '<p>x</p>', text: 'x' },
+        highlights: [],
+        progress: null,
+      },
+      isLoading: false,
+      isError: false,
+    };
+    renderAt('/library/d1');
+    expect(screen.getAllByTestId('highlights-panel')[0]).toHaveAttribute('data-document', 'd1');
   });
 });
 

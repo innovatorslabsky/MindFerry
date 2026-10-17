@@ -7,6 +7,7 @@ import {
   useUpdateLibraryHighlightMutation,
 } from '~/data-provider';
 import { NotificationSeverity } from '~/common';
+import ExportButtons from './ExportButtons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
@@ -116,12 +117,14 @@ const HighlightRow = memo(({ highlight, onFocus }: HighlightRowProps) => {
 HighlightRow.displayName = 'HighlightRow';
 
 type HighlightsPanelProps = {
+  /** The open document, so its highlights can be exported whole, not just those in view. */
+  documentId: string;
   highlights: readonly TLibraryHighlight[];
   onFocus: (highlight: TLibraryHighlight) => void;
 };
 
 /** What the person has highlighted in the open text, with a note beside each if they wrote one. */
-function HighlightsPanel({ highlights, onFocus }: HighlightsPanelProps) {
+function HighlightsPanel({ documentId, highlights, onFocus }: HighlightsPanelProps) {
   const localize = useLocalize();
   return (
     <section aria-label={localize('com_library_highlights')} className="flex h-full flex-col">
@@ -137,6 +140,9 @@ function HighlightsPanel({ highlights, onFocus }: HighlightsPanelProps) {
           ))}
         </ul>
       )}
+      <div className="border-border-light border-t px-2 py-1.5">
+        <ExportButtons documentId={documentId} />
+      </div>
     </section>
   );
 }

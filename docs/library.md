@@ -103,6 +103,25 @@ The tags are set once. Saving the same page again, or editing the tags, is never
 off with `contextHub.library.autoTag: false` (default on). Scanned PDFs have no text to count, so they get
 only `pdf` (reading them with OCR does not add keyword tags afterwards).
 
+## Exporting highlights
+
+**Export highlights** (Markdown or CSV) sits above the library list for everything, and under the
+highlights panel in the reader for the open document (`GET /api/library/export?format=markdown|csv`,
+add `&documentId=<id>` for one document). Up to 10,000 highlights per file.
+
+- Markdown has a heading per document with its author, site and address, then each highlight as a
+  quote with its note, colour, page or chapter, tags and date. A highlight whose text can no longer be
+  found on its page is kept and marked.
+- CSV has one row per highlight (`Highlight, Title, Author, Source, URL, Note, Color, Tags, Location,
+Date, Not found`), with a byte order mark so Excel reads Vietnamese and CJK text correctly.
+- Highlights are text from web pages and from the person's own notes, so exports are made safe to open:
+  a CSV cell that a spreadsheet would run as a formula (starting with `=`, `+`, `-`, `@`, a tab or a
+  carriage return) gets a leading apostrophe, and a multi-line quote cannot leave its Markdown block.
+  A legitimate cell beginning with a dash therefore shows an apostrophe in a spreadsheet.
+- The download carries `nosniff`, a sandbox policy and `no-store`, and its file name is plain ASCII.
+- The chat assistant does not need the export: the library's MCP tools (`search_library`,
+  `get_document`, `list_highlights`) already let it read highlights directly.
+
 ## Reading scanned PDFs (OCR)
 
 A scanned PDF has pictures of pages and no text. When the original file is kept

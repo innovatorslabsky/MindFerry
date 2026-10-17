@@ -3597,5 +3597,9 @@
   "com_library_ocr_error": "Text couldn't be read from this page. Your administrator may need to allow WebAssembly (CSP_ALLOW_WASM).",
   "com_library_error_has_text": "That page already has text.",
   "com_library_error_empty_text": "No text was found on that page.",
-  "com_library_ocr_language": "Language of the text"
+  "com_library_ocr_language": "Language of the text",
+  "com_library_export": "Export highlights",
+  "com_library_export_markdown": "Markdown",
+  "com_library_export_csv": "CSV",
+  "com_library_export_error": "Couldn't export the highlights."
 }

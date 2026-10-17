@@ -97,6 +97,7 @@ router.post(
   handlers.upload,
 );
 router.post('/feeds/preview', ...save, handlers.previewFeed);
+router.get('/export', ...browse, handlers.exportHighlights);
 router.get('/folders', ...browse, handlers.listFolders);
 router.post('/folders', ...browse, handlers.createFolder);
 router.patch('/folders/:id', ...browse, handlers.renameFolder);
