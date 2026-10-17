@@ -19,6 +19,15 @@ import { libraryErrorKey } from './errors';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
+/** Written out so each label key is visible to the unused-key check. */
+const COLOR_LABEL = {
+  yellow: 'com_library_color_yellow',
+  blue: 'com_library_color_blue',
+  green: 'com_library_color_green',
+  red: 'com_library_color_red',
+  purple: 'com_library_color_purple',
+} as const;
+
 const PROGRESS_DELAY_MS = 1500;
 
 export type ReaderBodyHandle = { focusHighlight: (highlight: TLibraryHighlight) => void };
@@ -275,7 +284,7 @@ function ReaderBody({
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => onPick(color)}
               aria-label={localize('com_library_highlight_with', {
-                0: localize(`com_library_color_${color}`),
+                0: localize(COLOR_LABEL[color]),
               })}
               className={cn(
                 'library-swatch h-6 w-6 rounded-full border',
