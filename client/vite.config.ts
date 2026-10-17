@@ -117,6 +117,8 @@ export default defineConfig(({ command }) => ({
           'assets/rum.*.js',
           'assets/locale-*.js',
           'assets/query-devtools*.js',
+          /** The library's OCR engine and language data are fetched only when someone starts OCR; precaching them would add about 12 MB to every first visit. */
+          'assets/ocr/**',
         ],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         /**
