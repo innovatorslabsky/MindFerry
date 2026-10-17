@@ -681,6 +681,36 @@ export const contextHubSchema = z
       })
       .default({}),
     git: contextHubGitTargetSchema.optional(),
+    /**
+     * The reading library: save articles by URL, highlight them, resume where you left off. Off by
+     * default because it makes the server fetch URLs on a user's behalf and store third-party text.
+     */
+    library: z
+      .object({
+        enabled: z.boolean().default(false),
+        /**
+         * Where untrusted pages, PDFs, EPUBs and feeds are parsed. `process` (the default) uses a
+         * short-lived child process with no secrets, no writable disk, a memory ceiling and a hard
+         * timeout; `inline` parses inside the API process and is only for a single trusted user.
+         */
+        isolation: z
+          .object({
+            mode: z.enum(['process', 'inline']).default('process'),
+            maxConcurrent: z.number().int().min(1).max(16).default(2),
+            maxQueue: z.number().int().min(0).max(256).default(16),
+            timeoutMs: z.number().int().min(5_000).max(300_000).default(60_000),
+            memoryMb: z.number().int().min(128).max(4096).default(768),
+          })
+          .default({}),
+        /**
+         * Keep the original file of each uploaded PDF so a page can be shown as the page itself,
+         * not only as reflowed text. Off by default: it stores the whole file for every PDF.
+         */
+        keepPdfOriginals: z.boolean().default(false),
+        /** Tag each new document with its site and a few keywords. On unless turned off. */
+        autoTag: z.boolean().default(true),
+      })
+      .default({}),
   })
   .optional();
 
@@ -3303,6 +3333,8 @@ export type TStartupConfig = {
   /** Whether the operator has turned on the context hub archive
    *  (`contextHub.enabled`), independent of its MCP surface. */
   contextHubEnabled?: boolean;
+  /** Whether the operator has turned on the reading library (`contextHub.library.enabled`). */
+  libraryEnabled?: boolean;
   /** Conversation-owned code-environment decision protocol supported by the API.
    * Clients must not emit selection-less decisions unless this is advertised. */
   codeEnvironmentDecisionVersion?: typeof CODE_ENVIRONMENT_DECISION_VERSION;

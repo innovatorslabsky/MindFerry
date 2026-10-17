@@ -17,6 +17,7 @@ const esModules = [
 ].join('|');
 
 export default {
+  testEnvironment: '<rootDir>/jest.environment.cjs',
   collectCoverageFrom: ['src/**/*.{js,jsx,ts,tsx}', '!<rootDir>/node_modules/'],
   coveragePathIgnorePatterns: ['/node_modules/', '/dist/'],
   testPathIgnorePatterns: [
@@ -43,6 +44,7 @@ export default {
   },
   transformIgnorePatterns: [`/node_modules/(?!(${esModules})/).*/`],
   moduleNameMapper: {
+    '^pdfjs-dist/legacy/build/pdf\\.mjs$': '<rootDir>/src/library/__tests__/helpers/pdfjs.cjs',
     '^@src/(.*)$': '<rootDir>/src/$1',
     '~/(.*)': '<rootDir>/src/$1',
   },

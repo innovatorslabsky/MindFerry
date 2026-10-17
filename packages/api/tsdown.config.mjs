@@ -11,6 +11,8 @@ export default defineConfig({
     'src/telemetry.ts',
     'src/credentials.ts',
     'src/agents/files/edit-worker.ts',
+    // The reading library's isolated parser, started as a child process (never imported).
+    'src/library/worker/entry.ts',
   ],
   format: ['cjs'],
   platform: 'node',

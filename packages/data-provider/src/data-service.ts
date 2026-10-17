@@ -1027,6 +1027,166 @@ export function listHubThreads(params: {
   return request.get(`${endpoints.hubThreads()}${suffix}`);
 }
 
+export function listLibraryDocuments(
+  params: t.TLibraryListParams = {},
+): Promise<t.TLibraryListResponse> {
+  const query = new URLSearchParams();
+  if (params.q) {
+    query.set('q', params.q);
+  }
+  if (params.location) {
+    query.set('location', params.location);
+  }
+  if (params.tag) {
+    query.set('tag', params.tag);
+  }
+  if (params.folder) {
+    query.set('folder', params.folder);
+  }
+  if (params.limit) {
+    query.set('limit', String(params.limit));
+  }
+  if (params.skip) {
+    query.set('skip', String(params.skip));
+  }
+  return request.get(endpoints.libraryDocuments(query.toString()));
+}
+
+export function getLibraryDocument(id: string): Promise<t.TLibraryDocumentResponse> {
+  return request.get(endpoints.libraryDocument(id));
+}
+
+export function getLibraryUnit(id: string, index: number): Promise<t.TLibraryUnitResponse> {
+  return request.get(endpoints.libraryUnit(id, index));
+}
+
+export function saveLibraryDocument(data: t.TLibrarySaveRequest): Promise<t.TLibrarySaveResponse> {
+  return request.post(endpoints.libraryDocuments(), data);
+}
+
+export function uploadLibraryFile(data: FormData): Promise<t.TLibrarySaveResponse> {
+  return request.postMultiPart(endpoints.libraryUploads(), data);
+}
+
+export function updateLibraryDocument(
+  id: string,
+  patch: { location?: t.TLibraryLocation; tags?: string[]; folderId?: string | null },
+): Promise<{ document: t.TLibraryDocumentSummary }> {
+  return request.patch(endpoints.libraryDocument(id), patch);
+}
+
+export function deleteLibraryDocument(id: string): Promise<void> {
+  return request.delete(endpoints.libraryDocument(id));
+}
+
+export function previewLibraryFeed(url: string): Promise<{ feed: t.TLibraryFeedPreview }> {
+  return request.post(endpoints.libraryFeedPreview(), { url });
+}
+
+/** The person's highlights as a file, for one document or for everything. */
+export async function exportLibraryHighlights(
+  format: 'markdown' | 'csv',
+  documentId?: string,
+): Promise<{ blob: Blob; filename: string }> {
+  const response = await request.getResponse(endpoints.libraryExport(format, documentId), {
+    responseType: 'blob',
+  });
+  const disposition = String(response.headers?.['content-disposition'] ?? '');
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1];
+  return {
+    blob: response.data as Blob,
+    filename: filename ?? `mindferry-highlights.${format === 'csv' ? 'csv' : 'md'}`,
+  };
+}
+
+export function listLibraryFolders(): Promise<{ folders: t.TLibraryFolder[] }> {
+  return request.get(endpoints.libraryFolders());
+}
+
+export function createLibraryFolder(name: string): Promise<{ folder: t.TLibraryFolder }> {
+  return request.post(endpoints.libraryFolders(), { name });
+}
+
+export function renameLibraryFolder(
+  id: string,
+  name: string,
+): Promise<{ folder: t.TLibraryFolder }> {
+  return request.patch(endpoints.libraryFolder(id), { name });
+}
+
+export function deleteLibraryFolder(id: string): Promise<void> {
+  return request.delete(endpoints.libraryFolder(id));
+}
+
+export function listLibraryFeeds(): Promise<{ feeds: t.TLibraryFeed[] }> {
+  return request.get(endpoints.libraryFeeds());
+}
+
+export function followLibraryFeed(url: string): Promise<t.TLibraryFollowResponse> {
+  return request.post(endpoints.libraryFeeds(), { url });
+}
+
+export function refreshLibraryFeed(id: string): Promise<{ refresh: t.TLibraryFeedRefresh }> {
+  return request.post(endpoints.libraryFeedRefresh(id), {});
+}
+
+export function unfollowLibraryFeed(id: string): Promise<void> {
+  return request.delete(endpoints.libraryFeed(id));
+}
+
+/** Text read from the image of a scanned page. Only a page with no text of its own accepts it. */
+export function saveLibraryUnitText(
+  id: string,
+  index: number,
+  text: string,
+): Promise<{ unit: t.TLibraryUnit; needsOcr: boolean }> {
+  return request.put(endpoints.libraryUnitText(id, index), { text });
+}
+
+/** The original file of a PDF, when the deployment keeps them. */
+export async function getLibrarySource(id: string): Promise<Blob> {
+  const response = await request.getResponse(endpoints.librarySource(id), {
+    responseType: 'blob',
+  });
+  return response.data as Blob;
+}
+
+export function deleteLibrarySource(id: string): Promise<void> {
+  return request.delete(endpoints.librarySource(id));
+}
+
+/** One image of a saved book, as a Blob. The request carries the session's credentials, which an `<img src>` cannot. */
+export async function getLibraryResource(id: string, path: string): Promise<Blob> {
+  const response = await request.getResponse(endpoints.libraryResource(id, path), {
+    responseType: 'blob',
+  });
+  return response.data as Blob;
+}
+
+export function setLibraryProgress(
+  id: string,
+  data: { textOffset: number; unitIndex?: number },
+): Promise<{ progress: t.TLibraryProgress }> {
+  return request.put(endpoints.libraryProgress(id), data);
+}
+
+export function createLibraryHighlight(
+  data: t.TLibraryCreateHighlight,
+): Promise<{ highlight: t.TLibraryHighlight }> {
+  return request.post(endpoints.libraryHighlights(), data);
+}
+
+export function updateLibraryHighlight(
+  id: string,
+  patch: t.TLibraryPatchHighlight,
+): Promise<{ highlight: t.TLibraryHighlight }> {
+  return request.patch(endpoints.libraryHighlight(id), patch);
+}
+
+export function deleteLibraryHighlight(id: string): Promise<void> {
+  return request.delete(endpoints.libraryHighlight(id));
+}
+
 export function continueHubThread(
   id: string,
   target: t.THubContinueRequest = {},

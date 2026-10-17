@@ -202,6 +202,52 @@ export const hubThreads = () => `${BASE_URL}/api/hub/threads`;
 
 export const hubThread = (id: string) => `${BASE_URL}/api/hub/threads/${encodeURIComponent(id)}`;
 
+export const libraryDocuments = (params?: string) =>
+  `${BASE_URL}/api/library/documents${params ? `?${params}` : ''}`;
+
+export const libraryDocument = (id: string) =>
+  `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}`;
+
+export const libraryUnit = (id: string, index: number) =>
+  `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/units/${index}`;
+
+export const libraryResource = (id: string, path: string) =>
+  `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/resources?path=${encodeURIComponent(path)}`;
+
+export const libraryUnitText = (id: string, index: number) =>
+  `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/units/${index}/text`;
+
+export const librarySource = (id: string) =>
+  `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/source`;
+
+export const libraryProgress = (id: string) =>
+  `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/progress`;
+
+export const libraryUploads = () => `${BASE_URL}/api/library/uploads`;
+
+export const libraryFeedPreview = () => `${BASE_URL}/api/library/feeds/preview`;
+
+export const libraryExport = (format: 'markdown' | 'csv', documentId?: string) =>
+  `${BASE_URL}/api/library/export?format=${format}${documentId ? `&documentId=${encodeURIComponent(documentId)}` : ''}`;
+
+export const libraryFolders = () => `${BASE_URL}/api/library/folders`;
+
+export const libraryFolder = (id: string) =>
+  `${BASE_URL}/api/library/folders/${encodeURIComponent(id)}`;
+
+export const libraryFeeds = () => `${BASE_URL}/api/library/feeds`;
+
+export const libraryFeed = (id: string) =>
+  `${BASE_URL}/api/library/feeds/${encodeURIComponent(id)}`;
+
+export const libraryFeedRefresh = (id: string) =>
+  `${BASE_URL}/api/library/feeds/${encodeURIComponent(id)}/refresh`;
+
+export const libraryHighlights = () => `${BASE_URL}/api/library/highlights`;
+
+export const libraryHighlight = (id: string) =>
+  `${BASE_URL}/api/library/highlights/${encodeURIComponent(id)}`;
+
 export const hubNotes = () => `${BASE_URL}/api/hub/notes`;
 
 export const hubNote = (id: string) => `${BASE_URL}/api/hub/notes/${encodeURIComponent(id)}`;

@@ -8,16 +8,24 @@ import { createAgentTriggerUserPurgeModel } from './triggerUserPurge';
 import { createRefreshTokenBridgeModel } from './refreshTokenBridge';
 import { createAgentTriggerDeliveryModel } from './triggerDelivery';
 import { createToolApprovalGrantModel } from './toolApprovalGrant';
+import { createLibraryHighlightModel } from './libraryHighlight';
 import { createSkillSyncStatusModel } from './skillSyncStatus';
 import { createConversationTagModel } from './conversationTag';
 import { createCodeEnvironmentModel } from './codeEnvironment';
+import { createLibraryDocumentModel } from './libraryDocument';
+import { createLibraryProgressModel } from './libraryProgress';
+import { createLibraryResourceModel } from './libraryResource';
 import { createHubOAuthClientModel } from './hubOAuthClient';
 import { createAgentCategoryModel } from './agentCategory';
+import { createLibrarySourceModel } from './librarySource';
+import { createLibraryFolderModel } from './libraryFolder';
 import { createChatProjectModel } from './chatProject';
 import { createAgentApiKeyModel } from './agentApiKey';
 import { createTransactionModel } from './transaction';
 import { createPromptGroupModel } from './promptGroup';
 import { createSystemGrantModel } from './systemGrant';
+import { createLibraryUnitModel } from './libraryUnit';
+import { createLibraryFeedModel } from './libraryFeed';
 import { createPluginAuthModel } from './pluginAuth';
 import { createSharedLinkModel } from './sharedLink';
 import { createAccessRoleModel } from './accessRole';
@@ -70,6 +78,14 @@ export function createModels(mongoose: typeof import('mongoose')): {
   HubThread: ReturnType<typeof createHubThreadModel>;
   HubNote: ReturnType<typeof createHubNoteModel>;
   HubOAuthClient: ReturnType<typeof createHubOAuthClientModel>;
+  LibraryDocument: ReturnType<typeof createLibraryDocumentModel>;
+  LibraryHighlight: ReturnType<typeof createLibraryHighlightModel>;
+  LibraryProgress: ReturnType<typeof createLibraryProgressModel>;
+  LibraryUnit: ReturnType<typeof createLibraryUnitModel>;
+  LibraryResource: ReturnType<typeof createLibraryResourceModel>;
+  LibraryFeed: ReturnType<typeof createLibraryFeedModel>;
+  LibrarySource: ReturnType<typeof createLibrarySourceModel>;
+  LibraryFolder: ReturnType<typeof createLibraryFolderModel>;
   AgentCategory: ReturnType<typeof createAgentCategoryModel>;
   MCPServer: ReturnType<typeof createMCPServerModel>;
   Role: ReturnType<typeof createRoleModel>;
@@ -124,6 +140,14 @@ export function createModels(mongoose: typeof import('mongoose')): {
     HubThread: createHubThreadModel(mongoose),
     HubNote: createHubNoteModel(mongoose),
     HubOAuthClient: createHubOAuthClientModel(mongoose),
+    LibraryDocument: createLibraryDocumentModel(mongoose),
+    LibraryHighlight: createLibraryHighlightModel(mongoose),
+    LibraryProgress: createLibraryProgressModel(mongoose),
+    LibraryUnit: createLibraryUnitModel(mongoose),
+    LibraryResource: createLibraryResourceModel(mongoose),
+    LibraryFeed: createLibraryFeedModel(mongoose),
+    LibrarySource: createLibrarySourceModel(mongoose),
+    LibraryFolder: createLibraryFolderModel(mongoose),
     AgentCategory: createAgentCategoryModel(mongoose),
     MCPServer: createMCPServerModel(mongoose),
     Role: createRoleModel(mongoose),

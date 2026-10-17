@@ -56,6 +56,7 @@ const mcpHandler = createContextHubMcpHandler({
   methods: db,
   importConversation: importHubConversation,
   clientOrigin: process.env.DOMAIN_CLIENT,
+  libraryMethods: db,
 });
 
 /**

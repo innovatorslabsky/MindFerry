@@ -1,0 +1,86 @@
+describe('library routes wiring', () => {
+  const router = () => require('../library');
+  const find = (path, method) =>
+    router().stack.find((layer) => layer.route?.path === path && layer.route.methods[method])
+      ?.route;
+
+  it('loads the library router without throwing', () => {
+    expect(() => router()).not.toThrow();
+  });
+
+  it.each([
+    ['/documents', 'post'],
+    ['/documents', 'get'],
+    ['/documents/:id', 'get'],
+    ['/documents/:id', 'patch'],
+    ['/documents/:id', 'delete'],
+    ['/documents/:id/units/:index', 'get'],
+    ['/documents/:id/resources', 'get'],
+    ['/feeds/preview', 'post'],
+    ['/export', 'get'],
+    ['/folders', 'get'],
+    ['/folders', 'post'],
+    ['/folders/:id', 'patch'],
+    ['/folders/:id', 'delete'],
+    ['/feeds', 'post'],
+    ['/feeds', 'get'],
+    ['/feeds/:id/refresh', 'post'],
+    ['/feeds/:id', 'delete'],
+    ['/documents/:id/source', 'get'],
+    ['/documents/:id/source', 'delete'],
+    ['/documents/:id/progress', 'put'],
+    ['/highlights', 'post'],
+    ['/highlights/:id', 'patch'],
+    ['/highlights/:id', 'delete'],
+  ])('registers %s %s behind auth, config and a rate limit', (path, method) => {
+    const route = find(path, method);
+    expect(route).toBeDefined();
+    // requireJwtAuth, configMiddleware, limiter, handler
+    expect(route.stack.length).toBe(4);
+  });
+
+  it('registers the upload behind auth, config, a rate limit and the file parser', () => {
+    const route = find('/uploads', 'post');
+    expect(route).toBeDefined();
+    // requireJwtAuth, configMiddleware, limiter, upload parser, handler
+    expect(route.stack.length).toBe(5);
+  });
+
+  it('gives the routes every method the service calls from the app models', () => {
+    const db = require('~/models');
+    for (const name of [
+      'saveLibraryDocument',
+      'saveLibraryBook',
+      'listLibraryUnits',
+      'getLibraryUnit',
+      'getLibraryResource',
+      'listLibraryDocumentsByIds',
+      'createLibraryFolder',
+      'listLibraryFolders',
+      'renameLibraryFolder',
+      'deleteLibraryFolder',
+      'saveLibrarySource',
+      'getLibrarySource',
+      'deleteLibrarySource',
+      'addLibraryFeed',
+      'listLibraryFeeds',
+      'getLibraryFeed',
+      'recordLibraryFeedRefresh',
+      'deleteLibraryFeed',
+      'getLibraryDocument',
+      'listLibraryDocuments',
+      'searchLibraryDocuments',
+      'updateLibraryDocument',
+      'deleteLibraryDocument',
+      'createLibraryHighlight',
+      'listLibraryHighlights',
+      'updateLibraryHighlight',
+      'deleteLibraryHighlight',
+      'reanchorLibraryHighlights',
+      'getLibraryProgress',
+      'setLibraryProgress',
+    ]) {
+      expect(typeof db[name]).toBe('function');
+    }
+  });
+});

@@ -466,6 +466,7 @@ const startServer = async () => {
   app.use('/api/tags', routes.tags);
   app.use('/api/mcp', routes.mcp);
   app.use('/api/hub', routes.hub);
+  app.use('/api/library', routes.library);
   app.use('/.well-known', routes.hubWellKnown);
   app.use('/api/channels/slack', routes.slackChannel);
   app.use('/api/rum', routes.rum);

@@ -90,6 +90,7 @@ export default defineConfig(({ command }) => ({
       },
     },
     copyPublicAssets(),
+    serveOcrAssets(),
     VitePWA({
       injectRegister: 'auto', // 'auto' | 'manual' | 'disabled'
       registerType: 'autoUpdate', // 'prompt' | 'autoUpdate'
@@ -116,6 +117,8 @@ export default defineConfig(({ command }) => ({
           'assets/rum.*.js',
           'assets/locale-*.js',
           'assets/query-devtools*.js',
+          /** The library's OCR engine and language data are fetched only when someone starts OCR; precaching them would add about 12 MB to every first visit. */
+          'assets/ocr/**',
         ],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         /**
@@ -520,6 +523,94 @@ export function copyPublicAssets(): Plugin {
           ),
         ),
       );
+    },
+  };
+}
+
+/**
+ * The files the library's in-browser OCR needs at run time: tesseract.js's worker and WebAssembly
+ * core, and the English language data. They are served from this app's own origin (nothing is
+ * fetched from a CDN, so the page works offline and leaks nothing about what is being read) under
+ * `assets/ocr/`, and are only requested when someone starts OCR. In a build they are copied into
+ * the output; in development they are served straight from `node_modules`.
+ */
+const OCR_FILES: Array<{ url: string; from?: string[]; absolute?: string }> = [
+  { url: 'worker.min.js', from: ['tesseract.js', 'dist', 'worker.min.js'] },
+  {
+    url: 'tesseract-core-lstm.wasm.js',
+    from: ['tesseract.js-core', 'tesseract-core-lstm.wasm.js'],
+  },
+  {
+    url: 'tesseract-core-relaxedsimd-lstm.wasm.js',
+    from: ['tesseract.js-core', 'tesseract-core-relaxedsimd-lstm.wasm.js'],
+  },
+  {
+    url: 'tesseract-core-simd-lstm.wasm.js',
+    from: ['tesseract.js-core', 'tesseract-core-simd-lstm.wasm.js'],
+  },
+];
+
+/**
+ * Language data for OCR, one package per language (the codes tesseract.js uses, which `OCR_LANGUAGES`
+ * in `src/utils/ocr.ts` lists). Each is named in full so that dependency checks can see it is used.
+ */
+const OCR_LANGUAGE_PACKAGES: Record<string, string> = {
+  eng: require.resolve('@tesseract.js-data/eng/package.json'),
+  vie: require.resolve('@tesseract.js-data/vie/package.json'),
+  chi_sim: require.resolve('@tesseract.js-data/chi_sim/package.json'),
+  fra: require.resolve('@tesseract.js-data/fra/package.json'),
+  kor: require.resolve('@tesseract.js-data/kor/package.json'),
+  jpn: require.resolve('@tesseract.js-data/jpn/package.json'),
+  spa: require.resolve('@tesseract.js-data/spa/package.json'),
+  deu: require.resolve('@tesseract.js-data/deu/package.json'),
+};
+for (const [code, packageJson] of Object.entries(OCR_LANGUAGE_PACKAGES)) {
+  OCR_FILES.push({
+    url: `lang/${code}.traineddata.gz`,
+    absolute: path.join(path.dirname(packageJson), '4.0.0_best_int', `${code}.traineddata.gz`),
+  });
+}
+
+function ocrSource(parts: string[]): string {
+  for (const base of [
+    path.resolve(import.meta.dirname, '../node_modules'),
+    path.resolve(import.meta.dirname, 'node_modules'),
+  ]) {
+    const candidate = path.join(base, ...parts);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  throw new Error(`OCR asset not found in node_modules: ${parts.join('/')}`);
+}
+
+export function serveOcrAssets(): Plugin {
+  let outDir = path.resolve(import.meta.dirname, 'dist');
+  return {
+    name: 'serve-ocr-assets',
+    configResolved(config) {
+      outDir = path.resolve(config.root, config.build.outDir);
+    },
+    configureServer(server) {
+      server.middlewares.use('/assets/ocr', (req, res, next) => {
+        const name = (req.url ?? '').split('?')[0].replace(/^\//, '');
+        const file = OCR_FILES.find((entry) => entry.url === name);
+        if (!file) {
+          return next();
+        }
+        res.setHeader(
+          'Content-Type',
+          name.endsWith('.js') ? 'text/javascript' : 'application/gzip',
+        );
+        fs.createReadStream(file.absolute ?? ocrSource(file.from ?? [])).pipe(res);
+      });
+    },
+    async writeBundle() {
+      for (const file of OCR_FILES) {
+        const target = path.join(outDir, 'assets', 'ocr', file.url);
+        await fs.promises.mkdir(path.dirname(target), { recursive: true });
+        await fs.promises.copyFile(file.absolute ?? ocrSource(file.from ?? []), target);
+      }
     },
   };
 }

@@ -2879,3 +2879,53 @@ describe('GitHub comparison configuration', () => {
     ).toBe(false);
   });
 });
+
+describe('contextHub.library', () => {
+  it('is off unless an operator turns it on, whatever the rest of contextHub says', () => {
+    expect(contextHubSchema.parse({ enabled: true })?.library.enabled).toBe(false);
+    expect(contextHubSchema.parse({ library: {} })?.library.enabled).toBe(false);
+  });
+
+  it('can be enabled independently of the hub', () => {
+    const result = contextHubSchema.parse({ library: { enabled: true } });
+    expect(result?.enabled).toBe(false);
+    expect(result?.library.enabled).toBe(true);
+  });
+
+  it('rejects a non-boolean flag', () => {
+    expect(contextHubSchema.safeParse({ library: { enabled: 'yes' } }).success).toBe(false);
+  });
+});
+
+describe('contextHub.library.isolation', () => {
+  it('defaults to parsing in a separate process with conservative limits', () => {
+    const isolation = contextHubSchema.parse({ library: { enabled: true } })?.library.isolation;
+    expect(isolation).toEqual({
+      mode: 'process',
+      maxConcurrent: 2,
+      maxQueue: 16,
+      timeoutMs: 60_000,
+      memoryMb: 768,
+    });
+  });
+
+  it('lets an operator choose inline parsing or tighter limits', () => {
+    const isolation = contextHubSchema.parse({
+      library: { isolation: { mode: 'inline', maxConcurrent: 1, timeoutMs: 10_000 } },
+    })?.library.isolation;
+    expect(isolation).toMatchObject({ mode: 'inline', maxConcurrent: 1, timeoutMs: 10_000 });
+  });
+
+  it.each([
+    { mode: 'thread' },
+    { maxConcurrent: 0 },
+    { maxConcurrent: 100 },
+    { timeoutMs: 100 },
+    { timeoutMs: 10_000_000 },
+    { memoryMb: 16 },
+    { memoryMb: 100_000 },
+    { maxQueue: -1 },
+  ])('rejects %p', (isolation) => {
+    expect(contextHubSchema.safeParse({ library: { isolation } }).success).toBe(false);
+  });
+});

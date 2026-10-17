@@ -8,8 +8,10 @@ import {
 } from 'librechat-data-provider';
 import type { HubStore, HubNote, HubThreadSummary } from './store';
 import type { HubOpenInChat, HubOpenInChatResult } from './chat';
+import type { LibraryMcpService } from '../../library/mcp';
 import type { HubProvider } from '../thread';
 import { renderThreadMarkdown, renderThreadOutlineMarkdown } from '../render';
+import { registerLibraryMcpTools } from '../../library/mcp';
 import { HUB_PROVIDERS, HUB_SURFACES } from '../thread';
 import { HubArchiveInputError } from './store';
 import { snippetAround } from './snippet';
@@ -36,6 +38,8 @@ export interface HubMcpServerOptions {
   maxArchiveBytes?: number;
   /** Opens an archived thread as a MindFerry chat. When absent, `open_in_chat` is not registered. */
   openInChat?: HubOpenInChat;
+  /** The caller's reading library. When absent, the library tools are not registered. */
+  library?: { userId: string; service: LibraryMcpService };
   name?: string;
   version?: string;
 }
@@ -98,6 +102,7 @@ export function createHubMcpServer(options: HubMcpServerOptions): McpServer {
     allowArchive = true,
     maxArchiveBytes = CONTEXT_HUB_DEFAULT_MAX_ARCHIVE_BYTES,
     openInChat,
+    library,
     name = 'mindferry',
     version = '1.0.0',
   } = options;
@@ -383,6 +388,10 @@ export function createHubMcpServer(options: HubMcpServerOptions): McpServer {
         return result.status === 'opened' ? asText(text) : { isError: true, ...asText(text) };
       },
     );
+  }
+
+  if (library) {
+    registerLibraryMcpTools(server, library.userId, library.service);
   }
 
   return server;
