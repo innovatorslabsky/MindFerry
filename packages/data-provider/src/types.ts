@@ -840,8 +840,7 @@ export type TConfig = {
 };
 
 export type TEndpointsConfig =
-  | Record<EModelEndpoint | string, TConfig | null | undefined>
-  | undefined;
+  Record<EModelEndpoint | string, TConfig | null | undefined> | undefined;
 
 export type TModelsConfig = Record<string, string[]>;
 
@@ -967,13 +966,7 @@ export type TVerify2FATempResponse = {
  * hands them straight to `@simplewebauthn/browser`, which validates the shape.
  */
 export type TPasskeyTransport =
-  | 'ble'
-  | 'cable'
-  | 'hybrid'
-  | 'internal'
-  | 'nfc'
-  | 'smart-card'
-  | 'usb';
+  'ble' | 'cable' | 'hybrid' | 'internal' | 'nfc' | 'smart-card' | 'usb';
 
 export type TPasskeyCredentialDescriptor = {
   id: string;
@@ -1467,8 +1460,7 @@ export type TLangfuseConnectionTestErrorCode =
   | 'unexpected_response';
 
 export type TLangfuseConnectionTestResponse =
-  | { success: true }
-  | { success: false; errorCode: TLangfuseConnectionTestErrorCode };
+  { success: true } | { success: false; errorCode: TLangfuseConnectionTestErrorCode };
 
 export type TLangfuseSessionLinkResponse = {
   url: string | null;

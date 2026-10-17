@@ -529,7 +529,7 @@ export function copyPublicAssets(): Plugin {
  * `assets/ocr/`, and are only requested when someone starts OCR. In a build they are copied into
  * the output; in development they are served straight from `node_modules`.
  */
-const OCR_FILES: Array<{ url: string; from: string[] }> = [
+const OCR_FILES: Array<{ url: string; from?: string[]; absolute?: string }> = [
   { url: 'worker.min.js', from: ['tesseract.js', 'dist', 'worker.min.js'] },
   {
     url: 'tesseract-core-lstm.wasm.js',
@@ -545,12 +545,24 @@ const OCR_FILES: Array<{ url: string; from: string[] }> = [
   },
 ];
 
-/** Language data for OCR: the codes tesseract.js uses, which `OCR_LANGUAGES` in `src/utils/ocr.ts` lists. */
-const OCR_LANGUAGES = ['eng', 'vie', 'chi_sim', 'fra', 'kor', 'jpn', 'spa', 'deu'];
-for (const code of OCR_LANGUAGES) {
+/**
+ * Language data for OCR, one package per language (the codes tesseract.js uses, which `OCR_LANGUAGES`
+ * in `src/utils/ocr.ts` lists). Each is named in full so that dependency checks can see it is used.
+ */
+const OCR_LANGUAGE_PACKAGES: Record<string, string> = {
+  eng: require.resolve('@tesseract.js-data/eng/package.json'),
+  vie: require.resolve('@tesseract.js-data/vie/package.json'),
+  chi_sim: require.resolve('@tesseract.js-data/chi_sim/package.json'),
+  fra: require.resolve('@tesseract.js-data/fra/package.json'),
+  kor: require.resolve('@tesseract.js-data/kor/package.json'),
+  jpn: require.resolve('@tesseract.js-data/jpn/package.json'),
+  spa: require.resolve('@tesseract.js-data/spa/package.json'),
+  deu: require.resolve('@tesseract.js-data/deu/package.json'),
+};
+for (const [code, packageJson] of Object.entries(OCR_LANGUAGE_PACKAGES)) {
   OCR_FILES.push({
     url: `lang/${code}.traineddata.gz`,
-    from: ['@tesseract.js-data', code, '4.0.0_best_int', `${code}.traineddata.gz`],
+    absolute: path.join(path.dirname(packageJson), '4.0.0_best_int', `${code}.traineddata.gz`),
   });
 }
 
@@ -585,14 +597,14 @@ export function serveOcrAssets(): Plugin {
           'Content-Type',
           name.endsWith('.js') ? 'text/javascript' : 'application/gzip',
         );
-        fs.createReadStream(ocrSource(file.from)).pipe(res);
+        fs.createReadStream(file.absolute ?? ocrSource(file.from ?? [])).pipe(res);
       });
     },
     async writeBundle() {
       for (const file of OCR_FILES) {
         const target = path.join(outDir, 'assets', 'ocr', file.url);
         await fs.promises.mkdir(path.dirname(target), { recursive: true });
-        await fs.promises.copyFile(ocrSource(file.from), target);
+        await fs.promises.copyFile(file.absolute ?? ocrSource(file.from ?? []), target);
       }
     },
   };

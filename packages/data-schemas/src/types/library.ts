@@ -252,7 +252,9 @@ export type LibraryFolderCreateResult =
   { status: 'created' | 'exists'; folder: LibraryFolderRecord } | { status: 'limit' };
 
 export type LibraryFolderRenameResult =
-  { status: 'renamed'; folder: LibraryFolderRecord } | { status: 'not_found' | 'exists' };
+  | { status: 'renamed'; folder: LibraryFolderRecord }
+  | { status: 'not_found' }
+  | { status: 'exists' };
 
 export interface LibraryUnitTextInput {
   text: string;
