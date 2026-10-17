@@ -23,7 +23,8 @@ export interface WorkerResultByOp {
 }
 
 export type WorkerReply =
-  { ok: true; result: unknown } | { ok: false; error: { name: string; message: string } };
+  | { ok: true; result: unknown }
+  | { ok: false; error: { name: string; message: string } };
 
 /** Settings the child process receives on the command line / environment, never from the job. */
 export const WORKER_RESULT_CHARS_ENV = 'LIBRARY_WORKER_MAX_RESULT_CHARS';
