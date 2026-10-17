@@ -1,8 +1,8 @@
 import type { Response } from 'express';
 import type { ServerRequest } from '../../types/http';
+import { createFakeLibraryMethods } from './helpers/fakeLibraryMethods';
 import { createContextHubMcpHandler } from '../../hub/mcp/route';
 import { handleHubMcpRequest } from '../../hub/mcp/http';
-import { createFakeLibraryMethods } from './helpers/fakeLibraryMethods';
 
 jest.mock('../../hub/mcp/http', () => ({ handleHubMcpRequest: jest.fn(async () => undefined) }));
 

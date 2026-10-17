@@ -8,13 +8,13 @@ import {
 } from 'librechat-data-provider';
 import type { HubStore, HubNote, HubThreadSummary } from './store';
 import type { HubOpenInChat, HubOpenInChatResult } from './chat';
+import type { LibraryMcpService } from '../../library/mcp';
 import type { HubProvider } from '../thread';
 import { renderThreadMarkdown, renderThreadOutlineMarkdown } from '../render';
+import { registerLibraryMcpTools } from '../../library/mcp';
 import { HUB_PROVIDERS, HUB_SURFACES } from '../thread';
 import { HubArchiveInputError } from './store';
 import { snippetAround } from './snippet';
-import type { LibraryMcpService } from '../../library/mcp';
-import { registerLibraryMcpTools } from '../../library/mcp';
 
 /**
  * The hub's MCP surface. One server serves every client that speaks MCP — a

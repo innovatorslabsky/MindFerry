@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { strFromU8, unzipSync } from 'fflate';
-import type { UnzipFileInfo } from 'fflate';
 import { JSDOM, VirtualConsole } from 'jsdom';
+import type { UnzipFileInfo } from 'fflate';
 import { readingMinutes, sanitizeArticleHtml, totalWords } from '../ingest/extract';
 import { editFragment, htmlToText, plainText } from '../ingest/html';
 

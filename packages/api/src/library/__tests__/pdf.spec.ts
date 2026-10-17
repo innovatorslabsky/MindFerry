@@ -1,3 +1,4 @@
+import type { TextItemLike } from '../core';
 import {
   PdfEncryptedError,
   PdfError,
@@ -8,9 +9,8 @@ import {
   resolveAnchor,
   sniffUpload,
 } from '../core';
-import type { TextItemLike } from '../core';
-import { epub3 } from './helpers/epubFixture';
 import { makePdf } from './helpers/pdfFixture';
+import { epub3 } from './helpers/epubFixture';
 
 const item = (str: string, y: number, hasEOL = true, height = 12): TextItemLike => ({
   str,

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Spinner } from '@librechat/client';
+import type { PdfPages } from '~/utils/pdfPages';
 import { useLibrarySourceQuery } from '~/data-provider';
 import { openPdfPages } from '~/utils/pdfPages';
-import type { PdfPages } from '~/utils/pdfPages';
 import { useLocalize } from '~/hooks';
 
 const MAX_WIDTH = 900;

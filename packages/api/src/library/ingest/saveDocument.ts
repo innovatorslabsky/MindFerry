@@ -1,8 +1,8 @@
-import { safeFetchHtml } from '../net/safeFetch';
-import type { SafeFetchOptions } from '../net/safeFetch';
-import { extractArticle } from './extract';
 import type { ExtractedArticle, ExtractOptions } from './extract';
+import type { SafeFetchOptions } from '../net/safeFetch';
 import { normalizeUrl, urlKey } from './normalizeUrl';
+import { safeFetchHtml } from '../net/safeFetch';
+import { extractArticle } from './extract';
 
 export interface DocumentDraft extends ExtractedArticle {
   /** URL as the user supplied it. */

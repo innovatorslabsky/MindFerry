@@ -1,6 +1,6 @@
 import { Model } from 'mongoose';
-import { applyTenantIsolation } from '~/models/plugins/tenantIsolation';
 import libraryDocumentSchema, { ILibraryDocument } from '~/schema/libraryDocument';
+import { applyTenantIsolation } from '~/models/plugins/tenantIsolation';
 
 export function createLibraryDocumentModel(
   mongoose: typeof import('mongoose'),

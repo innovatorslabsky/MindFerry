@@ -7,8 +7,8 @@ import {
   useDeleteLibraryFolderMutation,
   useRenameLibraryFolderMutation,
 } from '~/data-provider';
-import { libraryErrorKey } from './errors';
 import { NotificationSeverity } from '~/common';
+import { libraryErrorKey } from './errors';
 import { useLocalize } from '~/hooks';
 
 /** The value of the folder filter for documents that are in no folder. */

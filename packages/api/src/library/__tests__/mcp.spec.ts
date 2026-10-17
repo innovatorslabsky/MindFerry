@@ -1,13 +1,13 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { createFakeLibraryMethods } from './helpers/fakeLibraryMethods';
 import { createHubMemoryStore } from '../../hub/mcp/memory';
 import { createHubMcpServer } from '../../hub/mcp/server';
-import { createFakeLibraryMethods } from './helpers/fakeLibraryMethods';
 import { createAnchor } from '../anchor/textQuote';
 import { createLibraryService } from '../service';
-import { epub3 } from './helpers/epubFixture';
 import { makePdf } from './helpers/pdfFixture';
+import { epub3 } from './helpers/epubFixture';
 
 const para = (s: string) => `<p>${Array.from({ length: 10 }, () => s).join(' ')}</p>`;
 const page = (title: string, s: string) =>

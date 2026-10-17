@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { JSDOM, VirtualConsole } from 'jsdom';
-import { sanitizeArticleHtml } from '../ingest/extract';
 import { absoluteHttpUrl, absolutizeUrls, escapeHtml, plainText } from '../ingest/html';
+import { sanitizeArticleHtml } from '../ingest/extract';
 import { normalizeUrl } from '../ingest/normalizeUrl';
 
 export class FeedParseError extends Error {

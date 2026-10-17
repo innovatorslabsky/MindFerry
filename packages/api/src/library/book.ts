@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import type { LibraryBookInput, LibraryTocRecord } from '@librechat/data-schemas';
+import type { UploadDraft } from './ingest/upload';
 import type { EpubDraft } from './epub/parseEpub';
 import type { PdfDraft } from './pdf/parsePdf';
-import type { UploadDraft } from './ingest/upload';
 
 /** Search text kept on the document row. A book's full text lives in its units. */
 export const BOOK_SEARCH_TEXT_CHARS = 100_000;

@@ -2,14 +2,14 @@ import { createHash } from 'node:crypto';
 import type { Response } from 'express';
 import type { ServerRequest } from '../../types/http';
 import { createFakeLibraryMethods } from './helpers/fakeLibraryMethods';
+import { epub3, rawZip } from './helpers/epubFixture';
+import { createAnchor } from '../anchor/textQuote';
+import { FeedParseError } from '../feed/parseFeed';
 import { createLibraryHandlers } from '../routes';
 import { createLibraryService } from '../service';
-import { createAnchor } from '../anchor/textQuote';
-import { uploadKey } from '../book';
-import { FeedParseError } from '../feed/parseFeed';
 import { UnsafeUrlError } from '../net/safeFetch';
-import { epub3, rawZip } from './helpers/epubFixture';
 import { makePdf } from './helpers/pdfFixture';
+import { uploadKey } from '../book';
 
 const user = 'user-a';
 const other = 'user-b';

@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
-import { ArrowLeft, ExternalLink, Highlighter, List, X } from 'lucide-react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, ExternalLink, Highlighter, List, X } from 'lucide-react';
 import { Button, Spinner, OGDialog, OGDialogTemplate, useToastContext } from '@librechat/client';
 import type {
   TLibraryDocumentSummary,
@@ -9,18 +8,19 @@ import type {
   TLibraryProgress,
   TLibraryUnitSummary,
 } from 'librechat-data-provider';
+import type { CSSProperties } from 'react';
 import {
   useDeleteLibrarySourceMutation,
   useLibraryDocumentQuery,
   useLibraryUnitQuery,
 } from '~/data-provider';
-import { NotificationSeverity } from '~/common';
 import ReaderBody, { type ReaderBodyHandle } from './ReaderBody';
+import { NotificationSeverity } from '~/common';
 import HighlightsPanel from './HighlightsPanel';
 import PdfPageView from './PdfPageView';
-import OcrPanel from './OcrPanel';
-import TagEditor from './TagEditor';
 import { useLocalize } from '~/hooks';
+import TagEditor from './TagEditor';
+import OcrPanel from './OcrPanel';
 import { cn } from '~/utils';
 
 const EMPTY: readonly TLibraryHighlight[] = [];

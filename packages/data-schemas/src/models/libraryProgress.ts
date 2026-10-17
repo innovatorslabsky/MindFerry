@@ -1,6 +1,6 @@
 import { Model } from 'mongoose';
-import { applyTenantIsolation } from '~/models/plugins/tenantIsolation';
 import libraryProgressSchema, { ILibraryProgress } from '~/schema/libraryProgress';
+import { applyTenantIsolation } from '~/models/plugins/tenantIsolation';
 
 export function createLibraryProgressModel(
   mongoose: typeof import('mongoose'),

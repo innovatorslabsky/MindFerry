@@ -1,10 +1,10 @@
+import type { ProcessRunner } from '../worker/runner';
+import type { WorkerJob } from '../worker/protocol';
 import { DEFAULT_MAX_RESULT_CHARS, approxChars, handleJob } from '../worker/job';
 import { installParserPolyfills } from '../worker/polyfill';
 import { createIsolatedIngest } from '../worker/ingest';
-import { epub3 } from './helpers/epubFixture';
 import { makePdf } from './helpers/pdfFixture';
-import type { ProcessRunner } from '../worker/runner';
-import type { WorkerJob } from '../worker/protocol';
+import { epub3 } from './helpers/epubFixture';
 
 const html = `<html><head><title>Notes</title></head><body><article><h1>Notes</h1><p>${'Memory decays over time. '.repeat(20)}</p><p>${'A second paragraph for length. '.repeat(20)}</p></article></body></html>`;
 

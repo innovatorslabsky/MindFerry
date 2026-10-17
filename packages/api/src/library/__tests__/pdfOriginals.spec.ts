@@ -3,8 +3,8 @@ import type { ServerRequest } from '../../types/http';
 import { createFakeLibraryMethods } from './helpers/fakeLibraryMethods';
 import { createLibraryHandlers } from '../routes';
 import { createLibraryService } from '../service';
-import { epub3 } from './helpers/epubFixture';
 import { makePdf } from './helpers/pdfFixture';
+import { epub3 } from './helpers/epubFixture';
 
 const user = 'user-a';
 const other = 'user-b';

@@ -22,12 +22,12 @@ import {
   useUpdateLibraryDocumentMutation,
   useUploadLibraryFileMutation,
 } from '~/data-provider';
-import { libraryErrorKey } from './errors';
-import FeedsPanel from './FeedsPanel';
-import FolderBar from './FolderBar';
 import { NotificationSeverity } from '~/common';
 import { useDebounce } from '~/hooks/Input';
+import { libraryErrorKey } from './errors';
+import FeedsPanel from './FeedsPanel';
 import { useLocalize } from '~/hooks';
+import FolderBar from './FolderBar';
 
 const LOCATIONS: readonly TLibraryLocation[] = ['inbox', 'later', 'archive', 'feed'] as const;
 const PAGE_SIZE = 50;

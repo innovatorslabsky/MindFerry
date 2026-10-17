@@ -1,7 +1,7 @@
 import { createFakeLibraryMethods } from './helpers/fakeLibraryMethods';
-import { createLibraryService } from '../service';
-import { createAnchor } from '../anchor/textQuote';
 import { NotReadableError } from '../ingest/extract';
+import { createAnchor } from '../anchor/textQuote';
+import { createLibraryService } from '../service';
 
 const PAGE = (
   body: string,

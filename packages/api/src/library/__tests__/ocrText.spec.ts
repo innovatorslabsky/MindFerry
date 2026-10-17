@@ -1,7 +1,7 @@
 import type { Response } from 'express';
 import type { ServerRequest } from '../../types/http';
-import { createFakeLibraryMethods } from './helpers/fakeLibraryMethods';
 import { cleanOcrText, createLibraryService, MAX_OCR_PAGE_CHARS } from '../service';
+import { createFakeLibraryMethods } from './helpers/fakeLibraryMethods';
 import { createLibraryHandlers } from '../routes';
 import { makePdf } from './helpers/pdfFixture';
 

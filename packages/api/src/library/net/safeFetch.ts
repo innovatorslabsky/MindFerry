@@ -1,8 +1,8 @@
-import { lookup as dnsLookup } from 'node:dns';
-import type { LookupAddress } from 'node:dns';
 import { isIP } from 'node:net';
-import type { LookupFunction } from 'node:net';
+import { lookup as dnsLookup } from 'node:dns';
 import { Agent, fetch as undiciFetch } from 'undici';
+import type { LookupFunction } from 'node:net';
+import type { LookupAddress } from 'node:dns';
 import { publicAddressesOnly } from './ipGuard';
 
 export class UnsafeUrlError extends Error {

@@ -1,8 +1,8 @@
 import type { WorkerJob, WorkerReply } from './protocol';
-import { ingestUpload } from '../ingest/upload';
-import { saveHtml, saveUrl } from '../ingest/saveDocument';
 import { fetchFeed, subscribeToUrl } from '../feed/fetchFeed';
+import { saveHtml, saveUrl } from '../ingest/saveDocument';
 import { WorkerResultTooLargeError } from './errors';
+import { ingestUpload } from '../ingest/upload';
 
 /** The work an isolated parser does for one job. Kept apart from the process bootstrap so it can be tested. */
 

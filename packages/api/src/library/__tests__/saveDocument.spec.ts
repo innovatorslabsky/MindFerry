@@ -1,5 +1,5 @@
-import { UnsafeUrlError, saveHtml, saveUrl } from '../core';
 import { ARTICLE, html, startServer } from './helpers/fixtures';
+import { UnsafeUrlError, saveHtml, saveUrl } from '../core';
 
 describe('saveUrl / saveHtml', () => {
   let s: Awaited<ReturnType<typeof startServer>>;

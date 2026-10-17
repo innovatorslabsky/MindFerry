@@ -1,8 +1,8 @@
 import type { Response } from 'express';
 import type { ServerRequest } from '../../types/http';
 import { createFakeLibraryMethods } from './helpers/fakeLibraryMethods';
-import { createLibraryHandlers } from '../routes';
 import { MAX_FOLDERS, createLibraryService } from '../service';
+import { createLibraryHandlers } from '../routes';
 
 const HTML = `<html lang="en"><head><title>Spaced repetition</title></head><body><article><h1>Spaced repetition</h1><p>${Array.from(
   { length: 14 },

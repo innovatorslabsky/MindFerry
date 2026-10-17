@@ -1,13 +1,8 @@
 /* eslint-disable jest/no-standalone-expect -- `permissionIt` is `it` or `it.skip`, which the rule does not see through */
-import { execSync } from 'node:child_process';
 import path from 'node:path';
-import {
-  buildExecArgv,
-  createProcessRunner,
-  readablePaths,
-  supportsPermissionModel,
-} from '../worker/runner';
+import { execSync } from 'node:child_process';
 import type { ProcessRunnerOptions } from '../worker/runner';
+import type { WorkerJob } from '../worker/protocol';
 import {
   ParseTimeoutError,
   WorkerBusyError,
@@ -16,10 +11,15 @@ import {
   WorkerUnavailableError,
   reviveError,
 } from '../worker/errors';
+import {
+  buildExecArgv,
+  createProcessRunner,
+  readablePaths,
+  supportsPermissionModel,
+} from '../worker/runner';
 import { PdfEncryptedError, PdfError } from '../pdf/parsePdf';
-import { UnsafeUrlError } from '../net/safeFetch';
 import { WORKER_RESULT_CHARS_ENV } from '../worker/protocol';
-import type { WorkerJob } from '../worker/protocol';
+import { UnsafeUrlError } from '../net/safeFetch';
 
 const PROBE = path.join(__dirname, 'helpers', 'probeWorker.cjs');
 const probe = (action: string, extra: Record<string, unknown> = {}) =>

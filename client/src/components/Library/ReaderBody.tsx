@@ -14,8 +14,8 @@ import {
   scrollToOffset,
 } from '~/utils/libraryAnchors';
 import { useCreateLibraryHighlightMutation, useSetLibraryProgressMutation } from '~/data-provider';
-import { libraryErrorKey } from './errors';
 import { NotificationSeverity } from '~/common';
+import { libraryErrorKey } from './errors';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 

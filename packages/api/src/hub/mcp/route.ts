@@ -6,15 +6,15 @@ import type { HubMethods } from '@librechat/data-schemas';
 import type { RequestHandler, Response } from 'express';
 import type { HubStoreMethods, HubSemanticSearchOptions } from './mongoStore';
 import type { CreateHubOpenInChatDeps, HubOpenInChat } from './chat';
+import type { LibraryServiceDeps } from '../../library/service';
 import type { ServerRequest } from '../../types/http';
 import { createOpenAICompatEmbeddingProvider } from './embeddings';
+import { createLibraryService } from '../../library/service';
+import { isLibraryEnabled } from '../../library/config';
 import { contextHubRateLimitKey } from '../ratelimit';
 import { createHubMongoStore } from './mongoStore';
 import { isContextHubMcpEnabled } from '../config';
 import { createHubOpenInChat } from './chat';
-import type { LibraryServiceDeps } from '../../library/service';
-import { isLibraryEnabled } from '../../library/config';
-import { createLibraryService } from '../../library/service';
 import { handleHubMcpRequest } from './http';
 
 export { isContextHubMcpEnabled };

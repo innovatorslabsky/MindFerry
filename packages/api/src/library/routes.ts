@@ -4,12 +4,6 @@ import { logger } from '@librechat/data-schemas';
 import type { RequestHandler, Response } from 'express';
 import type { ServerRequest } from '../types/http';
 import type { LibraryService } from './service';
-import { contextHubRateLimitKey } from '../hub/ratelimit';
-import { NotReadableError } from './ingest/extract';
-import { UnsupportedUploadError } from './ingest/upload';
-import { EpubDrmError, EpubError } from './epub/parseEpub';
-import { PdfEncryptedError, PdfError } from './pdf/parsePdf';
-import { FeedParseError } from './feed/parseFeed';
 import {
   ParseTimeoutError,
   WorkerBusyError,
@@ -18,9 +12,15 @@ import {
   WorkerUnavailableError,
 } from './worker/errors';
 import { FetchError, TooLargeError, UnsafeUrlError } from './net/safeFetch';
+import { PdfEncryptedError, PdfError } from './pdf/parsePdf';
+import { EpubDrmError, EpubError } from './epub/parseEpub';
 import { createHighlightSchema, LOCATIONS } from './types';
-import { isLibraryEnabled } from './config';
+import { contextHubRateLimitKey } from '../hub/ratelimit';
+import { UnsupportedUploadError } from './ingest/upload';
+import { NotReadableError } from './ingest/extract';
+import { FeedParseError } from './feed/parseFeed';
 import { MAX_OCR_PAGE_CHARS } from './service';
+import { isLibraryEnabled } from './config';
 
 /**
  * HTTP surface of the reading library, for MindFerry's own UI. Every handler is gated by

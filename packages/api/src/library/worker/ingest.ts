@@ -1,6 +1,6 @@
 import type { DocumentDraft } from '../ingest/saveDocument';
-import type { UploadDraft } from '../ingest/upload';
 import type { FeedFetchResult } from '../feed/fetchFeed';
+import type { UploadDraft } from '../ingest/upload';
 import type { ProcessRunner } from './runner';
 
 /** The four things the service asks a parser to do, in a shape that is the same inline or isolated. */

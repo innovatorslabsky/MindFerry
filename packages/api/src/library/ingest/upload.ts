@@ -1,7 +1,7 @@
-import { parseEpub } from '../epub/parseEpub';
+import type { PdfDraft, PdfParseOptions } from '../pdf/parsePdf';
 import type { EpubDraft, EpubLimits } from '../epub/parseEpub';
 import { parsePdf, sniffUpload } from '../pdf/parsePdf';
-import type { PdfDraft, PdfParseOptions } from '../pdf/parsePdf';
+import { parseEpub } from '../epub/parseEpub';
 
 export class UnsupportedUploadError extends Error {
   override name = 'UnsupportedUploadError';

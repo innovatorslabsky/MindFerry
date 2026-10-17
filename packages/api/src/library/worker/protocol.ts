@@ -1,6 +1,6 @@
 import type { DocumentDraft } from '../ingest/saveDocument';
-import type { UploadDraft } from '../ingest/upload';
 import type { FeedFetchResult } from '../feed/fetchFeed';
+import type { UploadDraft } from '../ingest/upload';
 
 /**
  * What the parent asks an isolated parser to do, and what it gets back. Everything crossing the

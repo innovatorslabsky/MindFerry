@@ -1,9 +1,9 @@
-import { EpubDrmError, EpubError } from '../epub/parseEpub';
-import { FeedParseError } from '../feed/parseFeed';
-import { UnsupportedUploadError } from '../ingest/upload';
-import { NotReadableError } from '../ingest/extract';
 import { FetchError, TooLargeError, UnsafeUrlError } from '../net/safeFetch';
 import { PdfEncryptedError, PdfError } from '../pdf/parsePdf';
+import { EpubDrmError, EpubError } from '../epub/parseEpub';
+import { UnsupportedUploadError } from '../ingest/upload';
+import { NotReadableError } from '../ingest/extract';
+import { FeedParseError } from '../feed/parseFeed';
 
 /** Base for failures of the isolation machinery itself, as opposed to a bad input. */
 export class WorkerError extends Error {

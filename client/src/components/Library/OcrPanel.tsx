@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Spinner } from '@librechat/client';
-import { useLibrarySourceQuery, useSaveLibraryUnitTextMutation } from '~/data-provider';
+import type { OcrLanguage } from '~/utils/ocr';
 import {
   createOcrEngine,
   isOcrLanguage,
@@ -8,9 +8,9 @@ import {
   OCR_PAGE_WIDTH,
   ocrLanguageFor,
 } from '~/utils/ocr';
-import type { OcrLanguage } from '~/utils/ocr';
-import { libraryErrorCode } from './errors';
+import { useLibrarySourceQuery, useSaveLibraryUnitTextMutation } from '~/data-provider';
 import { openPdfPages } from '~/utils/pdfPages';
+import { libraryErrorCode } from './errors';
 import { useLocalize } from '~/hooks';
 
 const LANGUAGE_KEY = 'libraryOcrLanguage';

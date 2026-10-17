@@ -1,7 +1,7 @@
-import { installParserPolyfills } from './polyfill';
-import { WORKER_RESULT_CHARS_ENV } from './protocol';
 import type { WorkerJob } from './protocol';
 import { DEFAULT_MAX_RESULT_CHARS, handleJob } from './job';
+import { WORKER_RESULT_CHARS_ENV } from './protocol';
+import { installParserPolyfills } from './polyfill';
 
 /**
  * The isolated parser: one process, one job, then exit. It holds no database handle, no API keys and

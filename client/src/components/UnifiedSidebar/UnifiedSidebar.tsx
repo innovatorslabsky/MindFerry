@@ -20,10 +20,10 @@ import { filesDialogTriggerAtom, showFilesDialogAtom } from '~/store/filesDialog
 import { ChatContext, ChatFormProvider, ActivePanelProvider } from '~/Providers';
 import { MobileHeader, MobileBottomBar, MobileShortcutTargets } from './mobile';
 import AgentMarketplaceButton from '~/components/Nav/AgentMarketplaceButton';
-import LibraryButton from '~/components/Nav/LibraryButton';
 import { MyFilesModal } from '~/components/Chat/Input/Files/MyFilesModal';
 import useUnifiedSidebarLinks from '~/hooks/Nav/useUnifiedSidebarLinks';
 import useSidebarToggle from '~/hooks/Nav/useSidebarToggle';
+import LibraryButton from '~/components/Nav/LibraryButton';
 import useSidebarState from '~/hooks/Nav/useSidebarState';
 import { useChatHelpers, useLocalize } from '~/hooks';
 import SidePanelNav from '~/components/SidePanel/Nav';

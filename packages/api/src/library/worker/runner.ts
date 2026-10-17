@@ -1,9 +1,8 @@
-import { fork } from 'node:child_process';
-import type { ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fork } from 'node:child_process';
 import { logger } from '@librechat/data-schemas';
-import { WORKER_RESULT_CHARS_ENV } from './protocol';
+import type { ChildProcess } from 'node:child_process';
 import type { WorkerJob, WorkerReply } from './protocol';
 import {
   ParseTimeoutError,
@@ -12,6 +11,7 @@ import {
   WorkerUnavailableError,
   reviveError,
 } from './errors';
+import { WORKER_RESULT_CHARS_ENV } from './protocol';
 
 export interface ProcessRunnerOptions {
   /** Absolute path of the built parser program (`entry.cjs`). */

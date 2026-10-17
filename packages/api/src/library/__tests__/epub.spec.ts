@@ -1,5 +1,5 @@
-import { strToU8 } from 'fflate';
 import { JSDOM } from 'jsdom';
+import { strToU8 } from 'fflate';
 import {
   EpubDrmError,
   EpubError,

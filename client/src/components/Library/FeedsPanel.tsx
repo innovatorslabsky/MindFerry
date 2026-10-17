@@ -8,8 +8,8 @@ import {
   useRefreshLibraryFeedMutation,
   useUnfollowLibraryFeedMutation,
 } from '~/data-provider';
-import { libraryErrorKey } from './errors';
 import { NotificationSeverity } from '~/common';
+import { libraryErrorKey } from './errors';
 import { useLocalize } from '~/hooks';
 
 function FeedRow({

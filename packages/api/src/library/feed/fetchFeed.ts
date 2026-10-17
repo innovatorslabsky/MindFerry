@@ -1,7 +1,7 @@
-import { safeFetch, decodeBody, FetchError } from '../net/safeFetch';
+import type { FeedDraft, ParseFeedOptions } from './parseFeed';
 import type { SafeFetchOptions } from '../net/safeFetch';
 import { FeedParseError, discoverFeeds, parseFeed } from './parseFeed';
-import type { FeedDraft, ParseFeedOptions } from './parseFeed';
+import { safeFetch, decodeBody, FetchError } from '../net/safeFetch';
 
 const FEED_TYPES = [
   'application/rss+xml',

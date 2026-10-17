@@ -1,6 +1,6 @@
 import { Model } from 'mongoose';
-import { applyTenantIsolation } from '~/models/plugins/tenantIsolation';
 import libraryResourceSchema, { ILibraryResource } from '~/schema/libraryResource';
+import { applyTenantIsolation } from '~/models/plugins/tenantIsolation';
 
 export function createLibraryResourceModel(
   mongoose: typeof import('mongoose'),

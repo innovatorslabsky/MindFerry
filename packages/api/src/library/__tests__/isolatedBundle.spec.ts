@@ -1,14 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { createProcessRunner, supportsPermissionModel } from '../worker/runner';
+import { createFakeLibraryMethods } from './helpers/fakeLibraryMethods';
+import { UnsupportedUploadError } from '../ingest/upload';
+import { createIsolatedIngest } from '../worker/ingest';
 import { PdfEncryptedError } from '../pdf/parsePdf';
 import { UnsafeUrlError } from '../net/safeFetch';
-import { createIsolatedIngest } from '../worker/ingest';
-import { createProcessRunner, supportsPermissionModel } from '../worker/runner';
-import { UnsupportedUploadError } from '../ingest/upload';
 import { createLibraryService } from '../service';
-import { createFakeLibraryMethods } from './helpers/fakeLibraryMethods';
-import { epub3 } from './helpers/epubFixture';
 import { makePdf } from './helpers/pdfFixture';
+import { epub3 } from './helpers/epubFixture';
 
 /**
  * Runs the real, built parser program (`dist/library/worker/entry.cjs`) under the permission model.

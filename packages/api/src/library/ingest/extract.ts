@@ -1,7 +1,7 @@
-import { createHash } from 'node:crypto';
-import { Readability } from '@mozilla/readability';
 import createDOMPurify from 'dompurify';
+import { createHash } from 'node:crypto';
 import { JSDOM, VirtualConsole } from 'jsdom';
+import { Readability } from '@mozilla/readability';
 import { htmlToText } from './html';
 
 export class NotReadableError extends Error {

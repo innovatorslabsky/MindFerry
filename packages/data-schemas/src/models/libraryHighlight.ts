@@ -1,6 +1,6 @@
 import { Model } from 'mongoose';
-import { applyTenantIsolation } from '~/models/plugins/tenantIsolation';
 import libraryHighlightSchema, { ILibraryHighlight } from '~/schema/libraryHighlight';
+import { applyTenantIsolation } from '~/models/plugins/tenantIsolation';
 
 export function createLibraryHighlightModel(
   mongoose: typeof import('mongoose'),
