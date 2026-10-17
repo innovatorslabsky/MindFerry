@@ -15,6 +15,12 @@ contextHub:
     snippetLength: 400
     allowNotes: true
     allowChatImport: true
+  # Reading library: save articles, PDFs and EPUBs, highlight and export. See docs/library.md.
+  # keepPdfOriginals stores the uploaded PDF so a scanned page can be read with in-browser OCR
+  # (OCR also needs CSP_ALLOW_WASM=true in the environment).
+  library:
+    enabled: true
+    keepPdfOriginals: true
 
 # MCP directory: a searchable view of the awesome-mcp-servers listing in the
 # "Browse curated servers" dialog. Off unless enabled; fetched at most once per
