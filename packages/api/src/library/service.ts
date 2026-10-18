@@ -7,6 +7,10 @@ import type {
   LibraryFolderCreateResult,
   LibraryFolderRecord,
   LibraryFolderRenameResult,
+  LibraryViewCreateResult,
+  LibraryViewFilter,
+  LibraryViewRecord,
+  LibraryViewRenameResult,
   LibraryHighlightInput,
   LibraryHighlightPatch,
   LibraryHighlightRecord,
@@ -61,6 +65,10 @@ type Methods = Pick<
   | 'listLibraryFolders'
   | 'renameLibraryFolder'
   | 'deleteLibraryFolder'
+  | 'createLibraryView'
+  | 'listLibraryViews'
+  | 'renameLibraryView'
+  | 'deleteLibraryView'
   | 'saveLibrarySource'
   | 'getLibrarySource'
   | 'deleteLibrarySource'
@@ -231,6 +239,15 @@ export interface LibraryService {
   listFolders: (userId: string) => Promise<LibraryFolderRecord[]>;
   renameFolder: (userId: string, id: string, name: string) => Promise<LibraryFolderRenameResult>;
   deleteFolder: (userId: string, id: string) => Promise<boolean>;
+  /** Pins the list's filters under a name, to open them again in one click. */
+  createView: (
+    userId: string,
+    name: string,
+    filter: LibraryViewFilter,
+  ) => Promise<LibraryViewCreateResult>;
+  listViews: (userId: string) => Promise<LibraryViewRecord[]>;
+  renameView: (userId: string, id: string, name: string) => Promise<LibraryViewRenameResult>;
+  deleteView: (userId: string, id: string) => Promise<boolean>;
   createHighlight: (
     userId: string,
     input: LibraryHighlightInput,
@@ -347,6 +364,8 @@ export function filenameStem(title: string): string {
   return stem || 'document';
 }
 
+/** Most pinned views one person may have. */
+export const MAX_VIEWS = 30;
 /** Most folders one person may have. */
 export const MAX_FOLDERS = 100;
 /** Most feeds one person may follow. */
@@ -848,6 +867,22 @@ export function createLibraryService({
 
     deleteFolder(userId: string, id: string) {
       return methods.deleteLibraryFolder(userId, id);
+    },
+
+    createView(userId: string, name: string, filter: LibraryViewFilter) {
+      return methods.createLibraryView(userId, name, filter, MAX_VIEWS);
+    },
+
+    listViews(userId: string) {
+      return methods.listLibraryViews(userId);
+    },
+
+    renameView(userId: string, id: string, name: string) {
+      return methods.renameLibraryView(userId, id, name);
+    },
+
+    deleteView(userId: string, id: string) {
+      return methods.deleteLibraryView(userId, id);
     },
 
     remove(userId: string, id: string) {
