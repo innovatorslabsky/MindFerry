@@ -18,6 +18,8 @@ export const useLibraryDocumentsQuery = (
       params.location ?? '',
       params.tag ?? '',
       params.folder ?? '',
+      params.kind ?? '',
+      params.sort ?? '',
       params.limit ?? null,
       params.skip ?? null,
     ],
@@ -83,6 +85,25 @@ export const useLibrarySourceQuery = (
       cacheTime: 0,
       ...config,
       enabled: (config?.enabled ?? true) === true && queriesEnabled && id != null,
+    },
+  );
+};
+
+/** The small picture shown beside a document in a list: fetched with the session, kept for a while. */
+export const useLibraryThumbnailQuery = (
+  id: string,
+  path: string | undefined,
+): QueryObserverResult<Blob> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+  return useQuery<Blob>(
+    [QueryKeys.libraryThumbnail, id, path],
+    () => dataService.getLibraryResource(id, path as string),
+    {
+      refetchOnWindowFocus: false,
+      retry: false,
+      staleTime: 10 * 60 * 1000,
+      cacheTime: 10 * 60 * 1000,
+      enabled: queriesEnabled && path != null,
     },
   );
 };

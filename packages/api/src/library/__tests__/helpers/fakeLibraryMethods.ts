@@ -86,6 +86,18 @@ export function createFakeLibraryMethods() {
       }
       return saved;
     },
+    async setLibraryThumbnail(userId, documentId, image) {
+      const document = documents.get(documentId);
+      if (!document || document.userId !== userId) return false;
+      resources.set(`${documentId}:__thumbnail__`, {
+        path: '__thumbnail__',
+        mediaType: image.mediaType,
+        bytes: Buffer.from(image.bytes),
+        userId,
+      });
+      document.thumbnailPath = '__thumbnail__';
+      return true;
+    },
     async getLibraryResource(userId, documentId, path) {
       const found = resources.get(`${documentId}:${path}`);
       return found && found.userId === userId
@@ -395,5 +407,5 @@ export function createFakeLibraryMethods() {
       };
     },
   };
-  return { methods, documents, highlights, progress, feeds, sources, folders };
+  return { methods, documents, highlights, progress, feeds, sources, folders, resources };
 }

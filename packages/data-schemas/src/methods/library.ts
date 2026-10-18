@@ -21,11 +21,13 @@ import type {
   LibraryHighlightInput,
   LibraryHighlightPatch,
   LibraryHighlightRecord,
+  LibraryImageMediaType,
   LibraryListQuery,
   LibraryProgressRecord,
   LibraryReanchor,
   LibraryResourceInput,
   LibraryResourceRecord,
+  LibrarySortValue,
   LibraryUnitRecord,
   LibraryUnitSummary,
   LibraryUnitTextInput,
@@ -57,6 +59,15 @@ export interface LibraryMethods {
    */
   saveLibraryBook: (userId: string, input: LibraryBookInput) => Promise<LibraryDocumentSaveResult>;
   getLibraryDocument: (userId: string, id: string) => Promise<LibraryDocumentRecord | null>;
+  /**
+   * Keeps one small picture for an article, to show beside it in a list. `false` when the document is
+   * not the user's own. An EPUB's cover is stored with the book and is not set here.
+   */
+  setLibraryThumbnail: (
+    userId: string,
+    documentId: string,
+    image: { mediaType: LibraryImageMediaType; bytes: Uint8Array },
+  ) => Promise<boolean>;
   /** One image of a book. `null` when the path is not one of the user's own book's images. */
   getLibraryResource: (
     userId: string,
@@ -208,6 +219,30 @@ const MAX_SEEN_KEYS = 500;
 /** Images are large; a few per write keeps each insert well under the wire-protocol message limit. */
 const RESOURCE_INSERT_BATCH = 4;
 
+/** Where an article's picture is kept among its resources. No book chapter can refer to it. */
+const THUMBNAIL_PATH = '__thumbnail__';
+
+const EXCERPT_CHARS = 200;
+
+/** The opening of a text on one line, cut at a word so it does not end mid-word. */
+function makeExcerpt(text: string): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  if (flat.length <= EXCERPT_CHARS) {
+    return flat;
+  }
+  const cut = flat.slice(0, EXCERPT_CHARS);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > EXCERPT_CHARS / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
+
+const SORTS: Record<LibrarySortValue, Record<string, 1 | -1>> = {
+  updated: { updatedAt: -1, _id: -1 },
+  created: { createdAt: -1, _id: -1 },
+  title: { title: 1, _id: 1 },
+  shortest: { readingMinutes: 1, _id: 1 },
+  longest: { readingMinutes: -1, _id: -1 },
+};
+
 const SUMMARY_PROJECTION = { contentHtml: 0, text: 0 } as const;
 
 function toObjectId(id: string): Types.ObjectId {
@@ -226,6 +261,8 @@ function toSummary(doc: ILibraryDocument): LibraryDocumentSummary {
     lang: doc.lang,
     publishedTime: doc.publishedTime,
     contentHash: doc.contentHash,
+    ...(doc.excerpt ? { excerpt: doc.excerpt } : {}),
+    ...(doc.thumbnailPath ? { thumbnailPath: doc.thumbnailPath } : {}),
     wordCount: doc.wordCount,
     readingMinutes: doc.readingMinutes,
     unitCount: doc.unitCount ?? 0,
@@ -342,7 +379,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       const saved = (await LibraryDocument.findOneAndUpdate(
         { userId: owner, urlKey: input.urlKey },
         {
-          $set: { ...content, userId: owner },
+          $set: { ...content, excerpt: makeExcerpt(content.text), userId: owner },
           $setOnInsert: { location: location ?? 'inbox', tags: tags ?? [] },
         },
         { upsert: true, new: true },
@@ -429,6 +466,38 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
         })),
       );
     }
+  }
+
+  async function setLibraryThumbnail(
+    userId: string,
+    documentId: string,
+    image: { mediaType: LibraryImageMediaType; bytes: Uint8Array },
+  ): Promise<boolean> {
+    if (!Types.ObjectId.isValid(documentId)) {
+      return false;
+    }
+    const owner = toObjectId(userId);
+    const docId = toObjectId(documentId);
+    const owned = await mongoose.models.LibraryDocument.exists({ _id: docId, userId: owner });
+    if (!owned) {
+      return false;
+    }
+    await mongoose.models.LibraryResource.updateOne(
+      { userId: owner, documentId: docId, path: THUMBNAIL_PATH },
+      {
+        $set: {
+          mediaType: image.mediaType,
+          bytes: Buffer.from(image.bytes),
+          size: image.bytes.byteLength,
+        },
+      },
+      { upsert: true },
+    );
+    await mongoose.models.LibraryDocument.updateOne(
+      { _id: docId, userId: owner },
+      { $set: { thumbnailPath: THUMBNAIL_PATH } },
+    );
+    return true;
   }
 
   async function getLibraryResource(
@@ -594,6 +663,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       {
         $set: {
           text: searchText,
+          excerpt: makeExcerpt(searchText),
           wordCount: words,
           readingMinutes: Math.max(1, Math.ceil(words / 230)),
           needsOcr,
@@ -773,6 +843,9 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     if (query.tag) {
       filter.tags = query.tag;
     }
+    if (query.kind) {
+      filter.kind = query.kind;
+    }
     if (query.folder === 'none') {
       filter.folderId = { $exists: false };
     } else if (query.folder) {
@@ -782,7 +855,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       filter.folderId = toObjectId(query.folder);
     }
     const docs = (await LibraryDocument.find(filter, SUMMARY_PROJECTION)
-      .sort({ updatedAt: -1, _id: -1 })
+      .sort(SORTS[query.sort ?? 'updated'])
       .skip(query.skip ?? 0)
       .limit(query.limit)
       .lean()) as unknown as ILibraryDocument[];
@@ -1270,6 +1343,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     listLibraryDocumentsByIds,
     listLibraryUnits,
     getLibraryUnit,
+    setLibraryThumbnail,
     getLibraryResource,
     saveLibraryUnitText,
     createLibraryFolder,

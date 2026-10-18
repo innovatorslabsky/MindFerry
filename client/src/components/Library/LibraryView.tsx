@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Archive, BookOpen, Clock, FileText, Inbox, Trash2, Upload, X } from 'lucide-react';
+import { Archive, Clock, Inbox, Trash2, Upload, X } from 'lucide-react';
 import {
   Input,
   Button,
@@ -12,7 +12,9 @@ import {
 import type {
   TLibraryDocumentSummary,
   TLibraryFolder,
+  TLibraryKind,
   TLibraryLocation,
+  TLibrarySort,
 } from 'librechat-data-provider';
 import {
   useBulkDeleteLibraryDocumentsMutation,
@@ -32,6 +34,7 @@ import { libraryErrorKey } from './errors';
 import FeedsPanel from './FeedsPanel';
 import InboxPanel from './InboxPanel';
 import { useLocalize } from '~/hooks';
+import Thumbnail from './Thumbnail';
 import FolderBar from './FolderBar';
 import { cn } from '~/utils';
 
@@ -57,6 +60,21 @@ const LOCATION_LABEL = {
   archive: 'com_library_tab_archive',
   feed: 'com_library_tab_feed',
 } as const;
+
+const KIND_FILTERS = [
+  { value: '', label: 'com_library_kind_all' },
+  { value: 'article', label: 'com_library_kind_article' },
+  { value: 'pdf', label: 'com_library_kind_pdf' },
+  { value: 'epub', label: 'com_library_kind_epub' },
+] as const;
+
+const SORT_OPTIONS = [
+  { value: 'updated', label: 'com_library_sort_updated' },
+  { value: 'created', label: 'com_library_sort_created' },
+  { value: 'title', label: 'com_library_sort_title' },
+  { value: 'shortest', label: 'com_library_sort_shortest' },
+  { value: 'longest', label: 'com_library_sort_longest' },
+] as const;
 
 function DocumentRow({
   document,
@@ -119,13 +137,7 @@ function DocumentRow({
         aria-label={localize('com_library_select_row', { 0: document.title })}
         className="mt-1 h-4 w-4 shrink-0"
       />
-      <div className="text-text-secondary mt-0.5 shrink-0">
-        {isBook ? (
-          <BookOpen className="h-5 w-5" aria-hidden="true" />
-        ) : (
-          <FileText className="h-5 w-5" aria-hidden="true" />
-        )}
-      </div>
+      <Thumbnail document={document} />
       <div className="min-w-0 flex-1">
         <Link
           to={`/library/${document.id}`}
@@ -134,6 +146,14 @@ function DocumentRow({
           {document.title}
         </Link>
         <p className="text-text-secondary truncate text-xs">{meta.join(' · ')}</p>
+        {document.excerpt && (
+          <p
+            className="text-text-secondary line-clamp-2 pt-0.5 text-xs"
+            data-testid="library-row-excerpt"
+          >
+            {document.excerpt}
+          </p>
+        )}
         {document.tags.length > 0 && (
           <p className="flex flex-wrap gap-1 pt-0.5">
             {document.tags.map((tag) => (
@@ -231,6 +251,8 @@ export default function LibraryView() {
   const [address, setAddress] = useState('');
   const [tag, setTag] = useState('');
   const [folder, setFolder] = useState('');
+  const [kind, setKind] = useState<TLibraryKind | ''>('');
+  const [sort, setSort] = useState<TLibrarySort>('updated');
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [toDelete, setToDelete] = useState<TLibraryDocumentSummary | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
@@ -244,7 +266,14 @@ export default function LibraryView() {
   const documents = useLibraryDocumentsQuery(
     query
       ? { q: query, limit }
-      : { location, tag: tag || undefined, folder: folder || undefined, limit },
+      : {
+          location,
+          tag: tag || undefined,
+          folder: folder || undefined,
+          kind: kind || undefined,
+          sort,
+          limit,
+        },
     { keepPreviousData: true },
   );
 
@@ -332,7 +361,7 @@ export default function LibraryView() {
   useEffect(() => {
     setSelected(new Set());
     setActiveId(null);
-  }, [location, query, tag, folder]);
+  }, [location, query, tag, folder, kind, sort]);
 
   const activeIndex = rows.findIndex((row) => row.id === activeId);
   const active = activeIndex >= 0 ? rows[activeIndex] : undefined;
@@ -436,201 +465,253 @@ export default function LibraryView() {
 
   return (
     <div className="bg-surface-primary h-full w-full overflow-y-auto" data-testid="library-view">
-      <div className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6">
-        <h1 className="text-text-primary text-xl font-semibold">{localize('com_library_title')}</h1>
+      <div className="mx-auto max-w-5xl px-4 py-6 md:grid md:grid-cols-[12rem_minmax(0,1fr)] md:gap-8">
+        <nav
+          aria-label={localize('com_library_title')}
+          className="mb-4 flex flex-col gap-3 md:sticky md:top-6 md:mb-0 md:self-start"
+        >
+          <h1 className="text-text-primary text-xl font-semibold">
+            {localize('com_library_title')}
+          </h1>
 
-        <form onSubmit={onSubmit} className="flex gap-2">
-          <Input
-            type="url"
-            value={address}
-            onChange={(event) => setAddress(event.target.value)}
-            placeholder={localize('com_library_add_placeholder')}
-            aria-label={localize('com_library_add_placeholder')}
-            maxLength={2048}
-            disabled={busy}
-            className="min-w-0 flex-1"
-          />
-          <Button type="submit" disabled={busy || address.trim() === ''}>
-            {save.isLoading ? <Spinner className="h-4 w-4" /> : localize('com_library_save')}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={busy}
-            onClick={() => fileInput.current?.click()}
-          >
-            {upload.isLoading ? (
-              <Spinner className="h-4 w-4" />
-            ) : (
-              <Upload className="h-4 w-4" aria-hidden="true" />
-            )}
-            <span className="hidden sm:inline">{localize('com_library_upload')}</span>
-          </Button>
-          <input
-            ref={fileInput}
-            type="file"
-            accept=".pdf,.epub,application/pdf,application/epub+zip"
-            className="hidden"
-            onChange={onFile}
-            data-testid="library-upload-input"
-            aria-label={localize('com_library_upload')}
-          />
-        </form>
+          {!query && (
+            <div
+              role="group"
+              aria-label={localize('com_library_title')}
+              className="flex gap-2 md:flex-col md:gap-1"
+            >
+              {LOCATIONS.map((value) => (
+                <Button
+                  key={value}
+                  type="button"
+                  variant="outline-toggle"
+                  aria-pressed={location === value}
+                  className="min-w-0 flex-1 md:flex-none md:justify-start"
+                  onClick={() => setLocation(value)}
+                >
+                  {localize(LOCATION_LABEL[value])}
+                </Button>
+              ))}
+            </div>
+          )}
 
-        <Input
-          ref={searchInput}
-          type="search"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder={localize('com_library_search_placeholder')}
-          aria-label={localize('com_library_search_placeholder')}
-        />
+          {!query && (
+            <div
+              role="group"
+              aria-label={localize('com_library_kind_filter')}
+              className="flex flex-wrap gap-1.5 md:flex-col md:gap-1"
+            >
+              {KIND_FILTERS.map(({ value, label }) => (
+                <Button
+                  key={value}
+                  type="button"
+                  size="sm"
+                  variant="outline-toggle"
+                  className="md:justify-start"
+                  aria-pressed={kind === value}
+                  onClick={() => setKind(value)}
+                >
+                  {localize(label)}
+                </Button>
+              ))}
+            </div>
+          )}
 
-        {!query && (
-          <div role="group" aria-label={localize('com_library_title')} className="flex gap-2">
-            {LOCATIONS.map((value) => (
-              <Button
-                key={value}
-                type="button"
-                variant="outline-toggle"
-                aria-pressed={location === value}
-                className="min-w-0 flex-1"
-                onClick={() => setLocation(value)}
-              >
-                {localize(LOCATION_LABEL[value])}
-              </Button>
-            ))}
-          </div>
-        )}
-
-        <div className="flex items-center justify-between gap-2">
-          <Button asChild variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm" className="md:justify-start">
             <Link to="/library/review">{localize('com_library_review_link')}</Link>
           </Button>
-          <ExportButtons />
-        </div>
+        </nav>
 
-        {!query && location !== 'feed' && (
-          <FolderBar folders={folderList} value={folder} onChange={setFolder} />
-        )}
+        <div className="flex min-w-0 flex-col gap-4">
+          <form onSubmit={onSubmit} className="flex gap-2">
+            <Input
+              type="url"
+              value={address}
+              onChange={(event) => setAddress(event.target.value)}
+              placeholder={localize('com_library_add_placeholder')}
+              aria-label={localize('com_library_add_placeholder')}
+              maxLength={2048}
+              disabled={busy}
+              className="min-w-0 flex-1"
+            />
+            <Button type="submit" disabled={busy || address.trim() === ''}>
+              {save.isLoading ? <Spinner className="h-4 w-4" /> : localize('com_library_save')}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={() => fileInput.current?.click()}
+            >
+              {upload.isLoading ? (
+                <Spinner className="h-4 w-4" />
+              ) : (
+                <Upload className="h-4 w-4" aria-hidden="true" />
+              )}
+              <span className="hidden sm:inline">{localize('com_library_upload')}</span>
+            </Button>
+            <input
+              ref={fileInput}
+              type="file"
+              accept=".pdf,.epub,application/pdf,application/epub+zip"
+              className="hidden"
+              onChange={onFile}
+              data-testid="library-upload-input"
+              aria-label={localize('com_library_upload')}
+            />
+          </form>
 
-        {!query && tag && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="self-start"
-            aria-label={localize('com_library_tag_filter_clear', { 0: tag })}
-            onClick={() => setTag('')}
-          >
-            {tag}
-            <X className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
-          </Button>
-        )}
+          <Input
+            ref={searchInput}
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={localize('com_library_search_placeholder')}
+            aria-label={localize('com_library_search_placeholder')}
+          />
 
-        {!query && location === 'feed' && (
-          <>
-            <FeedsPanel />
-            <InboxPanel />
-          </>
-        )}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <ExportButtons />
+            {!query && (
+              <select
+                value={sort}
+                onChange={(event) => setSort(event.target.value as TLibrarySort)}
+                aria-label={localize('com_library_sort')}
+                className="border-border-medium bg-surface-primary text-text-secondary rounded-md border px-2 py-1.5 text-xs"
+              >
+                {SORT_OPTIONS.map(({ value, label }) => (
+                  <option key={value} value={value}>
+                    {localize(label)}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
 
-        {rows.length > 0 && (
-          <div
-            role="toolbar"
-            aria-label={localize('com_library_bulk_toolbar')}
-            className="flex flex-wrap items-center gap-2 text-sm"
-            data-testid="library-bulk-toolbar"
-          >
-            <label className="text-text-secondary flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={selectedIds.length === rows.length}
-                onChange={(event) =>
-                  setSelected(event.target.checked ? new Set(rows.map((row) => row.id)) : new Set())
-                }
-                aria-label={localize('com_library_select_all')}
-                className="h-4 w-4"
-              />
-              {selectedIds.length > 0
-                ? localize('com_library_selected_count', { 0: selectedIds.length })
-                : localize('com_library_select_all')}
-            </label>
-            {selectedIds.length > 0 && (
-              <>
-                {(['inbox', 'later', 'archive'] as const).map((target) => (
+          {!query && location !== 'feed' && (
+            <FolderBar folders={folderList} value={folder} onChange={setFolder} />
+          )}
+
+          {!query && tag && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="self-start"
+              aria-label={localize('com_library_tag_filter_clear', { 0: tag })}
+              onClick={() => setTag('')}
+            >
+              {tag}
+              <X className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
+          )}
+
+          {!query && location === 'feed' && (
+            <>
+              <FeedsPanel />
+              <InboxPanel />
+            </>
+          )}
+
+          {rows.length > 0 && (
+            <div
+              role="toolbar"
+              aria-label={localize('com_library_bulk_toolbar')}
+              className="flex flex-wrap items-center gap-2 text-sm"
+              data-testid="library-bulk-toolbar"
+            >
+              <label className="text-text-secondary flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.length === rows.length}
+                  onChange={(event) =>
+                    setSelected(
+                      event.target.checked ? new Set(rows.map((row) => row.id)) : new Set(),
+                    )
+                  }
+                  aria-label={localize('com_library_select_all')}
+                  className="h-4 w-4"
+                />
+                {selectedIds.length > 0
+                  ? localize('com_library_selected_count', { 0: selectedIds.length })
+                  : localize('com_library_select_all')}
+              </label>
+              {selectedIds.length > 0 && (
+                <>
+                  {(['inbox', 'later', 'archive'] as const).map((target) => (
+                    <Button
+                      key={target}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={bulkUpdate.isLoading}
+                      onClick={() => bulkUpdate.mutate({ ids: selectedIds, location: target })}
+                    >
+                      {localize(LOCATION_LABEL[target])}
+                    </Button>
+                  ))}
+                  {folderList.length > 0 && (
+                    <select
+                      value=""
+                      onChange={(event) => {
+                        if (event.target.value !== '') {
+                          bulkUpdate.mutate({
+                            ids: selectedIds,
+                            folderId: event.target.value === '__none' ? null : event.target.value,
+                          });
+                        }
+                      }}
+                      aria-label={localize('com_library_bulk_folder')}
+                      className="border-border-medium bg-surface-primary text-text-secondary rounded-md border px-2 py-1 text-xs"
+                    >
+                      <option value="">{localize('com_library_bulk_folder')}</option>
+                      <option value="__none">{localize('com_library_folder_none')}</option>
+                      {folderList.map((entry) => (
+                        <option key={entry.id} value={entry.id}>
+                          {entry.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   <Button
-                    key={target}
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={bulkUpdate.isLoading}
-                    onClick={() => bulkUpdate.mutate({ ids: selectedIds, location: target })}
+                    disabled={bulkRemove.isLoading}
+                    onClick={() => setBulkDelete(true)}
                   >
-                    {localize(LOCATION_LABEL[target])}
+                    <Trash2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                    {localize('com_ui_delete')}
                   </Button>
-                ))}
-                {folderList.length > 0 && (
-                  <select
-                    value=""
-                    onChange={(event) => {
-                      if (event.target.value !== '') {
-                        bulkUpdate.mutate({
-                          ids: selectedIds,
-                          folderId: event.target.value === '__none' ? null : event.target.value,
-                        });
-                      }
-                    }}
-                    aria-label={localize('com_library_bulk_folder')}
-                    className="border-border-medium bg-surface-primary text-text-secondary rounded-md border px-2 py-1 text-xs"
-                  >
-                    <option value="">{localize('com_library_bulk_folder')}</option>
-                    <option value="__none">{localize('com_library_folder_none')}</option>
-                    {folderList.map((entry) => (
-                      <option key={entry.id} value={entry.id}>
-                        {entry.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={bulkRemove.isLoading}
-                  onClick={() => setBulkDelete(true)}
-                >
-                  <Trash2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                  {localize('com_ui_delete')}
-                </Button>
-              </>
-            )}
-            <button
-              type="button"
-              className="text-text-secondary hover:text-text-primary ml-auto text-xs underline"
-              aria-expanded={showShortcuts}
-              onClick={() => setShowShortcuts((value) => !value)}
+                </>
+              )}
+              <button
+                type="button"
+                className="text-text-secondary hover:text-text-primary ml-auto text-xs underline"
+                aria-expanded={showShortcuts}
+                onClick={() => setShowShortcuts((value) => !value)}
+              >
+                {localize('com_library_shortcuts')}
+              </button>
+            </div>
+          )}
+
+          {showShortcuts && (
+            <dl
+              className="bg-surface-secondary grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-lg px-3 py-2 text-xs"
+              data-testid="library-shortcuts"
             >
-              {localize('com_library_shortcuts')}
-            </button>
-          </div>
-        )}
+              {SHORTCUTS.map((shortcut) => (
+                <div key={shortcut.keys} className="contents">
+                  <dt className="text-text-primary font-mono">{shortcut.keys}</dt>
+                  <dd className="text-text-secondary">{localize(shortcut.label)}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
 
-        {showShortcuts && (
-          <dl
-            className="bg-surface-secondary grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-lg px-3 py-2 text-xs"
-            data-testid="library-shortcuts"
-          >
-            {SHORTCUTS.map((shortcut) => (
-              <div key={shortcut.keys} className="contents">
-                <dt className="text-text-primary font-mono">{shortcut.keys}</dt>
-                <dd className="text-text-secondary">{localize(shortcut.label)}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
-
-        {list}
+          {list}
+        </div>
       </div>
 
       <OGDialog open={toDelete != null} onOpenChange={(open) => !open && setToDelete(null)}>

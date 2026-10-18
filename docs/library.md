@@ -21,8 +21,14 @@ With `contextHub.library.enabled: true` a Library entry appears in the sidebar (
 drawer), leading to `/library`:
 
 - paste an article address and press **Save**, or **Upload PDF or EPUB**;
-- the **Inbox / Later / Archive / Feed** buttons filter the list; typing in the search box searches the
-  title and text of everything instead; each row can be moved or deleted;
+- on a wide screen the **Inbox / Later / Archive / Feed** buttons and the type filter (All, Articles,
+  PDF, EPUB) form a column to the left of the list; on a narrow one they sit above it. A **Sort by**
+  menu orders the list by recent change, date saved, title, or shortest or longest to read. Typing in
+  the search box searches the title and text of everything instead; each row can be moved or deleted;
+- each row shows a small picture, the type, the site or author, the length and the first two lines of
+  the text. The picture is an EPUB's cover, or an article's lead image (`og:image`); a PDF, or a page
+  with no usable image, shows an icon for its type. Documents saved before this was added have no
+  opening lines until they are saved again (or, for a scanned PDF, read with OCR);
 - opening an article shows it cleanly with a **Highlights** panel beside it. Select text and pick a
   colour to highlight it; add a note under a highlight; delete it from the panel. Highlights stay put
   after reloading, and if a saved page is saved again with different text they are moved, or marked
@@ -295,6 +301,13 @@ contextHub:
   `GET /api/library/documents/:id/resources?path=`. The reader fetches each with the session's
   credentials, because an `<img src>` cannot send them, and shows it from an object URL. SVG, fonts
   and the book's own CSS are not kept.
+- **Article pictures** are fetched by the server when the page is saved, through the same guarded
+  fetch as the page itself (public addresses only, 5 seconds, at most 300 KB, typed from the first
+  bytes; nothing is decoded or resized). A larger picture, or one that cannot be fetched, is skipped
+  and the page is saved without one. A newsletter's lead image is never fetched, since it is often a
+  tracking pixel. Pictures are served like EPUB images, to their owner only. They are not made smaller,
+  so a 300 KB picture is shown at thumbnail size. A PDF has no picture; drawing its first page needs
+  the original file and is not done.
 - **Highlights on a PDF follow the reflowed text.** A revised PDF is a different document (its key is
   its bytes), so highlights never carry across versions of the same paper.
 - **Scanned PDFs** (`needsOcr: true`) have almost no text until they are read with OCR (see above), which

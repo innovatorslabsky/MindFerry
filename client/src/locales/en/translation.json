@@ -3651,5 +3651,14 @@
   "com_library_inbox_error": "Could not change the newsletter address.",
   "com_library_page_select_error": "That selection could not be matched to the page's text. Try selecting a smaller piece.",
   "com_library_progress": "Reading progress",
-  "com_library_progress_percent": "{{0}}% read"
+  "com_library_progress_percent": "{{0}}% read",
+  "com_library_kind_all": "All",
+  "com_library_kind_article": "Articles",
+  "com_library_kind_filter": "Type",
+  "com_library_sort": "Sort by",
+  "com_library_sort_updated": "Recently changed",
+  "com_library_sort_created": "Date saved",
+  "com_library_sort_title": "Title",
+  "com_library_sort_shortest": "Shortest first",
+  "com_library_sort_longest": "Longest first"
 }

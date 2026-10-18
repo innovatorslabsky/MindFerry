@@ -24,6 +24,8 @@ export type TLibraryDocumentSummary = {
   lang?: string;
   publishedTime?: string;
   contentHash: string;
+  /** The opening of the text, for a line under the title in a list. Absent on older documents. */
+  excerpt?: string;
   wordCount: number;
   readingMinutes: number;
   /** Chapters (EPUB) or pages (PDF); 0 for an article. */
@@ -33,6 +35,8 @@ export type TLibraryDocumentSummary = {
   needsOcr?: boolean;
   /** A PDF with more pages than were read. */
   truncated?: boolean;
+  /** Path of the stored picture to show beside the document, fetched like a book's image. */
+  thumbnailPath?: string;
   /** The original PDF is stored, so a page can be shown as the page itself. */
   hasSource: boolean;
   location: TLibraryLocation;
@@ -96,6 +100,8 @@ export type TLibraryProgress = {
   updatedAt: string;
 };
 
+export type TLibrarySort = 'updated' | 'created' | 'title' | 'shortest' | 'longest';
+
 export type TLibraryListParams = {
   q?: string;
   location?: TLibraryLocation;
@@ -103,6 +109,8 @@ export type TLibraryListParams = {
   tag?: string;
   /** A folder id, or `none` for documents in no folder. */
   folder?: string;
+  kind?: TLibraryKind;
+  sort?: TLibrarySort;
   limit?: number;
   skip?: number;
 };

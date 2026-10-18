@@ -32,6 +32,8 @@ export interface ILibraryDocument extends Document {
   text: string;
   /** sha256 of `text`; a change means highlights must be re-anchored. */
   contentHash: string;
+  /** The opening of `text`, for a line under the title in a listing. */
+  excerpt?: string;
   wordCount: number;
   readingMinutes: number;
   /** Chapters (EPUB) or pages (PDF); 0 for an article. */
@@ -41,6 +43,8 @@ export interface ILibraryDocument extends Document {
   needsOcr?: boolean;
   /** A PDF with more pages than were read. */
   truncated?: boolean;
+  /** Path of the `LibraryResource` that is this document's small picture: a book's cover or an article's lead image. */
+  thumbnailPath?: string;
   /** The original PDF file is stored (`LibrarySource`), so a page can be shown as the page itself. */
   hasSource?: boolean;
   location: LibraryLocation;
@@ -67,6 +71,8 @@ const libraryDocumentSchema: Schema<ILibraryDocument> = new Schema(
     contentHtml: { type: String, default: '' },
     text: { type: String, default: '' },
     contentHash: { type: String, required: true },
+    excerpt: { type: String },
+    thumbnailPath: { type: String },
     wordCount: { type: Number, required: true, default: 0 },
     readingMinutes: { type: Number, required: true, default: 0 },
     unitCount: { type: Number, required: true, default: 0 },

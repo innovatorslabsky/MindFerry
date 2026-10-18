@@ -60,6 +60,12 @@ jest.mock('../FolderBar', () => ({
     <button data-testid="folder-bar" data-value={value} onClick={() => onChange('f1')} />
   ),
 }));
+jest.mock('../Thumbnail', () => ({
+  __esModule: true,
+  default: ({ document }: { document: { id: string; thumbnailPath?: string } }) => (
+    <div data-testid="thumbnail" data-id={document.id} data-path={document.thumbnailPath ?? ''} />
+  ),
+}));
 jest.mock('../InboxPanel', () => ({
   __esModule: true,
   default: () => <div data-testid="inbox-panel" />,
@@ -360,5 +366,51 @@ describe('LibraryView: bulk actions and keyboard', () => {
     fireEvent.keyDown(window, { key: '?' });
 
     expect(screen.getByTestId('library-shortcuts')).toBeInTheDocument();
+  });
+});
+
+describe('LibraryView: excerpt, kind and sort', () => {
+  it('gives each row its picture', () => {
+    mockList = {
+      data: { documents: [doc({ thumbnailPath: '__thumbnail__' }), doc({ id: 'd2' })] },
+      isLoading: false,
+      isError: false,
+    };
+    renderView();
+    const pictures = screen.getAllByTestId('thumbnail');
+    expect(pictures.map((p) => p.getAttribute('data-path'))).toEqual(['__thumbnail__', '']);
+  });
+
+  it('shows the opening of each document under its title', () => {
+    mockList = {
+      data: {
+        documents: [doc({ excerpt: 'Memory decays on a forgetting curve.' }), doc({ id: 'd2' })],
+      },
+      isLoading: false,
+      isError: false,
+    };
+    renderView();
+    const excerpts = screen.getAllByTestId('library-row-excerpt');
+    expect(excerpts).toHaveLength(1);
+    expect(excerpts[0]).toHaveTextContent('Memory decays on a forgetting curve.');
+  });
+
+  it('asks for one kind of document and for a sort order', () => {
+    renderView();
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_kind_pdf' }));
+    expect(mockQueryParams).toMatchObject({ kind: 'pdf', sort: 'updated' });
+    fireEvent.change(screen.getByLabelText('com_library_sort'), { target: { value: 'title' } });
+    expect(mockQueryParams).toMatchObject({ kind: 'pdf', sort: 'title' });
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_kind_all' }));
+    expect(mockQueryParams).toMatchObject({ kind: undefined, sort: 'title' });
+  });
+
+  it('leaves the kind and sort out of a search', () => {
+    renderView();
+    fireEvent.change(screen.getByPlaceholderText('com_library_search_placeholder'), {
+      target: { value: 'memory' },
+    });
+    expect(mockQueryParams).toEqual({ q: 'memory', limit: expect.any(Number) });
+    expect(screen.queryByLabelText('com_library_sort')).toBeNull();
   });
 });

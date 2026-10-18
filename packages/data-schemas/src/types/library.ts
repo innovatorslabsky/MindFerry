@@ -42,6 +42,8 @@ export interface LibraryDocumentInput {
   toc?: LibraryTocRecord[];
   needsOcr?: boolean;
   truncated?: boolean;
+  /** Path of a stored resource to show as the document's picture. */
+  thumbnailPath?: string;
   fetchedAt: Date;
   /** Only applied when the document is new; saving a page again never moves it out of the archive. */
   location?: LibraryLocationValue;
@@ -61,12 +63,16 @@ export interface LibraryDocumentSummary {
   lang?: string;
   publishedTime?: string;
   contentHash: string;
+  /** The opening of the text, for a line under the title in a listing. Absent on documents saved before it existed. */
+  excerpt?: string;
   wordCount: number;
   readingMinutes: number;
   unitCount: number;
   toc: LibraryTocRecord[];
   needsOcr?: boolean;
   truncated?: boolean;
+  /** Path of a stored resource that is the document's picture, when it has one. */
+  thumbnailPath?: string;
   /** The original PDF is kept, so its pages can be shown as images. */
   hasSource: boolean;
   location: LibraryLocationValue;
@@ -147,9 +153,15 @@ export interface LibraryListQuery {
   tag?: string;
   /** Only documents in this folder, or only those in none when `'none'`. */
   folder?: string;
+  /** Only this kind of document. */
+  kind?: LibraryKindValue;
+  /** Newest change first when left out. */
+  sort?: LibrarySortValue;
   limit: number;
   skip?: number;
 }
+
+export type LibrarySortValue = 'updated' | 'created' | 'title' | 'shortest' | 'longest';
 
 export interface LibraryHighlightInput {
   documentId: string;
