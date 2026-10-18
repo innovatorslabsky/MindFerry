@@ -61,6 +61,8 @@ export interface LibraryDocumentSummary {
   lang?: string;
   publishedTime?: string;
   contentHash: string;
+  /** The opening of the text, for a line under the title in a listing. Absent on documents saved before it existed. */
+  excerpt?: string;
   wordCount: number;
   readingMinutes: number;
   unitCount: number;
@@ -147,9 +149,15 @@ export interface LibraryListQuery {
   tag?: string;
   /** Only documents in this folder, or only those in none when `'none'`. */
   folder?: string;
+  /** Only this kind of document. */
+  kind?: LibraryKindValue;
+  /** Newest change first when left out. */
+  sort?: LibrarySortValue;
   limit: number;
   skip?: number;
 }
+
+export type LibrarySortValue = 'updated' | 'created' | 'title' | 'shortest' | 'longest';
 
 export interface LibraryHighlightInput {
   documentId: string;
@@ -242,8 +250,7 @@ export interface LibraryFeedInput {
 }
 
 export type LibraryFeedAddResult =
-  | { status: 'added' | 'exists'; feed: LibraryFeedRecord }
-  | { status: 'limit' };
+  { status: 'added' | 'exists'; feed: LibraryFeedRecord } | { status: 'limit' };
 
 export interface LibraryFeedRefreshRecord {
   title?: string;
@@ -262,8 +269,7 @@ export interface LibraryFolderRecord {
 }
 
 export type LibraryFolderCreateResult =
-  | { status: 'created' | 'exists'; folder: LibraryFolderRecord }
-  | { status: 'limit' };
+  { status: 'created' | 'exists'; folder: LibraryFolderRecord } | { status: 'limit' };
 
 export type LibraryFolderRenameResult =
   | { status: 'renamed'; folder: LibraryFolderRecord }

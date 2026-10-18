@@ -18,6 +18,8 @@ export const useLibraryDocumentsQuery = (
       params.location ?? '',
       params.tag ?? '',
       params.folder ?? '',
+      params.kind ?? '',
+      params.sort ?? '',
       params.limit ?? null,
       params.skip ?? null,
     ],

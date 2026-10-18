@@ -1043,3 +1043,35 @@ describe('the newsletter address', () => {
     expect(await methods.getLibraryInbox(userB)).toBeNull();
   });
 });
+
+describe('listing: excerpt, kind and sort', () => {
+  it('keeps the opening of the text as an excerpt, cut at a word', async () => {
+    const long = `${'word '.repeat(80)}end`;
+    const saved = await methods.saveLibraryDocument(userA, doc({ text: long }));
+    const [listed] = await methods.listLibraryDocuments(userA, { limit: 10 });
+    expect(listed.id).toBe(saved.document.id);
+    expect(listed.excerpt?.endsWith('word…')).toBe(true);
+    expect(listed.excerpt?.length).toBeLessThanOrEqual(201);
+  });
+
+  it('filters by kind and sorts by title or length', async () => {
+    await methods.saveLibraryDocument(
+      userA,
+      doc({ urlKey: 'k1', title: 'Bravo', readingMinutes: 9 }),
+    );
+    await methods.saveLibraryDocument(
+      userA,
+      doc({ urlKey: 'k2', title: 'Alpha', readingMinutes: 2 }),
+    );
+    await methods.saveLibraryDocument(
+      userA,
+      doc({ urlKey: 'k3', title: 'Charlie', kind: 'pdf', readingMinutes: 5 }),
+    );
+    const titles = async (query: Partial<Parameters<typeof methods.listLibraryDocuments>[1]>) =>
+      (await methods.listLibraryDocuments(userA, { limit: 10, ...query })).map((d) => d.title);
+    expect(await titles({ sort: 'title' })).toEqual(['Alpha', 'Bravo', 'Charlie']);
+    expect(await titles({ sort: 'shortest' })).toEqual(['Alpha', 'Charlie', 'Bravo']);
+    expect(await titles({ sort: 'longest' })).toEqual(['Bravo', 'Charlie', 'Alpha']);
+    expect(await titles({ kind: 'pdf' })).toEqual(['Charlie']);
+  });
+});

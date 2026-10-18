@@ -16,7 +16,7 @@ import { isConversationImportError } from '../conversations/import';
 import { isContentFilterError } from '../middleware/contentFilter';
 import { PdfEncryptedError, PdfError } from './pdf/parsePdf';
 import { EpubDrmError, EpubError } from './epub/parseEpub';
-import { createHighlightSchema, LOCATIONS } from './types';
+import { createHighlightSchema, KINDS, LOCATIONS, SORTS } from './types';
 import { contextHubRateLimitKey } from '../hub/ratelimit';
 import { isInboxToken, parseInboundEmail } from './inbox';
 import { UnsupportedUploadError } from './ingest/upload';
@@ -466,8 +466,12 @@ export function createLibraryHandlers({
     const location = LOCATIONS.find((value) => value === req.query.location);
     const folder = typeof req.query.folder === 'string' ? req.query.folder.trim().slice(0, 64) : '';
     const tag = typeof req.query.tag === 'string' ? req.query.tag.trim().slice(0, 64) : '';
+    const kind = KINDS.find((value) => value === req.query.kind);
+    const sort = SORTS.find((value) => value === req.query.sort);
     const documents = await service.list(userId, {
       location,
+      kind,
+      sort,
       tag: tag || undefined,
       folder: folder || undefined,
       limit,

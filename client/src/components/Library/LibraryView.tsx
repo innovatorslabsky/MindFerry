@@ -12,7 +12,9 @@ import {
 import type {
   TLibraryDocumentSummary,
   TLibraryFolder,
+  TLibraryKind,
   TLibraryLocation,
+  TLibrarySort,
 } from 'librechat-data-provider';
 import {
   useBulkDeleteLibraryDocumentsMutation,
@@ -57,6 +59,21 @@ const LOCATION_LABEL = {
   archive: 'com_library_tab_archive',
   feed: 'com_library_tab_feed',
 } as const;
+
+const KIND_FILTERS = [
+  { value: '', label: 'com_library_kind_all' },
+  { value: 'article', label: 'com_library_kind_article' },
+  { value: 'pdf', label: 'com_library_kind_pdf' },
+  { value: 'epub', label: 'com_library_kind_epub' },
+] as const;
+
+const SORT_OPTIONS = [
+  { value: 'updated', label: 'com_library_sort_updated' },
+  { value: 'created', label: 'com_library_sort_created' },
+  { value: 'title', label: 'com_library_sort_title' },
+  { value: 'shortest', label: 'com_library_sort_shortest' },
+  { value: 'longest', label: 'com_library_sort_longest' },
+] as const;
 
 function DocumentRow({
   document,
@@ -134,6 +151,14 @@ function DocumentRow({
           {document.title}
         </Link>
         <p className="text-text-secondary truncate text-xs">{meta.join(' · ')}</p>
+        {document.excerpt && (
+          <p
+            className="text-text-secondary line-clamp-2 pt-0.5 text-xs"
+            data-testid="library-row-excerpt"
+          >
+            {document.excerpt}
+          </p>
+        )}
         {document.tags.length > 0 && (
           <p className="flex flex-wrap gap-1 pt-0.5">
             {document.tags.map((tag) => (
@@ -231,6 +256,8 @@ export default function LibraryView() {
   const [address, setAddress] = useState('');
   const [tag, setTag] = useState('');
   const [folder, setFolder] = useState('');
+  const [kind, setKind] = useState<TLibraryKind | ''>('');
+  const [sort, setSort] = useState<TLibrarySort>('updated');
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [toDelete, setToDelete] = useState<TLibraryDocumentSummary | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
@@ -244,7 +271,14 @@ export default function LibraryView() {
   const documents = useLibraryDocumentsQuery(
     query
       ? { q: query, limit }
-      : { location, tag: tag || undefined, folder: folder || undefined, limit },
+      : {
+          location,
+          tag: tag || undefined,
+          folder: folder || undefined,
+          kind: kind || undefined,
+          sort,
+          limit,
+        },
     { keepPreviousData: true },
   );
 
@@ -332,7 +366,7 @@ export default function LibraryView() {
   useEffect(() => {
     setSelected(new Set());
     setActiveId(null);
-  }, [location, query, tag, folder]);
+  }, [location, query, tag, folder, kind, sort]);
 
   const activeIndex = rows.findIndex((row) => row.id === activeId);
   const active = activeIndex >= 0 ? rows[activeIndex] : undefined;
@@ -512,6 +546,41 @@ export default function LibraryView() {
 
         {!query && location !== 'feed' && (
           <FolderBar folders={folderList} value={folder} onChange={setFolder} />
+        )}
+
+        {!query && (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div
+              role="group"
+              aria-label={localize('com_library_kind_filter')}
+              className="flex gap-1.5"
+            >
+              {KIND_FILTERS.map(({ value, label }) => (
+                <Button
+                  key={value}
+                  type="button"
+                  size="sm"
+                  variant="outline-toggle"
+                  aria-pressed={kind === value}
+                  onClick={() => setKind(value)}
+                >
+                  {localize(label)}
+                </Button>
+              ))}
+            </div>
+            <select
+              value={sort}
+              onChange={(event) => setSort(event.target.value as TLibrarySort)}
+              aria-label={localize('com_library_sort')}
+              className="border-border-medium bg-surface-primary text-text-secondary rounded-md border px-2 py-1.5 text-xs"
+            >
+              {SORT_OPTIONS.map(({ value, label }) => (
+                <option key={value} value={value}>
+                  {localize(label)}
+                </option>
+              ))}
+            </select>
+          </div>
         )}
 
         {!query && tag && (

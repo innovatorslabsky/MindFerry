@@ -362,3 +362,38 @@ describe('LibraryView: bulk actions and keyboard', () => {
     expect(screen.getByTestId('library-shortcuts')).toBeInTheDocument();
   });
 });
+
+describe('LibraryView: excerpt, kind and sort', () => {
+  it('shows the opening of each document under its title', () => {
+    mockList = {
+      data: {
+        documents: [doc({ excerpt: 'Memory decays on a forgetting curve.' }), doc({ id: 'd2' })],
+      },
+      isLoading: false,
+      isError: false,
+    };
+    renderView();
+    const excerpts = screen.getAllByTestId('library-row-excerpt');
+    expect(excerpts).toHaveLength(1);
+    expect(excerpts[0]).toHaveTextContent('Memory decays on a forgetting curve.');
+  });
+
+  it('asks for one kind of document and for a sort order', () => {
+    renderView();
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_kind_pdf' }));
+    expect(mockQueryParams).toMatchObject({ kind: 'pdf', sort: 'updated' });
+    fireEvent.change(screen.getByLabelText('com_library_sort'), { target: { value: 'title' } });
+    expect(mockQueryParams).toMatchObject({ kind: 'pdf', sort: 'title' });
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_kind_all' }));
+    expect(mockQueryParams).toMatchObject({ kind: undefined, sort: 'title' });
+  });
+
+  it('leaves the kind and sort out of a search', () => {
+    renderView();
+    fireEvent.change(screen.getByPlaceholderText('com_library_search_placeholder'), {
+      target: { value: 'memory' },
+    });
+    expect(mockQueryParams).toEqual({ q: 'memory', limit: expect.any(Number) });
+    expect(screen.queryByLabelText('com_library_sort')).toBeNull();
+  });
+});

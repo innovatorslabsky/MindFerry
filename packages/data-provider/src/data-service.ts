@@ -1043,6 +1043,12 @@ export function listLibraryDocuments(
   if (params.folder) {
     query.set('folder', params.folder);
   }
+  if (params.kind) {
+    query.set('kind', params.kind);
+  }
+  if (params.sort) {
+    query.set('sort', params.sort);
+  }
   if (params.limit) {
     query.set('limit', String(params.limit));
   }

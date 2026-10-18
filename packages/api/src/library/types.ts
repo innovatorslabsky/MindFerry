@@ -36,6 +36,8 @@ export type CreateHighlight = z.infer<typeof createHighlightSchema>;
 
 export const LOCATIONS = ['inbox', 'later', 'archive', 'feed'] as const;
 export type Location = (typeof LOCATIONS)[number];
+export const KINDS = ['article', 'pdf', 'epub'] as const;
+export const SORTS = ['updated', 'created', 'title', 'shortest', 'longest'] as const;
 
 /**
  * Reading progress as a *text offset*, not a scroll pixel: it survives window resizes, font changes
