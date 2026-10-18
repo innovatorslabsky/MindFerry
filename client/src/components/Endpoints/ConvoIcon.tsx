@@ -122,9 +122,7 @@ export default function ConvoIcon({
 
   const renderArt = () => {
     if (isAgent) {
-      return (
-        <AgentAvatar avatar={avatar ?? ''} agentName={name} className={className} />
-      );
+      return <AgentAvatar avatar={avatar ?? ''} agentName={name} className={className} />;
     }
 
     if (isAssistant) {
