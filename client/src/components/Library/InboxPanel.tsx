@@ -77,7 +77,7 @@ export default function InboxPanel() {
               value={secretUrl}
               aria-label={localize('com_library_inbox_url')}
               onFocus={(event) => event.currentTarget.select()}
-              className="min-w-0 flex-1 font-mono text-xs"
+              className="min-w-0 flex-1"
             />
             <Button
               type="button"

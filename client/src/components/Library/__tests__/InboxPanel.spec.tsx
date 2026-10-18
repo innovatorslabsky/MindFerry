@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { mockClient } from 'test/libraryMocks';
 
 const mockRotate = jest.fn();
@@ -7,7 +7,6 @@ const mockOff = jest.fn();
 const mockToast = jest.fn();
 let mockInbox: { data?: { inbox: { createdAt: string } | null }; isLoading: boolean };
 let rotateOptions: { onSuccess?: (data: unknown) => void; onError?: () => void } = {};
-let offOptions: { onSuccess?: () => void } = {};
 
 jest.mock('~/hooks', () => ({
   useLocalize: () => (key: string, vars?: Record<string, unknown>) =>
@@ -20,10 +19,7 @@ jest.mock('~/data-provider', () => ({
     rotateOptions = options;
     return { mutate: mockRotate, isLoading: false };
   },
-  useDeleteLibraryInboxMutation: (options: typeof offOptions) => {
-    offOptions = options;
-    return { mutate: mockOff, isLoading: false };
-  },
+  useDeleteLibraryInboxMutation: () => ({ mutate: mockOff, isLoading: false }),
 }));
 jest.mock('@librechat/client', () => ({
   ...mockClient,
@@ -51,7 +47,7 @@ describe('InboxPanel', () => {
     expect(mockRotate).toHaveBeenCalledTimes(1);
 
     mockInbox = { data: { inbox: { createdAt: '2026-03-01T00:00:00Z' } }, isLoading: false };
-    React.act(() => rotateOptions.onSuccess?.({ token: 'secret-token-value' }));
+    act(() => rotateOptions.onSuccess?.({ token: 'secret-token-value' }));
     rerender(<InboxPanel />);
 
     const field = screen.getByLabelText('com_library_inbox_url') as HTMLInputElement;
@@ -81,9 +77,9 @@ describe('InboxPanel', () => {
     const writeText = jest.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
     render(<InboxPanel />);
-    React.act(() => rotateOptions.onSuccess?.({ token: 'abc' }));
+    act(() => rotateOptions.onSuccess?.({ token: 'abc' }));
 
-    await React.act(async () => {
+    await act(async () => {
       fireEvent.click(screen.getByLabelText('com_library_inbox_copy'));
     });
 
