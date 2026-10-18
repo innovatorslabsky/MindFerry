@@ -391,6 +391,7 @@ export function createFakeLibraryMethods() {
         sources: 0,
         folders: 0,
         feeds: 0,
+        inboxes: 0,
       };
     },
   };
