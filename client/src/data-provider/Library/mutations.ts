@@ -91,6 +91,128 @@ export const useDeleteLibraryDocumentMutation = (
   });
 };
 
+export type BulkLibraryResult = { done: number; failed: number };
+
+/** How many of a batch of requests went through; one failing never stops the rest. */
+async function settleAll(requests: Promise<unknown>[]): Promise<BulkLibraryResult> {
+  const results = await Promise.allSettled(requests);
+  const failed = results.filter((result) => result.status === 'rejected').length;
+  return { done: results.length - failed, failed };
+}
+
+/** Moves or files several documents at once, then refreshes the lists a single time. */
+export const useBulkUpdateLibraryDocumentsMutation = (
+  options?: t.MutationOptions<
+    BulkLibraryResult,
+    { ids: string[] } & UpdateLibraryDocumentVariables['patch']
+  >,
+): UseMutationResult<
+  BulkLibraryResult,
+  unknown,
+  { ids: string[] } & UpdateLibraryDocumentVariables['patch'],
+  unknown
+> => {
+  const refresh = useRefreshLibraryLists();
+  const queryClient = useQueryClient();
+  return useMutation(
+    ({ ids, ...patch }: { ids: string[] } & UpdateLibraryDocumentVariables['patch']) =>
+      settleAll(ids.map((id) => dataService.updateLibraryDocument(id, patch))),
+    {
+      ...options,
+      onSettled: (data, error, variables, context) => {
+        refresh();
+        variables.ids.forEach((id) =>
+          queryClient.invalidateQueries([QueryKeys.libraryDocument, id]),
+        );
+        options?.onSettled?.(data, error, variables, context);
+      },
+    },
+  );
+};
+
+export const useBulkDeleteLibraryDocumentsMutation = (
+  options?: t.MutationOptions<BulkLibraryResult, { ids: string[] }>,
+): UseMutationResult<BulkLibraryResult, unknown, { ids: string[] }, unknown> => {
+  const refresh = useRefreshLibraryLists();
+  const queryClient = useQueryClient();
+  return useMutation(
+    ({ ids }: { ids: string[] }) =>
+      settleAll(ids.map((id) => dataService.deleteLibraryDocument(id))),
+    {
+      ...options,
+      onSettled: (data, error, variables, context) => {
+        refresh();
+        variables.ids.forEach((id) => {
+          queryClient.removeQueries([QueryKeys.libraryDocument, id]);
+          queryClient.removeQueries([QueryKeys.libraryUnit, id]);
+        });
+        options?.onSettled?.(data, error, variables, context);
+      },
+    },
+  );
+};
+
+/** Going through the review is a quiet write: the cards on screen already moved on. */
+export const useReviewLibraryHighlightMutation = (): UseMutationResult<
+  void,
+  unknown,
+  { id: string; action: t.TLibraryReviewAction },
+  unknown
+> =>
+  useMutation(({ id, action }: { id: string; action: t.TLibraryReviewAction }) =>
+    dataService.reviewLibraryHighlight(id, action),
+  );
+
+/** Opens a new chat that starts from a document; the document itself is untouched. */
+export const useStartLibraryChatMutation = (
+  options?: t.MutationOptions<t.TLibraryChatResponse, { id: string } & t.TLibraryChatRequest>,
+): UseMutationResult<
+  t.TLibraryChatResponse,
+  unknown,
+  { id: string } & t.TLibraryChatRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation(
+    ({ id, ...request }: { id: string } & t.TLibraryChatRequest) =>
+      dataService.startLibraryChat(id, request),
+    {
+      ...options,
+      onSuccess: (data, variables, context) => {
+        queryClient.invalidateQueries([QueryKeys.allConversations]);
+        options?.onSuccess?.(data, variables, context);
+      },
+    },
+  );
+};
+
+/** Makes the newsletter address, or replaces it; the new secret comes back once. */
+export const useRotateLibraryInboxMutation = (
+  options?: t.MutationOptions<t.TLibraryInboxCreated, void>,
+): UseMutationResult<t.TLibraryInboxCreated, unknown, void, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation(() => dataService.rotateLibraryInbox(), {
+    ...options,
+    onSuccess: (data, variables, context) => {
+      queryClient.invalidateQueries([QueryKeys.libraryInbox]);
+      options?.onSuccess?.(data, variables, context);
+    },
+  });
+};
+
+export const useDeleteLibraryInboxMutation = (
+  options?: t.MutationOptions<void, void>,
+): UseMutationResult<void, unknown, void, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation(() => dataService.deleteLibraryInbox(), {
+    ...options,
+    onSuccess: (data, variables, context) => {
+      queryClient.invalidateQueries([QueryKeys.libraryInbox]);
+      options?.onSuccess?.(data, variables, context);
+    },
+  });
+};
+
 export const usePreviewLibraryFeedMutation = (
   options?: t.MutationOptions<{ feed: t.TLibraryFeedPreview }, string>,
 ): UseMutationResult<{ feed: t.TLibraryFeedPreview }, unknown, string, unknown> =>

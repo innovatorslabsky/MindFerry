@@ -132,6 +132,33 @@ export type TLibrarySaveResponse = {
   reanchored?: { kept: number; orphaned: number };
 };
 
+export type TLibraryReviewItem = {
+  highlight: TLibraryHighlight;
+  document: Pick<TLibraryDocumentSummary, 'id' | 'title' | 'siteName' | 'kind'>;
+};
+
+/** One day's review of old highlights. */
+export type TLibraryDailyReview = {
+  items: TLibraryReviewItem[];
+  /** Highlights gone through since the day began. */
+  reviewedToday: number;
+  /** How many make up the day's review, counting any "review more". */
+  goal: number;
+};
+
+/** What to run the chat on, and which chapter or page to ask about (leave out for an article or the book). */
+export type TLibraryChatRequest = { endpoint?: string; model?: string; unitIndex?: number };
+
+export type TLibraryChatResponse = { conversationId: string };
+
+/** When the person's newsletter address was made; `null` if they have none. */
+export type TLibraryInbox = { createdAt: string } | null;
+
+/** The secret that completes the newsletter address. Shown once; only a hash is kept. */
+export type TLibraryInboxCreated = { token: string; createdAt: string };
+
+export type TLibraryReviewAction = 'done' | 'mute';
+
 export type TLibraryUnitResponse = { unit: TLibraryUnit; highlights: TLibraryHighlight[] };
 
 export type TLibraryCreateHighlight = {

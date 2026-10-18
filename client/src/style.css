@@ -2603,6 +2603,62 @@ html[data-input-modality='keyboard']
   color: inherit;
 }
 
+/* The invisible text laid over a page image, so words on it can be selected and highlighted. These are the
+ * parts of pdf.js's own text layer styles it needs, without the rest of its large viewer stylesheet. */
+.library-pdf-layer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  text-align: initial;
+  transform-origin: 0 0;
+  forced-color-adjust: none;
+  text-size-adjust: none;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+.library-pdf-layer :is(span, br, mark) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0 0;
+}
+.library-pdf-layer > :not(.markedContent),
+.library-pdf-layer .markedContent span:not(.markedContent) {
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+.library-pdf-layer .markedContent {
+  display: contents;
+}
+.library-pdf-layer mark {
+  position: static;
+  background-color: transparent;
+}
+.library-pdf-layer mark[data-color='yellow'] {
+  background-color: var(--library-yellow);
+}
+.library-pdf-layer mark[data-color='blue'] {
+  background-color: var(--library-blue);
+}
+.library-pdf-layer mark[data-color='green'] {
+  background-color: var(--library-green);
+}
+.library-pdf-layer mark[data-color='red'] {
+  background-color: var(--library-red);
+}
+.library-pdf-layer mark[data-color='purple'] {
+  background-color: var(--library-purple);
+}
+.library-pdf-layer ::selection {
+  background: rgb(37 99 235 / 0.3);
+}
+
 @utility library-prose {
   font-size: 1.0625rem;
   line-height: 1.75;

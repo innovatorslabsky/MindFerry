@@ -210,6 +210,16 @@ describe('Landing icon', () => {
     expect(container.querySelector('img[src="assets/logo.svg"]')).not.toBeInTheDocument();
   });
 
+  it('shows the MindFerry boat while no agent is selected', () => {
+    mockConversation = { endpoint: 'agents', agent_id: 'missing-agent' };
+    mockAgentsMap = {};
+
+    const { container } = renderLanding();
+
+    expect(container.querySelector('img[src="assets/logo.svg"]')).toBeInTheDocument();
+    expect(screen.queryByTestId('convo-icon')).not.toBeInTheDocument();
+  });
+
   it('keeps the entity icon for an assistant', () => {
     mockConversation = { endpoint: 'assistants', assistant_id: 'assistant-1' };
     mockAssistantMap = { 'assistant-1': { id: 'assistant-1', name: 'Assistant' } };

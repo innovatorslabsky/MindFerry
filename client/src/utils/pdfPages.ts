@@ -19,6 +19,11 @@ export interface PdfPages {
     /** Pixels per CSS pixel; the screen's by default. OCR passes 1 and asks for a large width. */
     pixelRatio?: number,
   ) => PdfPageRender;
+  /**
+   * Fills `container` with the page's text, invisible and positioned over the words of the image drawn
+   * at `cssWidth`, so it can be selected. Needs pdf.js's viewer styles on the container's class.
+   */
+  renderTextLayer: (pageNumber: number, container: HTMLElement, cssWidth: number) => PdfPageRender;
   destroy: () => Promise<void>;
 }
 
@@ -81,6 +86,42 @@ export async function openPdfPages(data: ArrayBuffer): Promise<PdfPages> {
         cancel: () => {
           cancelled = true;
           current?.cancel();
+        },
+      };
+    },
+    renderTextLayer(pageNumber, container, cssWidth) {
+      let cancelled = false;
+      let layer: { cancel: () => void } | undefined;
+      const promise = (async () => {
+        const page = await pdf.getPage(pageNumber);
+        if (cancelled) {
+          return;
+        }
+        const base = page.getViewport({ scale: 1 });
+        const viewport = page.getViewport({ scale: cssWidth / base.width });
+        container.replaceChildren();
+        container.style.width = `${Math.floor(viewport.width)}px`;
+        container.style.height = `${Math.floor(viewport.height)}px`;
+        container.style.setProperty('--total-scale-factor', String(viewport.scale));
+        const textLayer = new pdfjs.TextLayer({
+          textContentSource: page.streamTextContent(),
+          container,
+          viewport,
+        });
+        layer = textLayer;
+        try {
+          await textLayer.render();
+        } catch (error) {
+          if (!cancelled) {
+            throw error;
+          }
+        }
+      })();
+      return {
+        promise,
+        cancel: () => {
+          cancelled = true;
+          layer?.cancel();
         },
       };
     },

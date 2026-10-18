@@ -118,3 +118,41 @@ export const useLibraryFoldersQuery = (
     },
   );
 };
+
+/**
+ * Today's review of old highlights. It is read once and then worked through on screen, so it is
+ * never refetched by itself: that would reshuffle the cards under the reader's eyes.
+ */
+export const useLibraryReviewQuery = (
+  extra: number,
+  config?: UseQueryOptions<t.TLibraryDailyReview>,
+): QueryObserverResult<t.TLibraryDailyReview> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+  return useQuery<t.TLibraryDailyReview>(
+    [QueryKeys.libraryReview, extra],
+    () => dataService.getLibraryDailyReview(new Date().getTimezoneOffset(), extra),
+    {
+      refetchOnWindowFocus: false,
+      staleTime: Infinity,
+      cacheTime: 0,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
+/** Whether the person has a newsletter address, and since when. The secret itself is never returned. */
+export const useLibraryInboxQuery = (
+  config?: UseQueryOptions<{ inbox: t.TLibraryInbox }>,
+): QueryObserverResult<{ inbox: t.TLibraryInbox }> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+  return useQuery<{ inbox: t.TLibraryInbox }>(
+    [QueryKeys.libraryInbox],
+    () => dataService.getLibraryInbox(),
+    {
+      refetchOnWindowFocus: false,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};

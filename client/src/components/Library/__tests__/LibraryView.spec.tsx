@@ -7,6 +7,9 @@ const mockSave = jest.fn();
 const mockUpload = jest.fn();
 const mockUpdate = jest.fn();
 const mockRemove = jest.fn();
+const mockBulkUpdate = jest.fn();
+const mockBulkRemove = jest.fn();
+const mockNavigate = jest.fn();
 const mockToast = jest.fn();
 let mockList: { data?: { documents: unknown[] }; isLoading: boolean; isError: boolean } = {
   data: { documents: [] },
@@ -20,6 +23,10 @@ jest.mock('~/hooks', () => ({
   useLocalize: () => (key: string, vars?: Record<string, unknown>) =>
     vars ? `${key}:${Object.values(vars).join(',')}` : key,
 }));
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: () => mockNavigate,
+}));
 jest.mock('~/hooks/Input', () => ({ useDebounce: (value: string) => value }));
 jest.mock('~/common', () => ({ NotificationSeverity: { ERROR: 'error', SUCCESS: 'success' } }));
 jest.mock('~/data-provider', () => ({
@@ -32,6 +39,8 @@ jest.mock('~/data-provider', () => ({
   useUploadLibraryFileMutation: () => ({ mutate: mockUpload, isLoading: false }),
   useUpdateLibraryDocumentMutation: () => ({ mutate: mockUpdate }),
   useDeleteLibraryDocumentMutation: () => ({ mutate: mockRemove }),
+  useBulkUpdateLibraryDocumentsMutation: () => ({ mutate: mockBulkUpdate, isLoading: false }),
+  useBulkDeleteLibraryDocumentsMutation: () => ({ mutate: mockBulkRemove, isLoading: false }),
 }));
 jest.mock('@librechat/client', () => ({
   ...mockClient,
@@ -50,6 +59,10 @@ jest.mock('../FolderBar', () => ({
   default: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
     <button data-testid="folder-bar" data-value={value} onClick={() => onChange('f1')} />
   ),
+}));
+jest.mock('../InboxPanel', () => ({
+  __esModule: true,
+  default: () => <div data-testid="inbox-panel" />,
 }));
 jest.mock('../FeedsPanel', () => ({
   __esModule: true,
@@ -164,6 +177,7 @@ describe('LibraryView: the Feed tab and tags', () => {
     fireEvent.click(screen.getByRole('button', { name: 'com_library_tab_feed' }));
     expect(mockQueryParams).toMatchObject({ location: 'feed' });
     expect(screen.getByTestId('feeds-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('inbox-panel')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('com_library_add_placeholder'), {
       target: { value: 'https://example.test/x' },
     });
@@ -269,5 +283,82 @@ describe('LibraryView: managing a document', () => {
       within(screen.getByRole('dialog')).getByRole('button', { name: 'com_ui_delete' }),
     );
     expect(mockRemove).toHaveBeenCalledWith({ id: 'd1' });
+  });
+});
+
+describe('LibraryView: bulk actions and keyboard', () => {
+  const two = () => {
+    mockList = {
+      data: { documents: [doc(), doc({ id: 'd2', title: 'Second page' })] },
+      isLoading: false,
+      isError: false,
+    };
+  };
+
+  it('acts on every selected document at once', () => {
+    two();
+    renderView();
+
+    fireEvent.click(screen.getByLabelText('com_library_select_row:Spaced repetition'));
+    fireEvent.click(screen.getByLabelText('com_library_select_row:Second page'));
+    const bar = screen.getByTestId('library-bulk-toolbar');
+    expect(bar).toHaveTextContent('com_library_selected_count:2');
+
+    fireEvent.click(within(bar).getByText('com_library_tab_archive'));
+
+    expect(mockBulkUpdate).toHaveBeenCalledWith({ ids: ['d1', 'd2'], location: 'archive' });
+  });
+
+  it('selects everything from the header checkbox and deletes only after confirming', () => {
+    two();
+    renderView();
+
+    fireEvent.click(screen.getByLabelText('com_library_select_all'));
+    fireEvent.click(within(screen.getByTestId('library-bulk-toolbar')).getByText('com_ui_delete'));
+    expect(mockBulkRemove).not.toHaveBeenCalled();
+
+    expect(screen.getByRole('dialog')).toHaveTextContent('com_library_bulk_delete_confirm:2');
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'com_ui_delete' }),
+    );
+    expect(mockBulkRemove).toHaveBeenCalledWith({ ids: ['d1', 'd2'] });
+  });
+
+  it('moves with j and k, and archives the document it stands on with e', () => {
+    two();
+    renderView();
+
+    fireEvent.keyDown(window, { key: 'j' });
+    fireEvent.keyDown(window, { key: 'j' });
+    fireEvent.keyDown(window, { key: 'k' });
+    expect(screen.getAllByTestId('library-row')[0]).toHaveAttribute('aria-current', 'true');
+
+    fireEvent.keyDown(window, { key: 'e' });
+    expect(mockUpdate).toHaveBeenCalledWith({ id: 'd1', patch: { location: 'archive' } });
+  });
+
+  it('opens the document with o, selects it with x and leaves typing alone', () => {
+    two();
+    renderView();
+
+    fireEvent.keyDown(window, { key: 'j' });
+    fireEvent.keyDown(window, { key: 'o' });
+    expect(mockNavigate).toHaveBeenCalledWith('/library/d1');
+
+    fireEvent.keyDown(window, { key: 'x' });
+    expect(screen.getByLabelText('com_library_select_row:Spaced repetition')).toBeChecked();
+
+    mockUpdate.mockClear();
+    fireEvent.keyDown(screen.getByLabelText('com_library_search_placeholder'), { key: 'e' });
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('lists the shortcuts on request', () => {
+    two();
+    renderView();
+
+    fireEvent.keyDown(window, { key: '?' });
+
+    expect(screen.getByTestId('library-shortcuts')).toBeInTheDocument();
   });
 });

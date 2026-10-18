@@ -1,8 +1,8 @@
-import { Feather } from 'lucide-react';
 import { EModelEndpoint, alternateName } from 'librechat-data-provider';
 import { pxToRem, Sparkles, ProviderIcon, getProviderIconDef } from '@librechat/client';
 import type { IconProps } from '~/common';
 import { useProviderIcon } from '~/hooks/Endpoint';
+import Boat from '~/components/MindFerry/Boat';
 import { cn } from '~/utils';
 
 /** The art stays at `icon-sm` and never outgrows the wrapper it sits in. */
@@ -47,7 +47,7 @@ const MinimalIcon: React.FC<IconProps> = (props) => {
 
   if (endpoint === EModelEndpoint.agents) {
     return renderWrapper(
-      <Feather className="icon-sm" aria-hidden="true" />,
+      <Boat className="icon-sm" />,
       modelLabel ?? alternateName[EModelEndpoint.agents],
     );
   }

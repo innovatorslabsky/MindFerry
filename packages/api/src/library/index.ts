@@ -7,8 +7,12 @@ export {
   getLibraryIsolation,
   getLibraryKeepPdfOriginals,
   getLibraryAutoTag,
+  getLibraryReviewPerDay,
+  getLibraryChatMaxChars,
 } from './config';
 export { createLibraryService } from './service';
+export { startOfDay as startOfReviewDay } from './review';
+export type { DailyReview, ReviewItem, ReviewAction } from './review';
 export type {
   LibraryService,
   LibraryServiceDeps,
@@ -24,6 +28,8 @@ export {
 export type { LibraryIsolationConfig, LibraryIngest, ProcessRunner } from './worker';
 export {
   createLibraryHandlers,
+  createLibraryInboxAuth,
+  libraryInboxLimiter,
   libraryBrowseLimiter,
   librarySaveLimiter,
   LIBRARY_MAX_HTML_CHARS,

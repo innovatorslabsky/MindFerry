@@ -205,6 +205,18 @@ export interface LibraryDataDeleteResult {
   sources: number;
   folders: number;
   feeds: number;
+  inboxes: number;
+}
+
+/** A person's newsletter address, as far as anyone but its holder may know: when it was made. */
+export interface LibraryInboxInfo {
+  createdAt: Date;
+}
+
+/** Who a newsletter address belongs to, for the unauthenticated request that arrives at it. */
+export interface LibraryInboxOwner {
+  userId: string;
+  tenantId?: string;
 }
 
 export interface LibraryFeedRecord {

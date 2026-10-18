@@ -8,6 +8,7 @@ import libraryDocumentSchema from '~/schema/libraryDocument';
 import libraryProgressSchema from '~/schema/libraryProgress';
 import libraryResourceSchema from '~/schema/libraryResource';
 import libraryFolderSchema from '~/schema/libraryFolder';
+import libraryInboxSchema from '~/schema/libraryInbox';
 import libraryUnitSchema from '~/schema/libraryUnit';
 import libraryFeedSchema from '~/schema/libraryFeed';
 
@@ -64,6 +65,9 @@ beforeAll(async () => {
   }
   if (!mongoose.models.LibraryFeed) {
     mongoose.model('LibraryFeed', libraryFeedSchema);
+  }
+  if (!mongoose.models.LibraryInbox) {
+    mongoose.model('LibraryInbox', libraryInboxSchema);
   }
   methods = createLibraryMethods(mongoose);
   await mongoose.connect(mongoServer.getUri());
@@ -270,6 +274,7 @@ describe('deletion', () => {
       sources: 0,
       folders: 0,
       feeds: 0,
+      inboxes: 0,
     });
     expect(await methods.listLibraryDocuments(userB, { limit: 10 })).toHaveLength(1);
     expect(await methods.listLibraryHighlights(userB)).toHaveLength(1);
@@ -926,5 +931,115 @@ describe('listLibraryDocumentsByIds', () => {
     expect(found.map((d) => d.id).sort()).toEqual([a.document.id, b.document.id].sort());
     expect(found[0]).not.toHaveProperty('text');
     expect(await methods.listLibraryDocumentsByIds(userA, [])).toEqual([]);
+  });
+});
+
+describe('daily review', () => {
+  const startOfToday = () => {
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  };
+
+  const seed = async (count: number) => {
+    const { document } = await methods.saveLibraryDocument(userA, doc());
+    const made = [];
+    for (let i = 0; i < count; i += 1) {
+      made.push(
+        (await methods.createLibraryHighlight(
+          userA,
+          highlight(document.id, {
+            anchor: { exact: `Quote ${i}`, prefix: '', suffix: '', start: i, end: i + 7 },
+          }),
+        ))!,
+      );
+    }
+    return made;
+  };
+
+  it('offers every highlight once, newest first, until some have been reviewed', async () => {
+    const made = await seed(3);
+    const listed = await methods.listLibraryReviewHighlights(userA, startOfToday(), 10);
+    expect(listed.map((h) => h.id)).toEqual([made[2].id, made[1].id, made[0].id]);
+  });
+
+  it('leaves out what was reviewed today, and counts it', async () => {
+    const made = await seed(3);
+    expect(await methods.markLibraryHighlightReviewed(userA, made[2].id)).toBe(true);
+
+    const listed = await methods.listLibraryReviewHighlights(userA, startOfToday(), 10);
+    expect(listed.map((h) => h.id)).toEqual([made[1].id, made[0].id]);
+    expect(await methods.countLibraryReviewedSince(userA, startOfToday())).toBe(1);
+  });
+
+  it('brings a highlight back on a later day, after those never reviewed', async () => {
+    const made = await seed(2);
+    await methods.markLibraryHighlightReviewed(userA, made[1].id);
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    const listed = await methods.listLibraryReviewHighlights(userA, tomorrow, 10);
+
+    expect(listed.map((h) => h.id)).toEqual([made[0].id, made[1].id]);
+  });
+
+  it('keeps a muted highlight out for good', async () => {
+    const made = await seed(2);
+    await methods.markLibraryHighlightReviewed(userA, made[1].id, { mute: true });
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    const listed = await methods.listLibraryReviewHighlights(userA, tomorrow, 10);
+
+    expect(listed.map((h) => h.id)).toEqual([made[0].id]);
+  });
+
+  it('skips orphaned highlights, honours the limit, and never crosses users', async () => {
+    const made = await seed(3);
+    await methods.reanchorLibraryHighlights(userA, made[0].documentId, [
+      { id: made[0].id, anchor: null, contentHash: HASH },
+    ]);
+
+    const listed = await methods.listLibraryReviewHighlights(userA, startOfToday(), 1);
+    expect(listed).toHaveLength(1);
+    expect(listed[0].id).not.toBe(made[0].id);
+    expect(await methods.listLibraryReviewHighlights(userB, startOfToday(), 10)).toEqual([]);
+    expect(await methods.markLibraryHighlightReviewed(userB, made[1].id)).toBe(false);
+    expect(await methods.markLibraryHighlightReviewed(userA, 'not-an-id')).toBe(false);
+    expect(await methods.listLibraryReviewHighlights(userA, startOfToday(), 0)).toEqual([]);
+  });
+});
+
+describe('the newsletter address', () => {
+  const HASH_A = 'c'.repeat(64);
+  const HASH_B = 'd'.repeat(64);
+
+  it('belongs to one person and is found by its secret', async () => {
+    expect(await methods.getLibraryInbox(userA)).toBeNull();
+
+    const made = await methods.rotateLibraryInbox(userA, HASH_A);
+
+    expect(made.createdAt).toBeInstanceOf(Date);
+    expect(await methods.getLibraryInbox(userA)).toEqual(made);
+    expect(await methods.findLibraryInboxOwner(HASH_A)).toEqual({ userId: userA });
+    expect(await methods.findLibraryInboxOwner(HASH_B)).toBeNull();
+    expect(await methods.getLibraryInbox(userB)).toBeNull();
+  });
+
+  it('is replaced, not added to, when made again: the old secret stops working', async () => {
+    await methods.rotateLibraryInbox(userA, HASH_A);
+    await methods.rotateLibraryInbox(userA, HASH_B);
+
+    expect(await methods.findLibraryInboxOwner(HASH_A)).toBeNull();
+    expect(await methods.findLibraryInboxOwner(HASH_B)).toEqual({ userId: userA });
+    expect(await mongoose.models.LibraryInbox.countDocuments({})).toBe(1);
+  });
+
+  it('can be turned off, and goes with the rest of a person’s library data', async () => {
+    await methods.rotateLibraryInbox(userA, HASH_A);
+    expect(await methods.deleteLibraryInbox(userA)).toBe(true);
+    expect(await methods.deleteLibraryInbox(userA)).toBe(false);
+    expect(await methods.findLibraryInboxOwner(HASH_A)).toBeNull();
+
+    await methods.rotateLibraryInbox(userB, HASH_B);
+    expect(await methods.deleteAllLibraryData(userB)).toMatchObject({ inboxes: 1 });
+    expect(await methods.getLibraryInbox(userB)).toBeNull();
   });
 });

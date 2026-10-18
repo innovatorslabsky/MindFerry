@@ -1,6 +1,6 @@
 import React from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { mockClient } from 'test/libraryMocks';
 
 let mockDocument: { data?: unknown; isLoading: boolean; isError: boolean };
@@ -8,7 +8,14 @@ let mockUnit: { data?: unknown; isLoading: boolean; isError: boolean };
 let mockUnitArgs: unknown[] = [];
 const bodyProps: Array<Record<string, unknown>> = [];
 const mockRemoveSource = jest.fn();
+const mockUpdateDocument = jest.fn();
+const mockHighlightSelection = jest.fn();
+const mockNavigate = jest.fn();
 
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: () => mockNavigate,
+}));
 jest.mock('~/hooks', () => ({
   useLocalize: () => (key: string, vars?: Record<string, unknown>) =>
     vars ? `${key}:${Object.values(vars).join(',')}` : key,
@@ -16,6 +23,7 @@ jest.mock('~/hooks', () => ({
 jest.mock('~/common', () => ({ NotificationSeverity: { ERROR: 'error', SUCCESS: 'success' } }));
 jest.mock('~/data-provider', () => ({
   useDeleteLibrarySourceMutation: () => ({ mutate: mockRemoveSource }),
+  useUpdateLibraryDocumentMutation: () => ({ mutate: mockUpdateDocument }),
   useLibraryDocumentQuery: () => mockDocument,
   useLibraryUnitQuery: (...args: unknown[]) => {
     mockUnitArgs = args;
@@ -29,6 +37,12 @@ jest.mock('../ReaderBody', () => ({
     bodyProps.push(props);
     return <div data-testid="reader-body" />;
   },
+}));
+jest.mock('../AskButtons', () => ({
+  __esModule: true,
+  default: ({ kind, unitIndex }: { kind: string; unitIndex: number }) => (
+    <div data-testid="ask-buttons" data-kind={kind} data-unit={unitIndex} />
+  ),
 }));
 jest.mock('../OcrPanel', () => ({
   __esModule: true,
@@ -134,6 +148,11 @@ describe('ReaderView: an article', () => {
     expect(bodyProps.at(-1)?.unit).toBeUndefined();
     expect(screen.queryByText('com_library_contents')).not.toBeInTheDocument();
     expect(mockUnitArgs.slice(1)).toEqual([undefined]);
+  });
+
+  it('offers to ask about the article', () => {
+    renderAt('/library/d1');
+    expect(screen.getByTestId('ask-buttons')).toHaveAttribute('data-kind', 'article');
   });
 
   it('does not resume from a position recorded against different text', () => {
@@ -502,5 +521,51 @@ describe('ReaderView: narrow screens', () => {
     };
     renderAt('/library/d1');
     expect(screen.queryByRole('button', { name: 'com_library_contents' })).not.toBeInTheDocument();
+  });
+});
+
+describe('ReaderView: keyboard', () => {
+  beforeEach(() => {
+    mockDocument = {
+      isLoading: false,
+      isError: false,
+      data: {
+        document: { ...summary(), contentHtml: '<p>Hello</p>', text: 'Hello' },
+        highlights: [],
+        progress: null,
+      },
+    };
+  });
+  afterEach(() => jest.clearAllMocks());
+
+  it('highlights the selection with h through the reader body', () => {
+    renderAt('/library/d1');
+    const register = bodyProps.at(-1)?.registerHandle as (handle: unknown) => void;
+    act(() => register({ focusHighlight: jest.fn(), highlightSelection: mockHighlightSelection }));
+
+    fireEvent.keyDown(window, { key: 'h' });
+
+    expect(mockHighlightSelection).toHaveBeenCalledTimes(1);
+  });
+
+  it('archives with e and sets aside with l', () => {
+    renderAt('/library/d1');
+
+    fireEvent.keyDown(window, { key: 'e' });
+    expect(mockUpdateDocument).toHaveBeenLastCalledWith({
+      id: 'd1',
+      patch: { location: 'archive' },
+    });
+
+    fireEvent.keyDown(window, { key: 'l' });
+    expect(mockUpdateDocument).toHaveBeenLastCalledWith({ id: 'd1', patch: { location: 'later' } });
+  });
+
+  it('goes back to the list with u', () => {
+    renderAt('/library/d1');
+
+    fireEvent.keyDown(window, { key: 'u' });
+
+    expect(mockNavigate).toHaveBeenCalledWith('/library');
   });
 });

@@ -3,7 +3,6 @@ import { useToastContext } from '@librechat/client';
 import { dataService } from 'librechat-data-provider';
 import type { TLibraryHighlight, TLibraryHighlightColor } from 'librechat-data-provider';
 import {
-  HIGHLIGHT_COLORS,
   buildAnchor,
   offsetAtTop,
   offsetsFromRange,
@@ -14,23 +13,19 @@ import {
   scrollToOffset,
 } from '~/utils/libraryAnchors';
 import { useCreateLibraryHighlightMutation, useSetLibraryProgressMutation } from '~/data-provider';
+import HighlightToolbar from './HighlightToolbar';
 import { NotificationSeverity } from '~/common';
 import { libraryErrorKey } from './errors';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
-/** Written out so each label key is visible to the unused-key check. */
-const COLOR_LABEL = {
-  yellow: 'com_library_color_yellow',
-  blue: 'com_library_color_blue',
-  green: 'com_library_color_green',
-  red: 'com_library_color_red',
-  purple: 'com_library_color_purple',
-} as const;
-
 const PROGRESS_DELAY_MS = 1500;
 
-export type ReaderBodyHandle = { focusHighlight: (highlight: TLibraryHighlight) => void };
+export type ReaderBodyHandle = {
+  focusHighlight: (highlight: TLibraryHighlight) => void;
+  /** Highlights whatever the reader has selected, in yellow unless told otherwise. */
+  highlightSelection: (color?: TLibraryHighlightColor) => boolean;
+};
 
 type ReaderBodyProps = {
   documentId: string;
@@ -47,6 +42,8 @@ type ReaderBodyProps = {
   unit?: { kind: 'chapter' | 'page'; index: number };
   /** Off for text that cannot be highlighted, with the reason shown to the reader. */
   highlightingDisabledReason?: string;
+  /** Chapters in the book. With `unit`, the progress bar then shows how far through the whole book. */
+  unitCount?: number;
   /** Where the reader was last time, if it is still meaningful. */
   resumeAt?: number;
   /** Gives the parent a way to scroll to a highlight. */
@@ -69,6 +66,7 @@ function ReaderBody({
   contentHash,
   highlights,
   unit,
+  unitCount,
   highlightingDisabledReason,
   resumeAt,
   registerHandle,
@@ -80,6 +78,8 @@ function ReaderBody({
   const content = useRef<HTMLDivElement>(null);
   const [aligned, setAligned] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
+  /** How far down the text the reader is, 0 to 1. */
+  const [fraction, setFraction] = useState(0);
 
   const createHighlight = useCreateLibraryHighlightMutation({
     onError: (error) =>
@@ -152,6 +152,34 @@ function ReaderBody({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentId, unit?.index, html, plainText]);
 
+  const highlightSelection = useCallback(
+    (color: TLibraryHighlightColor = 'yellow') => {
+      const root = content.current;
+      const selection = window.getSelection();
+      if (
+        !root ||
+        !canHighlight ||
+        !selection ||
+        selection.rangeCount === 0 ||
+        selection.isCollapsed
+      ) {
+        return false;
+      }
+      const offsets = offsetsFromRange(root, selection.getRangeAt(0));
+      const anchor = offsets && buildAnchor(anchorText, offsets.start, offsets.end);
+      if (!anchor) {
+        return false;
+      }
+      createHighlight.mutate({ documentId, anchor, contentHash, color, unit });
+      selection.removeAllRanges();
+      setPending(null);
+      return true;
+    },
+    // `createHighlight.mutate` is stable; the rest is what a highlight is made from.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [canHighlight, anchorText, documentId, contentHash, unit?.kind, unit?.index],
+  );
+
   useEffect(() => {
     registerHandle?.({
       focusHighlight: (highlight) => {
@@ -159,13 +187,19 @@ function ReaderBody({
           scrollToHighlight(content.current, highlight);
         }
       },
+      highlightSelection,
     });
     return () => registerHandle?.(null);
-  }, [registerHandle]);
+  }, [registerHandle, highlightSelection]);
 
   /** Saves where the reader is, a moment after they stop scrolling. */
   const progressTimer = useRef<ReturnType<typeof setTimeout>>();
   const onScroll = useCallback(() => {
+    const box = scroller.current;
+    if (box) {
+      const room = box.scrollHeight - box.clientHeight;
+      setFraction(room > 0 ? Math.min(1, Math.max(0, box.scrollTop / room)) : 1);
+    }
     clearTimeout(progressTimer.current);
     progressTimer.current = setTimeout(() => {
       const root = content.current;
@@ -222,78 +256,84 @@ function ReaderBody({
     setPending(null);
   };
 
+  /** Percent of the whole document read: of the book when it has chapters, else of this text. */
+  const percent = Math.round(
+    (unit?.kind === 'chapter' && unitCount && unitCount > 0
+      ? (unit.index + fraction) / unitCount
+      : fraction) * 100,
+  );
+  const seek = (value: number) => {
+    const box = scroller.current;
+    if (box) {
+      box.scrollTop = (value / 100) * (box.scrollHeight - box.clientHeight);
+    }
+  };
+
   return (
-    <div
-      ref={scroller}
-      onScroll={onScroll}
-      className={cn('relative h-full overflow-y-auto', className)}
-      data-testid="library-reader-scroll"
-    >
-      {highlightingDisabledReason != null && (
-        <p
-          className="text-text-secondary bg-surface-secondary mx-auto mb-4 max-w-2xl rounded-lg px-3 py-2 text-sm"
-          role="note"
-        >
-          {highlightingDisabledReason}
-        </p>
-      )}
-      {highlightingDisabledReason == null && !aligned && (html != null || plainText != null) && (
-        <p
-          className="text-text-secondary bg-surface-secondary mx-auto mb-4 max-w-2xl rounded-lg px-3 py-2 text-sm"
-          role="note"
-          data-testid="library-highlighting-off"
-        >
-          {localize('com_library_highlighting_off')}
-        </p>
-      )}
-      {html != null ? (
-        <div
-          ref={content}
-          className="library-prose mx-auto max-w-2xl px-4 pb-24"
-          data-testid="library-reader-content"
-          onMouseUp={onSelectionEnd}
-          onKeyUp={onSelectionEnd}
-          // The server sanitized this with an allow-list; offsets only hold if it is shown unchanged.
-          dangerouslySetInnerHTML={{ __html: html }}
+    <div className="flex h-full min-h-0 flex-col">
+      <div
+        ref={scroller}
+        onScroll={onScroll}
+        className={cn('relative min-h-0 flex-1 overflow-y-auto', className)}
+        data-testid="library-reader-scroll"
+      >
+        {highlightingDisabledReason != null && (
+          <p
+            className="text-text-secondary bg-surface-secondary mx-auto mb-4 max-w-2xl rounded-lg px-3 py-2 text-sm"
+            role="note"
+          >
+            {highlightingDisabledReason}
+          </p>
+        )}
+        {highlightingDisabledReason == null && !aligned && (html != null || plainText != null) && (
+          <p
+            className="text-text-secondary bg-surface-secondary mx-auto mb-4 max-w-2xl rounded-lg px-3 py-2 text-sm"
+            role="note"
+            data-testid="library-highlighting-off"
+          >
+            {localize('com_library_highlighting_off')}
+          </p>
+        )}
+        {html != null ? (
+          <div
+            ref={content}
+            className="library-prose mx-auto max-w-2xl px-4 pb-24"
+            data-testid="library-reader-content"
+            onMouseUp={onSelectionEnd}
+            onKeyUp={onSelectionEnd}
+            // The server sanitized this with an allow-list; offsets only hold if it is shown unchanged.
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        ) : (
+          <div
+            ref={content}
+            className="library-prose mx-auto max-w-2xl px-4 pb-24 whitespace-pre-wrap"
+            data-testid="library-reader-content"
+            onMouseUp={onSelectionEnd}
+            onKeyUp={onSelectionEnd}
+          >
+            {/* One text node, so the text on screen is exactly the text highlights are anchored in. */}
+            {plainText}
+          </div>
+        )}
+        {pending && <HighlightToolbar top={pending.top} left={pending.left} onPick={onPick} />}
+      </div>
+      <div className="border-border-light flex shrink-0 items-center gap-3 border-t px-4 py-1.5">
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={unit?.kind === 'chapter' ? Math.round(fraction * 100) : percent}
+          onChange={(event) => seek(Number(event.target.value))}
+          aria-label={localize('com_library_progress')}
+          aria-valuetext={localize('com_library_progress_percent', { 0: percent })}
+          className="h-1 min-w-0 flex-1 cursor-pointer accent-current"
+          data-testid="library-progress-slider"
         />
-      ) : (
-        <div
-          ref={content}
-          className="library-prose mx-auto max-w-2xl px-4 pb-24 whitespace-pre-wrap"
-          data-testid="library-reader-content"
-          onMouseUp={onSelectionEnd}
-          onKeyUp={onSelectionEnd}
-        >
-          {/* One text node, so the text on screen is exactly the text highlights are anchored in. */}
-          {plainText}
-        </div>
-      )}
-      {pending && (
-        <div
-          role="toolbar"
-          aria-label={localize('com_library_highlight_toolbar')}
-          className="border-border-medium bg-surface-primary fixed z-50 flex -translate-x-1/2 -translate-y-full gap-1 rounded-lg border p-1 shadow-lg"
-          style={{ top: Math.max(pending.top - 8, 8), left: pending.left }}
-          data-testid="library-highlight-toolbar"
-        >
-          {HIGHLIGHT_COLORS.map((color) => (
-            <button
-              key={color}
-              type="button"
-              // Keep the selection alive while the button takes the click.
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => onPick(color)}
-              aria-label={localize('com_library_highlight_with', {
-                0: localize(COLOR_LABEL[color]),
-              })}
-              className={cn(
-                'library-swatch h-6 w-6 rounded-full border',
-                `library-swatch-${color}`,
-              )}
-            />
-          ))}
-        </div>
-      )}
+        <span className="text-text-secondary w-12 shrink-0 text-right text-xs tabular-nums">
+          {localize('com_library_progress_percent', { 0: percent })}
+        </span>
+      </div>
     </div>
   );
 }

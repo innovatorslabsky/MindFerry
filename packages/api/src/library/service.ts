@@ -20,13 +20,21 @@ import type {
   LibraryUnitSummary,
 } from '@librechat/data-schemas';
 import type { DocumentDraft } from './ingest/saveDocument';
+import type { DailyReview, ReviewAction } from './review';
 import type { FeedFetchResult } from './feed/fetchFeed';
 import type { LibraryIngest } from './worker/ingest';
 import type { ExportFormat } from './export';
+import type { InboundEmail } from './inbox';
+import type { ChatSource } from './chat';
 import { EXPORT_MAX_HIGHLIGHTS, highlightsToCsv, highlightsToMarkdown } from './export';
+import { emailKey, generateInboxToken, hashInboxToken, textToHtml } from './inbox';
+import { DEFAULT_REVIEW_PER_DAY, MAX_REVIEW_EXTRA, startOfDay } from './review';
 import { createAnchor, resolveAnchor } from './anchor/textQuote';
 import { fetchFeed, subscribeToUrl } from './feed/fetchFeed';
 import { saveHtml, saveUrl } from './ingest/saveDocument';
+import { DEFAULT_CHAT_MAX_CHARS, capText } from './chat';
+import { NotReadableError } from './ingest/extract';
+import { urlKey } from './ingest/normalizeUrl';
 import { ingestUpload } from './ingest/upload';
 import { feedItemKey } from './feed/parseFeed';
 import { totalWords } from './ingest/extract';
@@ -63,6 +71,13 @@ type Methods = Pick<
   | 'listLibraryHighlights'
   | 'updateLibraryHighlight'
   | 'deleteLibraryHighlight'
+  | 'rotateLibraryInbox'
+  | 'getLibraryInbox'
+  | 'deleteLibraryInbox'
+  | 'findLibraryInboxOwner'
+  | 'listLibraryReviewHighlights'
+  | 'countLibraryReviewedSince'
+  | 'markLibraryHighlightReviewed'
   | 'reanchorLibraryHighlights'
   | 'getLibraryProgress'
   | 'setLibraryProgress'
@@ -80,6 +95,12 @@ export interface LibraryServiceDeps {
   keepPdfOriginals?: boolean;
   /** Tag each new document with its site and keywords (default on). */
   autoTag?: boolean;
+  /** Highlights in one day's review (`contextHub.library.reviewPerDay`). */
+  reviewPerDay?: number;
+  /** The most text "Ask about this" puts in front of the model (`contextHub.library.chatMaxChars`). */
+  chatMaxChars?: number;
+  /** Read for the day's start; tests pass a fixed one. */
+  now?: () => Date;
 }
 
 export interface SaveResult {
@@ -220,6 +241,37 @@ export interface LibraryService {
     patch: LibraryHighlightPatch,
   ) => Promise<LibraryHighlightRecord | null>;
   removeHighlight: (userId: string, id: string) => Promise<boolean>;
+  /**
+   * Today's review: highlights not seen yet today, up to the day's goal. `extra` raises the goal for
+   * a person who wants to keep going; `offsetMinutes` is the browser's timezone offset.
+   */
+  dailyReview: (
+    userId: string,
+    options?: { offsetMinutes?: number; extra?: number },
+  ) => Promise<DailyReview>;
+  /**
+   * What a chat about a document is opened with: an article's text, one chapter or page of a book when
+   * `unitIndex` is given, or the book from its start up to the cap. `null` when it is not the person's.
+   */
+  chatSource: (
+    userId: string,
+    id: string,
+    options?: { unitIndex?: number },
+  ) => Promise<ChatSource | null>;
+  /** When the person's newsletter address was made, or `null` if they have none. */
+  getInbox: (userId: string) => Promise<{ createdAt: Date } | null>;
+  /**
+   * Makes the address, or replaces it. The secret in it is returned here and never again: only a hash
+   * is kept, so it cannot be read back later.
+   */
+  rotateInbox: (userId: string) => Promise<{ token: string; createdAt: Date }>;
+  deleteInbox: (userId: string) => Promise<boolean>;
+  /** Whose address a secret in a request is; `null` if it is no one's. */
+  findInboxOwner: (token: string) => Promise<{ userId: string; tenantId?: string } | null>;
+  /** Saves a newsletter to the person's Feed tab. The same message again updates the same document. */
+  receiveEmail: (userId: string, email: InboundEmail) => Promise<SaveResult>;
+  /** `false` when the highlight is not the person's. */
+  reviewHighlight: (userId: string, id: string, action: ReviewAction) => Promise<boolean>;
   getProgress: (userId: string, documentId: string) => Promise<LibraryProgressRecord | null>;
   setProgress: (
     userId: string,
@@ -304,6 +356,9 @@ export function createLibraryService({
   ingest = {},
   keepPdfOriginals = false,
   autoTag = true,
+  reviewPerDay = DEFAULT_REVIEW_PER_DAY,
+  chatMaxChars = DEFAULT_CHAT_MAX_CHARS,
+  now = () => new Date(),
 }: LibraryServiceDeps): LibraryService {
   const fetchUrl = ingest.saveUrl ?? ((url: string) => saveUrl(url));
   const fromHtml = ingest.saveHtml ?? (async (url: string, html: string) => saveHtml(url, html));
@@ -318,6 +373,7 @@ export function createLibraryService({
     userId: string,
     draft: DocumentDraft,
     location?: LibraryLocationValue,
+    extraTags: string[] = [],
   ): Promise<SaveResult> {
     const saved = await methods.saveLibraryDocument(userId, {
       urlKey: draft.urlKey,
@@ -334,20 +390,26 @@ export function createLibraryService({
       readingMinutes: draft.readingMinutes,
       fetchedAt: new Date(draft.fetchedAt),
       location,
-      tags: autoTag
-        ? suggestTags({
-            kind: 'article',
-            title: draft.title,
-            text: draft.text,
-            lang: draft.lang,
-            normalizedUrl: draft.normalizedUrl,
-          })
-        : undefined,
+      tags: initialTags(draft, extraTags),
     });
     const reanchored = saved.contentChanged
       ? await reanchor(userId, saved.document)
       : { kept: 0, orphaned: 0 };
     return { document: toSummary(saved.document), created: saved.created, reanchored };
+  }
+
+  function initialTags(draft: DocumentDraft, extraTags: string[]): string[] | undefined {
+    const suggested = autoTag
+      ? suggestTags({
+          kind: 'article',
+          title: draft.title,
+          text: draft.text,
+          lang: draft.lang,
+          normalizedUrl: draft.normalizedUrl,
+        })
+      : [];
+    const tags = [...new Set([...extraTags, ...suggested])];
+    return tags.length > 0 ? tags : undefined;
   }
 
   /** Saves the items of a feed read that have not been seen, newest first, and remembers them all. */
@@ -615,6 +677,144 @@ export function createLibraryService({
             : highlightsToMarkdown(documents, rows),
         count: rows.length,
       };
+    },
+
+    async dailyReview(userId: string, options: { offsetMinutes?: number; extra?: number } = {}) {
+      const since = startOfDay(now(), options.offsetMinutes);
+      const extra = Math.min(Math.max(Math.trunc(options.extra ?? 0), 0), MAX_REVIEW_EXTRA);
+      const goal = reviewPerDay + extra;
+      const reviewedToday = await methods.countLibraryReviewedSince(userId, since);
+      const highlights = await methods.listLibraryReviewHighlights(
+        userId,
+        since,
+        Math.max(goal - reviewedToday, 0),
+      );
+      const documents = await methods.listLibraryDocumentsByIds(
+        userId,
+        highlights.map((highlight) => highlight.documentId),
+      );
+      const byId = new Map(documents.map((document) => [document.id, document]));
+      const items = highlights.flatMap((highlight) => {
+        const document = byId.get(highlight.documentId);
+        return document
+          ? [
+              {
+                highlight,
+                document: {
+                  id: document.id,
+                  title: document.title,
+                  siteName: document.siteName,
+                  kind: document.kind,
+                },
+              },
+            ]
+          : [];
+      });
+      return { items, reviewedToday, goal };
+    },
+
+    getInbox(userId: string) {
+      return methods.getLibraryInbox(userId);
+    },
+
+    async rotateInbox(userId: string) {
+      const token = generateInboxToken();
+      const { createdAt } = await methods.rotateLibraryInbox(userId, hashInboxToken(token));
+      return { token, createdAt };
+    },
+
+    deleteInbox(userId: string) {
+      return methods.deleteLibraryInbox(userId);
+    },
+
+    findInboxOwner(token: string) {
+      return methods.findLibraryInboxOwner(hashInboxToken(token));
+    },
+
+    async receiveEmail(userId: string, email: InboundEmail) {
+      const key = emailKey(email);
+      const subject = email.subject || 'Newsletter';
+      // Relative links in a message have no page to resolve against; this address is never fetched.
+      const base = `https://mail.invalid/${key}`;
+      let draft: DocumentDraft;
+      try {
+        draft = await fromHtml(base, email.html ?? textToHtml(subject, email.text ?? ''));
+      } catch (error) {
+        if (!(error instanceof NotReadableError) || !email.text) {
+          throw error;
+        }
+        draft = await fromHtml(base, textToHtml(subject, email.text));
+      }
+      const normalizedUrl = `mail://${key}`;
+      const site = email.fromName ?? email.fromAddress?.split('@')[1] ?? null;
+      return persist(
+        userId,
+        {
+          ...draft,
+          sourceUrl: normalizedUrl,
+          normalizedUrl,
+          urlKey: urlKey(normalizedUrl),
+          title: subject,
+          siteName: site,
+          byline: email.fromAddress ?? draft.byline,
+        },
+        'feed',
+        ['newsletter'],
+      );
+    },
+
+    async chatSource(userId: string, id: string, options: { unitIndex?: number } = {}) {
+      const document = await methods.getLibraryDocument(userId, id);
+      if (!document) {
+        return null;
+      }
+      const summary = toSummary(document);
+      const highlights = await methods.listLibraryHighlights(userId, id, 200);
+      if (document.kind === 'article') {
+        const { text, truncated } = capText(document.text, chatMaxChars);
+        return { document: summary, text, truncated, highlights };
+      }
+      if (options.unitIndex !== undefined) {
+        const unit = await methods.getLibraryUnit(userId, id, options.unitIndex);
+        if (!unit) {
+          return null;
+        }
+        const { text, truncated } = capText(unit.text, chatMaxChars);
+        return {
+          document: summary,
+          unit: { kind: unit.kind, index: unit.index },
+          text,
+          truncated,
+          highlights: highlights.filter((highlight) => highlight.unit?.index === unit.index),
+        };
+      }
+      const parts: string[] = [];
+      let length = 0;
+      let truncated = false;
+      for (let index = 0; index < document.unitCount; index += 1) {
+        if (length >= chatMaxChars) {
+          truncated = true;
+          break;
+        }
+        const unit = await methods.getLibraryUnit(userId, id, index);
+        if (!unit || unit.text.trim() === '') {
+          continue;
+        }
+        const piece = `[${unit.kind} ${index + 1}]\n${unit.text}`;
+        parts.push(piece);
+        length += piece.length + 2;
+      }
+      const joined = capText(parts.join('\n\n'), chatMaxChars);
+      return {
+        document: summary,
+        text: joined.text,
+        truncated: truncated || joined.truncated,
+        highlights,
+      };
+    },
+
+    reviewHighlight(userId: string, id: string, action: ReviewAction) {
+      return methods.markLibraryHighlightReviewed(userId, id, { mute: action === 'mute' });
     },
 
     createFolder(userId: string, name: string) {

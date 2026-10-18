@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { rateLimit } from 'express-rate-limit';
-import { logger } from '@librechat/data-schemas';
-import type { RequestHandler, Response } from 'express';
+import { logger, runAsSystem } from '@librechat/data-schemas';
+import type { NextFunction, RequestHandler, Response } from 'express';
 import type { ServerRequest } from '../types/http';
 import type { LibraryService } from './service';
 import {
@@ -12,11 +12,15 @@ import {
   WorkerUnavailableError,
 } from './worker/errors';
 import { FetchError, TooLargeError, UnsafeUrlError } from './net/safeFetch';
+import { isConversationImportError } from '../conversations/import';
+import { isContentFilterError } from '../middleware/contentFilter';
 import { PdfEncryptedError, PdfError } from './pdf/parsePdf';
 import { EpubDrmError, EpubError } from './epub/parseEpub';
 import { createHighlightSchema, LOCATIONS } from './types';
 import { contextHubRateLimitKey } from '../hub/ratelimit';
+import { isInboxToken, parseInboundEmail } from './inbox';
 import { UnsupportedUploadError } from './ingest/upload';
+import { convertLibraryDocumentToChat } from './chat';
 import { NotReadableError } from './ingest/extract';
 import { FeedParseError } from './feed/parseFeed';
 import { MAX_OCR_PAGE_CHARS } from './service';
@@ -47,6 +51,17 @@ export const librarySaveLimiter: RequestHandler = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => contextHubRateLimitKey(req as ServerRequest),
+});
+
+/**
+ * A newsletter address is a secret in a URL that anyone can try, so every guess is limited by where it
+ * comes from, the only thing known before the secret has been checked.
+ */
+export const libraryInboxLimiter: RequestHandler = rateLimit({
+  windowMs: LIBRARY_RATE_WINDOW_MS,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 /** Largest page a client may hand over directly; the server-side fetch has its own 5 MiB cap. */
@@ -99,6 +114,18 @@ const folderBodySchema = z.object({
 });
 
 const feedBodySchema = z.object({ url: z.string().url().max(2048) });
+
+const reviewBodySchema = z.object({ action: z.enum(['done', 'mute']) });
+
+/** An endpoint or model name as the UI reports it: letters, digits and the punctuation model ids use. */
+const NAME_PATTERN = /^[\w.:/@ -]{1,200}$/;
+
+const chatBodySchema = z.object({
+  endpoint: z.string().regex(NAME_PATTERN).optional(),
+  model: z.string().regex(NAME_PATTERN).optional(),
+  /** A chapter or page of a book; leave out for an article or for the book from its start. */
+  unitIndex: z.number().int().nonnegative().optional(),
+});
 
 /** Largest upload accepted; also the ceiling the route's multer instance is configured with. */
 export const LIBRARY_MAX_UPLOAD_BYTES: number = 50 * 1024 * 1024;
@@ -246,6 +273,13 @@ export interface LibraryHandlers {
   saveUnitText: Handler;
   getSource: Handler;
   exportHighlights: Handler;
+  dailyReview: Handler;
+  reviewHighlight: Handler;
+  chat: Handler;
+  getInbox: Handler;
+  rotateInbox: Handler;
+  deleteInbox: Handler;
+  receiveEmail: Handler;
   removeSource: Handler;
   list: Handler;
   get: Handler;
@@ -260,10 +294,23 @@ export interface LibraryHandlers {
 /** A service, or a function that picks one per request (so isolation settings can follow the config). */
 export type LibraryServiceSource = LibraryService | ((req: ServerRequest) => LibraryService);
 
+/**
+ * Saves a conversation, already in the shape of an import, through the app's own importer and
+ * returns the new conversation's id. Supplied by the caller: the importer lives in `/api`.
+ */
+export type LibraryChatImporter = (params: {
+  userId: string;
+  userRole?: string;
+  payload: ReturnType<typeof convertLibraryDocumentToChat>;
+  req: ServerRequest;
+}) => Promise<{ conversationId: string }>;
+
 export function createLibraryHandlers({
   service: source,
+  importConversation,
 }: {
   service: LibraryServiceSource;
+  importConversation?: LibraryChatImporter;
 }): LibraryHandlers {
   // Resolved once per request by the handler's first use; a plain service is used as is.
   const serviceFor = (req: ServerRequest): LibraryService =>
@@ -611,6 +658,110 @@ export function createLibraryHandlers({
     res.status(204).end();
   };
 
+  const dailyReview: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const service = serviceFor(req);
+    const query = (req.query ?? {}) as Record<string, unknown>;
+    const number = (raw: unknown): number | undefined => {
+      const parsed = typeof raw === 'string' ? Number.parseInt(raw, 10) : NaN;
+      return Number.isFinite(parsed) ? parsed : undefined;
+    };
+    res.status(200).json(
+      await service.dailyReview(userId, {
+        offsetMinutes: number(query.offset),
+        extra: number(query.extra),
+      }),
+    );
+  };
+
+  const reviewHighlight: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const service = serviceFor(req);
+    const body = reviewBodySchema.safeParse(req.body);
+    if (!body.success) return fail(res, 400, 'invalid_request', 'action must be done or mute');
+    const found = await service.reviewHighlight(userId, param(req, 'id'), body.data.action);
+    if (!found) return fail(res, 404, 'not_found', 'Highlight not found');
+    res.status(204).end();
+  };
+
+  /** "Ask about this": opens a new chat that starts from the page, article, chapter or book. */
+  const chat: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    if (!importConversation) return fail(res, 404, 'not_found', 'Chat is not available');
+    const service = serviceFor(req);
+    const body = chatBodySchema.safeParse(req.body ?? {});
+    if (!body.success) return fail(res, 400, 'invalid_request', 'Invalid request');
+    try {
+      const found = await service.chatSource(userId, param(req, 'id'), {
+        unitIndex: body.data.unitIndex,
+      });
+      if (!found) return fail(res, 404, 'not_found', 'Document not found');
+      if (found.text.trim() === '') {
+        return fail(res, 422, 'empty_document', 'There is no text here to ask about');
+      }
+      const payload = convertLibraryDocumentToChat(found, {
+        endpoint: body.data.endpoint,
+        model: body.data.model,
+      });
+      const { conversationId } = await importConversation({
+        userId,
+        userRole: req.user?.role,
+        payload,
+        req,
+      });
+      res.status(201).json({ conversationId });
+    } catch (error) {
+      if (isContentFilterError(error) || isConversationImportError(error)) {
+        res.status(error.statusCode).json(error.body);
+        return;
+      }
+      logger.error('[library] Could not open a chat about a document:', error);
+      fail(res, 500, 'internal_error', 'Could not open the chat');
+    }
+  };
+
+  const getInbox: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const inbox = await serviceFor(req).getInbox(userId);
+    res.status(200).json({ inbox: inbox ? { createdAt: inbox.createdAt } : null });
+  };
+
+  /** The one time the secret is shown: only its hash is stored. */
+  const rotateInbox: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const { token, createdAt } = await serviceFor(req).rotateInbox(userId);
+    res.status(201).json({ token, createdAt });
+  };
+
+  const deleteInbox: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    await serviceFor(req).deleteInbox(userId);
+    res.status(204).end();
+  };
+
+  /**
+   * What an email service posts for a message sent to someone's newsletter address. The sender is
+   * not the person, so nothing about the answer tells a guesser anything: every refusal is a 404.
+   */
+  const receiveEmail: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const email = parseInboundEmail(req.body);
+    if (!email) return fail(res, 422, 'empty_message', 'The message has no text');
+    try {
+      const result = await serviceFor(req).receiveEmail(userId, email);
+      res.status(result.created ? 201 : 200).json({ document: { id: result.document.id } });
+    } catch (error) {
+      saveFailure(res, error);
+    }
+  };
+
   const setProgress: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
@@ -645,6 +796,13 @@ export function createLibraryHandlers({
     saveUnitText,
     getSource,
     exportHighlights,
+    dailyReview,
+    reviewHighlight,
+    chat,
+    getInbox,
+    rotateInbox,
+    deleteInbox,
+    receiveEmail,
     removeSource,
     list,
     get,
@@ -654,5 +812,36 @@ export function createLibraryHandlers({
     patchHighlight,
     removeHighlight,
     setProgress,
+  };
+}
+
+export interface LibraryInboxAuthDeps {
+  /** Whose address a secret is; from the service, which reads across tenants for this one lookup. */
+  findOwner: (token: string) => Promise<{ userId: string; tenantId?: string } | null>;
+  findUser: (query: { _id: string }) => Promise<Record<string, unknown> | null>;
+}
+
+/**
+ * Turns the secret in a newsletter address into the person it belongs to, as if they had signed in,
+ * so everything after it (config, tenant, handler) works as for any request of theirs. A token that
+ * is malformed, unknown, or whose owner is gone gets the same 404.
+ */
+export function createLibraryInboxAuth({
+  findOwner,
+  findUser,
+}: LibraryInboxAuthDeps): (req: ServerRequest, res: Response, next: NextFunction) => Promise<void> {
+  return async (req, res, next) => {
+    const token = (req.params as Record<string, unknown> | undefined)?.token;
+    if (!isInboxToken(token)) return fail(res, 404, 'not_found', 'Not found');
+    try {
+      const owner = await findOwner(token);
+      const user = owner ? await runAsSystem(async () => findUser({ _id: owner.userId })) : null;
+      if (!owner || !user) return fail(res, 404, 'not_found', 'Not found');
+      (req as unknown as { user: unknown }).user = { ...user, id: owner.userId };
+      next();
+    } catch (error) {
+      logger.error('[library] Could not look up a newsletter address:', error);
+      fail(res, 500, 'internal_error', 'Could not receive the message');
+    }
   };
 }

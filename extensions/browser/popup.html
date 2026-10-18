@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Save to MindFerry</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <h1>Save to MindFerry</h1>
+    <p id="page" hidden></p>
+    <button id="save" type="button">Save this page</button>
+    <p id="status" role="status" aria-live="polite"></p>
+    <details id="setup">
+      <summary>Server and key</summary>
+      <label for="server">MindFerry address</label>
+      <input id="server" type="text" placeholder="https://mindferry.example.com" autocomplete="off" />
+      <label for="key">API key</label>
+      <input id="key" type="password" autocomplete="off" />
+      <button id="store" type="button">Save settings</button>
+    </details>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

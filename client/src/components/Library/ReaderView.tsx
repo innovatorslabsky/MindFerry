@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, Highlighter, List, X } from 'lucide-react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button, Spinner, OGDialog, OGDialogTemplate, useToastContext } from '@librechat/client';
 import type {
   TLibraryDocumentSummary,
@@ -11,13 +11,16 @@ import type {
 import type { CSSProperties } from 'react';
 import {
   useDeleteLibrarySourceMutation,
+  useUpdateLibraryDocumentMutation,
   useLibraryDocumentQuery,
   useLibraryUnitQuery,
 } from '~/data-provider';
 import ReaderBody, { type ReaderBodyHandle } from './ReaderBody';
 import { NotificationSeverity } from '~/common';
 import HighlightsPanel from './HighlightsPanel';
+import { useShortcuts } from './useShortcuts';
 import PdfPageView from './PdfPageView';
+import AskButtons from './AskButtons';
 import { useLocalize } from '~/hooks';
 import TagEditor from './TagEditor';
 import OcrPanel from './OcrPanel';
@@ -112,6 +115,15 @@ export default function ReaderView() {
   const registerHandle = useCallback((next: ReaderBodyHandle | null) => {
     handle.current = next;
   }, []);
+  const navigate = useNavigate();
+  const update = useUpdateLibraryDocumentMutation({
+    onSuccess: () => navigate('/library'),
+    onError: () =>
+      showToast({
+        message: localize('com_library_update_error'),
+        status: NotificationSeverity.ERROR,
+      }),
+  });
 
   const documentQuery = useLibraryDocumentQuery(id);
   const data = documentQuery.data;
@@ -142,6 +154,15 @@ export default function ReaderView() {
     return isBook ? (unitQuery.data?.highlights ?? EMPTY) : data.highlights;
   }, [data, isBook, unitQuery.data]);
 
+  useShortcuts({
+    h: () => handle.current?.highlightSelection(),
+    e: () => id && update.mutate({ id, patch: { location: 'archive' } }),
+    l: () => id && update.mutate({ id, patch: { location: 'later' } }),
+    u: () => navigate('/library'),
+    n: () => isBook && unitIndex < lastUnit && selectUnit(unitIndex + 1),
+    p: () => isBook && unitIndex > 0 && selectUnit(unitIndex - 1),
+  });
+
   const onFocus = useCallback((highlight: TLibraryHighlight) => {
     handle.current?.focusHighlight(highlight);
     setSheet(null);
@@ -171,7 +192,17 @@ export default function ReaderView() {
 
   let body: JSX.Element;
   if (isPdf && pageView) {
-    body = <PdfPageView documentId={document.id} pageIndex={unitIndex} />;
+    const page = unitQuery.data?.unit.index === unitIndex ? unitQuery.data.unit : undefined;
+    body = (
+      <PdfPageView
+        documentId={document.id}
+        pageIndex={unitIndex}
+        anchorText={page?.text}
+        contentHash={page?.contentHash}
+        highlights={highlights}
+        registerHandle={registerHandle}
+      />
+    );
   } else if (!isBook && 'contentHtml' in document) {
     body = (
       <ReaderBody
@@ -218,6 +249,7 @@ export default function ReaderView() {
         contentHash={unit.contentHash}
         highlights={highlights}
         unit={{ kind: 'chapter', index: unit.index }}
+        unitCount={document.unitCount}
         resumeAt={resumeOffset(data.progress, unit.contentHash, unit.index)}
         registerHandle={registerHandle}
       />
@@ -263,6 +295,7 @@ export default function ReaderView() {
         >
           <Highlighter className="h-4 w-4" aria-hidden="true" />
         </Button>
+        <AskButtons documentId={document.id} kind={document.kind} unitIndex={unitIndex} />
         {isOriginalLink && (
           <Button asChild variant="ghost" size="sm" className="shrink-0">
             <a href={document.normalizedUrl} target="_blank" rel="noopener noreferrer nofollow">

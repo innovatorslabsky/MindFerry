@@ -24,6 +24,11 @@ export interface ILibraryHighlight extends Document {
   contentHash: string;
   /** Set when a re-extraction could no longer place the anchor; the highlight is kept, not dropped. */
   orphaned: boolean;
+  /** When the daily review last showed this highlight and the person went on; absent if never. */
+  reviewedAt?: Date;
+  reviewCount?: number;
+  /** The person asked for this highlight to stay out of the daily review. */
+  reviewMuted?: boolean;
   createdAt: Date;
   updatedAt: Date;
   tenantId?: string;
@@ -64,11 +69,15 @@ const libraryHighlightSchema: Schema<ILibraryHighlight> = new Schema(
     },
     contentHash: { type: String, required: true },
     orphaned: { type: Boolean, required: true, default: false },
+    reviewedAt: { type: Date },
+    reviewCount: { type: Number, default: 0 },
+    reviewMuted: { type: Boolean, default: false },
     tenantId: { type: String, index: true },
   },
   { timestamps: true },
 );
 
 libraryHighlightSchema.index({ userId: 1, documentId: 1, createdAt: 1 });
+libraryHighlightSchema.index({ userId: 1, reviewMuted: 1, reviewedAt: 1 });
 
 export default libraryHighlightSchema;

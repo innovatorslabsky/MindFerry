@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Archive, BookOpen, Clock, FileText, Inbox, Trash2, Upload, X } from 'lucide-react';
 import {
   Input,
@@ -15,6 +15,8 @@ import type {
   TLibraryLocation,
 } from 'librechat-data-provider';
 import {
+  useBulkDeleteLibraryDocumentsMutation,
+  useBulkUpdateLibraryDocumentsMutation,
   useDeleteLibraryDocumentMutation,
   useLibraryDocumentsQuery,
   useLibraryFoldersQuery,
@@ -23,15 +25,31 @@ import {
   useUploadLibraryFileMutation,
 } from '~/data-provider';
 import { NotificationSeverity } from '~/common';
+import { useShortcuts } from './useShortcuts';
 import { useDebounce } from '~/hooks/Input';
 import ExportButtons from './ExportButtons';
 import { libraryErrorKey } from './errors';
 import FeedsPanel from './FeedsPanel';
+import InboxPanel from './InboxPanel';
 import { useLocalize } from '~/hooks';
 import FolderBar from './FolderBar';
+import { cn } from '~/utils';
 
 const LOCATIONS: readonly TLibraryLocation[] = ['inbox', 'later', 'archive', 'feed'] as const;
 const PAGE_SIZE = 50;
+
+/** Written out so each label key is visible to the unused-key check. */
+const SHORTCUTS = [
+  { keys: 'j / k', label: 'com_library_shortcut_move' },
+  { keys: 'o', label: 'com_library_shortcut_open' },
+  { keys: 'x', label: 'com_library_shortcut_select' },
+  { keys: 'e', label: 'com_library_shortcut_archive' },
+  { keys: 'l', label: 'com_library_shortcut_later' },
+  { keys: 'i', label: 'com_library_shortcut_inbox' },
+  { keys: '#', label: 'com_library_shortcut_delete' },
+  { keys: '/', label: 'com_library_shortcut_search' },
+  { keys: 'Esc', label: 'com_library_shortcut_clear' },
+] as const;
 
 const LOCATION_LABEL = {
   inbox: 'com_library_tab_inbox',
@@ -43,11 +61,18 @@ const LOCATION_LABEL = {
 function DocumentRow({
   document,
   folders,
+  selected,
+  active,
+  onSelect,
   onDelete,
   onTag,
 }: {
   document: TLibraryDocumentSummary;
   folders: TLibraryFolder[];
+  selected: boolean;
+  /** The row the keyboard shortcuts act on. */
+  active: boolean;
+  onSelect: (document: TLibraryDocumentSummary) => void;
   onDelete: (document: TLibraryDocumentSummary) => void;
   onTag: (tag: string) => void;
 }) {
@@ -63,6 +88,12 @@ function DocumentRow({
   const move = (location: TLibraryLocation) =>
     update.mutate({ id: document.id, patch: { location } });
   const isBook = document.kind !== 'article';
+  const row = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (active) {
+      row.current?.scrollIntoView?.({ block: 'nearest' });
+    }
+  }, [active]);
   const meta = [
     document.kind === 'pdf' ? localize('com_library_kind_pdf') : undefined,
     document.kind === 'epub' ? localize('com_library_kind_epub') : undefined,
@@ -75,7 +106,19 @@ function DocumentRow({
   ].filter(Boolean);
 
   return (
-    <li className="flex items-start gap-3 px-4 py-3" data-testid="library-row">
+    <li
+      ref={row}
+      className={cn('flex items-start gap-3 px-4 py-3', active && 'bg-surface-secondary')}
+      data-testid="library-row"
+      aria-current={active ? 'true' : undefined}
+    >
+      <input
+        type="checkbox"
+        checked={selected}
+        onChange={() => onSelect(document)}
+        aria-label={localize('com_library_select_row', { 0: document.title })}
+        className="mt-1 h-4 w-4 shrink-0"
+      />
       <div className="text-text-secondary mt-0.5 shrink-0">
         {isBook ? (
           <BookOpen className="h-5 w-5" aria-hidden="true" />
@@ -190,6 +233,12 @@ export default function LibraryView() {
   const [folder, setFolder] = useState('');
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [toDelete, setToDelete] = useState<TLibraryDocumentSummary | null>(null);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [bulkDelete, setBulkDelete] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
   const query = useDebounce(search.trim(), 300);
 
   const documents = useLibraryDocumentsQuery(
@@ -232,6 +281,30 @@ export default function LibraryView() {
       }),
   });
 
+  const bulkDone = (result: { done: number; failed: number }) => {
+    setSelected(new Set());
+    if (result.failed > 0) {
+      showToast({
+        message: localize('com_library_bulk_error', { 0: result.failed }),
+        status: NotificationSeverity.ERROR,
+      });
+    }
+  };
+  const bulkUpdate = useBulkUpdateLibraryDocumentsMutation({ onSuccess: bulkDone });
+  const bulkRemove = useBulkDeleteLibraryDocumentsMutation({
+    onSuccess: (result) => {
+      setBulkDelete(false);
+      bulkDone(result);
+    },
+  });
+  const quickUpdate = useUpdateLibraryDocumentMutation({
+    onError: () =>
+      showToast({
+        message: localize('com_library_update_error'),
+        status: NotificationSeverity.ERROR,
+      }),
+  });
+
   const onSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     const url = address.trim();
@@ -254,6 +327,63 @@ export default function LibraryView() {
 
   const rows = documents.data?.documents ?? [];
   const busy = save.isLoading || upload.isLoading;
+
+  // A selection means nothing once the list it was made in is no longer on screen.
+  useEffect(() => {
+    setSelected(new Set());
+    setActiveId(null);
+  }, [location, query, tag, folder]);
+
+  const activeIndex = rows.findIndex((row) => row.id === activeId);
+  const active = activeIndex >= 0 ? rows[activeIndex] : undefined;
+  const selectedIds = rows.filter((row) => selected.has(row.id)).map((row) => row.id);
+  const toggle = (document: TLibraryDocumentSummary) =>
+    setSelected((current) => {
+      const next = new Set(current);
+      if (!next.delete(document.id)) {
+        next.add(document.id);
+      }
+      return next;
+    });
+  const step = (by: number) => {
+    if (rows.length === 0) {
+      return;
+    }
+    const outside = by > 0 ? -1 : rows.length;
+    const from = activeIndex >= 0 ? activeIndex : outside;
+    const next = Math.min(Math.max(from + by, 0), rows.length - 1);
+    setActiveId(rows[next].id);
+  };
+  /** After a row leaves the list, the cursor lands on its neighbour rather than vanishing. */
+  const moveActive = (location: TLibraryLocation) => {
+    if (!active || active.location === location) {
+      return;
+    }
+    const neighbour = rows[activeIndex + 1] ?? rows[activeIndex - 1];
+    quickUpdate.mutate({ id: active.id, patch: { location } });
+    setActiveId(neighbour?.id ?? null);
+  };
+
+  useShortcuts(
+    {
+      j: () => step(1),
+      k: () => step(-1),
+      o: () => active && navigate(`/library/${active.id}`),
+      x: () => active && toggle(active),
+      e: () => moveActive('archive'),
+      l: () => moveActive('later'),
+      i: () => moveActive('inbox'),
+      '#': () => active && setToDelete(active),
+      '/': () => searchInput.current?.focus(),
+      '?': () => setShowShortcuts((value) => !value),
+      Escape: () => {
+        setSelected(new Set());
+        setActiveId(null);
+        setShowShortcuts(false);
+      },
+    },
+    toDelete == null && !bulkDelete,
+  );
 
   let list: JSX.Element;
   if (documents.isLoading) {
@@ -285,6 +415,9 @@ export default function LibraryView() {
               key={document.id}
               document={document}
               folders={folderList}
+              selected={selected.has(document.id)}
+              active={document.id === activeId}
+              onSelect={toggle}
               onDelete={setToDelete}
               onTag={setTag}
             />
@@ -345,6 +478,7 @@ export default function LibraryView() {
         </form>
 
         <Input
+          ref={searchInput}
           type="search"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
@@ -369,7 +503,10 @@ export default function LibraryView() {
           </div>
         )}
 
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link to="/library/review">{localize('com_library_review_link')}</Link>
+          </Button>
           <ExportButtons />
         </div>
 
@@ -391,7 +528,107 @@ export default function LibraryView() {
           </Button>
         )}
 
-        {!query && location === 'feed' && <FeedsPanel />}
+        {!query && location === 'feed' && (
+          <>
+            <FeedsPanel />
+            <InboxPanel />
+          </>
+        )}
+
+        {rows.length > 0 && (
+          <div
+            role="toolbar"
+            aria-label={localize('com_library_bulk_toolbar')}
+            className="flex flex-wrap items-center gap-2 text-sm"
+            data-testid="library-bulk-toolbar"
+          >
+            <label className="text-text-secondary flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={selectedIds.length === rows.length}
+                onChange={(event) =>
+                  setSelected(event.target.checked ? new Set(rows.map((row) => row.id)) : new Set())
+                }
+                aria-label={localize('com_library_select_all')}
+                className="h-4 w-4"
+              />
+              {selectedIds.length > 0
+                ? localize('com_library_selected_count', { 0: selectedIds.length })
+                : localize('com_library_select_all')}
+            </label>
+            {selectedIds.length > 0 && (
+              <>
+                {(['inbox', 'later', 'archive'] as const).map((target) => (
+                  <Button
+                    key={target}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={bulkUpdate.isLoading}
+                    onClick={() => bulkUpdate.mutate({ ids: selectedIds, location: target })}
+                  >
+                    {localize(LOCATION_LABEL[target])}
+                  </Button>
+                ))}
+                {folderList.length > 0 && (
+                  <select
+                    value=""
+                    onChange={(event) => {
+                      if (event.target.value !== '') {
+                        bulkUpdate.mutate({
+                          ids: selectedIds,
+                          folderId: event.target.value === '__none' ? null : event.target.value,
+                        });
+                      }
+                    }}
+                    aria-label={localize('com_library_bulk_folder')}
+                    className="border-border-medium bg-surface-primary text-text-secondary rounded-md border px-2 py-1 text-xs"
+                  >
+                    <option value="">{localize('com_library_bulk_folder')}</option>
+                    <option value="__none">{localize('com_library_folder_none')}</option>
+                    {folderList.map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={bulkRemove.isLoading}
+                  onClick={() => setBulkDelete(true)}
+                >
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                  {localize('com_ui_delete')}
+                </Button>
+              </>
+            )}
+            <button
+              type="button"
+              className="text-text-secondary hover:text-text-primary ml-auto text-xs underline"
+              aria-expanded={showShortcuts}
+              onClick={() => setShowShortcuts((value) => !value)}
+            >
+              {localize('com_library_shortcuts')}
+            </button>
+          </div>
+        )}
+
+        {showShortcuts && (
+          <dl
+            className="bg-surface-secondary grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-lg px-3 py-2 text-xs"
+            data-testid="library-shortcuts"
+          >
+            {SHORTCUTS.map((shortcut) => (
+              <div key={shortcut.keys} className="contents">
+                <dt className="text-text-primary font-mono">{shortcut.keys}</dt>
+                <dd className="text-text-secondary">{localize(shortcut.label)}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
 
         {list}
       </div>
@@ -408,6 +645,25 @@ export default function LibraryView() {
           }
           selection={{
             selectHandler: () => toDelete && remove.mutate({ id: toDelete.id }),
+            selectClasses:
+              'bg-surface-destructive hover:bg-surface-destructive-hover text-text-on-status',
+            selectText: localize('com_ui_delete'),
+          }}
+        />
+      </OGDialog>
+
+      <OGDialog open={bulkDelete} onOpenChange={setBulkDelete}>
+        <OGDialogTemplate
+          showCloseButton={false}
+          title={localize('com_library_bulk_delete_title')}
+          className="w-11/12 max-w-lg"
+          main={
+            <p className="text-text-primary text-left text-sm">
+              {localize('com_library_bulk_delete_confirm', { 0: selectedIds.length })}
+            </p>
+          }
+          selection={{
+            selectHandler: () => bulkRemove.mutate({ ids: selectedIds }),
             selectClasses:
               'bg-surface-destructive hover:bg-surface-destructive-hover text-text-on-status',
             selectText: localize('com_ui_delete'),

@@ -1,0 +1,43 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+body {
+  width: 300px;
+  margin: 0;
+  padding: 14px;
+  font-size: 14px;
+}
+h1 {
+  font-size: 15px;
+  margin: 0 0 10px;
+}
+label {
+  display: block;
+  margin: 8px 0 3px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  font: inherit;
+}
+button {
+  margin-top: 12px;
+  padding: 7px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+#status {
+  min-height: 1.4em;
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+#status.error {
+  color: #b3261e;
+}
+details {
+  margin-top: 12px;
+}

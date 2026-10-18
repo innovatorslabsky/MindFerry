@@ -1099,6 +1099,36 @@ export async function exportLibraryHighlights(
   };
 }
 
+export function getLibraryInbox(): Promise<{ inbox: t.TLibraryInbox }> {
+  return request.get(endpoints.libraryInbox());
+}
+
+export function rotateLibraryInbox(): Promise<t.TLibraryInboxCreated> {
+  return request.post(endpoints.libraryInbox(), {});
+}
+
+export function deleteLibraryInbox(): Promise<void> {
+  return request.delete(endpoints.libraryInbox());
+}
+
+export function startLibraryChat(
+  id: string,
+  request_: t.TLibraryChatRequest = {},
+): Promise<t.TLibraryChatResponse> {
+  return request.post(endpoints.libraryDocumentChat(id), request_);
+}
+
+export function getLibraryDailyReview(
+  offsetMinutes: number,
+  extra: number,
+): Promise<t.TLibraryDailyReview> {
+  return request.get(endpoints.libraryReview(offsetMinutes, extra));
+}
+
+export function reviewLibraryHighlight(id: string, action: t.TLibraryReviewAction): Promise<void> {
+  return request.post(endpoints.libraryReviewHighlight(id), { action });
+}
+
 export function listLibraryFolders(): Promise<{ folders: t.TLibraryFolder[] }> {
   return request.get(endpoints.libraryFolders());
 }

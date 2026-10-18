@@ -27,6 +27,7 @@ const MESSAGES: Record<string, TranslationKeys> = {
   feed_limit: 'com_library_error_feed_limit',
   stale_content: 'com_library_error_stale',
   anchor_mismatch: 'com_library_error_mismatch',
+  empty_document: 'com_library_ask_empty',
 };
 
 /** A message the person can act on for a failed save, upload or highlight. */

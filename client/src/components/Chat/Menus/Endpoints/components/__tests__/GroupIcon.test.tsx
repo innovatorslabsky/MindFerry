@@ -9,13 +9,13 @@ describe('GroupIcon', () => {
     expect(screen.getByRole('img', { name: 'OpenAI' })).toBeInTheDocument();
   });
 
-  it('keeps the agents mark for an agents group icon', () => {
+  it('marks an agents group icon with the MindFerry boat', () => {
     const { container } = render(
       <GroupIcon iconURL={EModelEndpoint.agents} groupName="My Agents" />,
     );
 
     expect(screen.queryByRole('img', { name: 'Custom' })).not.toBeInTheDocument();
-    expect(container.querySelector('svg')).toBeInTheDocument();
+    expect(container.querySelector('img[src="assets/logo.svg"]')).toBeInTheDocument();
     expect(screen.getByTitle('My Agents')).toBeInTheDocument();
   });
 
