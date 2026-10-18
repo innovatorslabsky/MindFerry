@@ -9,6 +9,7 @@ const {
   getLibraryReviewPerDay,
   getLibraryChatMaxChars,
   createLibraryHandlers,
+  createRequireApiKeyAuth,
   libraryBrowseLimiter,
   librarySaveLimiter,
   LIBRARY_MAX_UPLOAD_BYTES,
@@ -60,6 +61,16 @@ const handlers = createLibraryHandlers({
   importConversation: importHubConversation,
 });
 
+/**
+ * The browser extension has no session: like the hub's MCP endpoint it authenticates with an Agent
+ * API key (Settings → API Keys). A key can save pages for its owner and nothing else here.
+ */
+const apiKeyMiddleware = createRequireApiKeyAuth({
+  validateAgentApiKey: db.validateAgentApiKey,
+  findUser: db.findUser,
+  isPrincipalActive: db.isAgentTriggerPrincipalActive,
+});
+
 const browse = [requireJwtAuth, configMiddleware, libraryBrowseLimiter];
 const save = [requireJwtAuth, configMiddleware, librarySaveLimiter];
 
@@ -98,6 +109,7 @@ function handleUpload(req, res, next) {
 }
 
 router.post('/documents', ...save, handlers.save);
+router.post('/clip', apiKeyMiddleware, configMiddleware, librarySaveLimiter, handlers.save);
 router.post(
   '/uploads',
   requireJwtAuth,

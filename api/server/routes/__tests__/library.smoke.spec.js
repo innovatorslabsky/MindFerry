@@ -42,6 +42,13 @@ describe('library routes wiring', () => {
     expect(route.stack.length).toBe(4);
   });
 
+  it('registers the browser clip behind an API key, config and the save rate limit', () => {
+    const route = find('/clip', 'post');
+    expect(route).toBeDefined();
+    // apiKeyMiddleware, configMiddleware, limiter, handler
+    expect(route.stack.length).toBe(4);
+  });
+
   it('registers the upload behind auth, config, a rate limit and the file parser', () => {
     const route = find('/uploads', 'post');
     expect(route).toBeDefined();
