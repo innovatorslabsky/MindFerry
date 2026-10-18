@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Feather } from 'lucide-react';
 import { Skeleton } from '@librechat/client';
 import { isEphemeralAgentId, parseEphemeralAgentId } from 'librechat-data-provider';
 import type t from 'librechat-data-provider';
+import Boat from '~/components/MindFerry/Boat';
 
 /**
  * Extracts the avatar URL from an agent's avatar property
@@ -37,7 +37,7 @@ const LazyAgentAvatar = ({
 }) => {
   const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
   if (status === 'error') {
-    return <Feather className={fallbackClass} strokeWidth={1.5} aria-hidden="true" />;
+    return <Boat className={fallbackClass} />;
   }
 
   return (
@@ -86,15 +86,6 @@ export const renderAgentAvatar = (
     xl: 'h-24 w-24',
   };
 
-  const iconSizeClasses = {
-    icon: 'h-4 w-4',
-    xs: 'h-5 w-5 sm:h-6 sm:w-6',
-    sm: 'h-6 w-6 sm:h-7 sm:w-7',
-    md: 'h-6 w-6 sm:h-8 sm:w-8 md:h-10 md:w-10',
-    lg: 'h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12',
-    xl: 'h-10 w-10',
-  };
-
   // Tailwind v3 never generated border-1, so avatars have never painted a border; deliberate width belongs in a follow-up.
   const borderClasses = showBorder ? 'border-border-medium' : '';
 
@@ -108,7 +99,7 @@ export const renderAgentAvatar = (
           url={avatarUrl}
           alt={`${agent?.name || 'Agent'} avatar`}
           imgClass={`${sizeClasses[size]} rounded-full object-cover shadow-lg ${borderClasses}`}
-          fallbackClass={`text-text-primary ${iconSizeClasses[size]}`}
+          fallbackClass={sizeClasses[size]}
         />
       </div>
     );
@@ -116,7 +107,7 @@ export const renderAgentAvatar = (
 
   return (
     <div className={`relative flex items-center justify-center ${sizeClasses[size]} ${className}`}>
-      <Feather className={`text-text-primary ${iconSizeClasses[size]}`} strokeWidth={1.5} />
+      <Boat className={sizeClasses[size]} />
     </div>
   );
 };

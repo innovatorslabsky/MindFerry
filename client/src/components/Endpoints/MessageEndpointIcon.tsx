@@ -1,9 +1,9 @@
 import { memo } from 'react';
-import { Feather } from 'lucide-react';
 import { EModelEndpoint, isAssistantsEndpoint } from 'librechat-data-provider';
 import { pxToRem, AssistantIcon, TooltipAnchor, ProviderAvatar } from '@librechat/client';
 import type { IconProps } from '~/common';
 import { useProviderIcon } from '~/hooks/Endpoint';
+import Boat from '~/components/MindFerry/Boat';
 import { cn } from '~/utils';
 
 const MessageEndpointIcon: React.FC<IconProps> = (props) => {
@@ -70,7 +70,7 @@ const MessageEndpointIcon: React.FC<IconProps> = (props) => {
     ) : (
       <div className="h-6 w-6">
         <div className="shadow-stroke flex h-6 w-6 items-center justify-center overflow-hidden rounded-full">
-          <Feather className="text-text-tertiary h-2/3 w-2/3" aria-hidden="true" />
+          <Boat className="h-full w-full" />
         </div>
       </div>
     ),

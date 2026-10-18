@@ -20,10 +20,12 @@ describe('MinimalIcon', () => {
     expect(src).not.toBe('');
   });
 
-  it('keeps the agent art out of the provider registry', () => {
-    render(<MinimalIcon endpoint={EModelEndpoint.agents} isCreatedByUser={false} />);
+  it('marks agents with the MindFerry boat, not a provider mark', () => {
+    const { container } = render(
+      <MinimalIcon endpoint={EModelEndpoint.agents} isCreatedByUser={false} />,
+    );
 
-    expect(screen.queryByRole('img', { hidden: true })).not.toBeInTheDocument();
+    expect(container.querySelector('img[src="assets/logo.svg"]')).toBeInTheDocument();
     expect(screen.getByTestId('convo-icon')).toHaveAttribute('title', 'My Agents');
   });
 

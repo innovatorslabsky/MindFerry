@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react';
-import { Feather } from 'lucide-react';
 import { ProviderId } from 'librechat-data-provider';
 import { Sparkles, AssistantIcon, ProviderIcon } from '@librechat/client';
 import type * as t from 'librechat-data-provider';
 import ConvoIconURL from '~/components/Endpoints/ConvoIconURL';
+import Boat from '~/components/MindFerry/Boat';
 import { cn, getEntity, getIconEndpoint } from '~/utils';
 import { useProviderIcon } from '~/hooks/Endpoint';
 import { isImageURL } from '~/utils/icons';
@@ -17,12 +17,10 @@ function AgentAvatar({
   avatar,
   agentName,
   className,
-  size,
 }: {
   avatar: string;
   agentName: string;
   className: string;
-  size?: number;
 }) {
   if (agentName && avatar) {
     return (
@@ -30,7 +28,7 @@ function AgentAvatar({
     );
   }
 
-  return <Feather className={cn(agentName === '' ? 'icon-2xl' : '', className)} size={size} />;
+  return <Boat className={cn(agentName === '' ? 'icon-2xl' : '', className)} />;
 }
 
 function AssistantAvatar({
@@ -125,7 +123,7 @@ export default function ConvoIcon({
   const renderArt = () => {
     if (isAgent) {
       return (
-        <AgentAvatar avatar={avatar ?? ''} agentName={name} className={className} size={size} />
+        <AgentAvatar avatar={avatar ?? ''} agentName={name} className={className} />
       );
     }
 

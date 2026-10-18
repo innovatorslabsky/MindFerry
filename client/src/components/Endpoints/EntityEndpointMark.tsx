@@ -1,6 +1,6 @@
-import { Feather } from 'lucide-react';
 import { Sparkles } from '@librechat/client';
 import { EModelEndpoint } from 'librechat-data-provider';
+import Boat from '~/components/MindFerry/Boat';
 
 export function isEntityEndpoint(endpoint?: string | null): boolean {
   return (
@@ -18,7 +18,7 @@ export function EntityEndpointMark({
   className?: string;
 }) {
   if (endpoint === EModelEndpoint.agents) {
-    return <Feather className={className} aria-hidden="true" />;
+    return <Boat className={className} />;
   }
 
   if (endpoint === EModelEndpoint.assistants || endpoint === EModelEndpoint.azureAssistants) {
