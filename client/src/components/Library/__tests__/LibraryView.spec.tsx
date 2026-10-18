@@ -60,6 +60,25 @@ jest.mock('../FolderBar', () => ({
     <button data-testid="folder-bar" data-value={value} onClick={() => onChange('f1')} />
   ),
 }));
+jest.mock('../PinnedViews', () => ({
+  __esModule: true,
+  default: ({
+    current,
+    canPin,
+    onOpen,
+  }: {
+    current: unknown;
+    canPin: boolean;
+    onOpen: (filter: Record<string, string>) => void;
+  }) => (
+    <button
+      data-testid="pinned"
+      data-current={JSON.stringify(current)}
+      data-can-pin={String(canPin)}
+      onClick={() => onOpen({ location: 'later', kind: 'pdf', tag: 'paper', sort: 'title' })}
+    />
+  ),
+}));
 jest.mock('../Thumbnail', () => ({
   __esModule: true,
   default: ({ document }: { document: { id: string; thumbnailPath?: string } }) => (
@@ -412,5 +431,35 @@ describe('LibraryView: excerpt, kind and sort', () => {
     });
     expect(mockQueryParams).toEqual({ q: 'memory', limit: expect.any(Number) });
     expect(screen.queryByLabelText('com_library_sort')).toBeNull();
+  });
+});
+
+describe('LibraryView: pinned views', () => {
+  it('tells the pinned views what the list shows, and cannot pin while searching', () => {
+    renderView();
+    const pinned = screen.getByTestId('pinned');
+    expect(JSON.parse(pinned.getAttribute('data-current') ?? '{}')).toEqual({
+      location: 'inbox',
+      sort: 'updated',
+    });
+    expect(pinned).toHaveAttribute('data-can-pin', 'true');
+    fireEvent.change(screen.getByPlaceholderText('com_library_search_placeholder'), {
+      target: { value: 'memory' },
+    });
+    expect(screen.getByTestId('pinned')).toHaveAttribute('data-can-pin', 'false');
+  });
+
+  it('opens a pinned view: its filters apply and a search is left behind', () => {
+    renderView();
+    const search = screen.getByPlaceholderText('com_library_search_placeholder');
+    fireEvent.change(search, { target: { value: 'memory' } });
+    fireEvent.click(screen.getByTestId('pinned'));
+    expect(search).toHaveValue('');
+    expect(mockQueryParams).toMatchObject({
+      location: 'later',
+      kind: 'pdf',
+      tag: 'paper',
+      sort: 'title',
+    });
   });
 });

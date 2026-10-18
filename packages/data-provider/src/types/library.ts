@@ -225,6 +225,23 @@ export type TLibraryFollowResponse =
   | { status: 'followed'; feed: TLibraryFeed; refresh: TLibraryFeedRefresh }
   | { status: 'exists'; feed: TLibraryFeed };
 
+/** The filters of the list that a pinned view keeps. `folder` is a folder id, or `none`. */
+export type TLibraryViewFilter = {
+  location?: TLibraryLocation;
+  kind?: TLibraryKind;
+  tag?: string;
+  folder?: string;
+  sort?: TLibrarySort;
+};
+
+/** A set of list filters kept under a name, shown in the sidebar. */
+export type TLibraryView = {
+  id: string;
+  name: string;
+  filter: TLibraryViewFilter;
+  createdAt: string;
+};
+
 export type TLibraryFolder = {
   id: string;
   name: string;

@@ -25,6 +25,8 @@ const MESSAGES: Record<string, TranslationKeys> = {
   folder_exists: 'com_library_error_folder_exists',
   folder_limit: 'com_library_error_folder_limit',
   feed_limit: 'com_library_error_feed_limit',
+  view_exists: 'com_library_error_view_exists',
+  view_limit: 'com_library_error_view_limit',
   stale_content: 'com_library_error_stale',
   anchor_mismatch: 'com_library_error_mismatch',
   empty_document: 'com_library_ask_empty',

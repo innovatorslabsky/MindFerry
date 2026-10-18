@@ -53,7 +53,7 @@ describe('pinned views over HTTP', () => {
 
     const again = reply();
     await handlers.createView(req({ body: { name: 'short READS', filter: {} } }), again.response);
-    expect(again.out.status).toBe(200);
+    expect(again.out.status).toBe(409);
 
     const listed = reply();
     await handlers.listViews(req(), listed.response);

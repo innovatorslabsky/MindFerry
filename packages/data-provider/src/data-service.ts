@@ -1135,6 +1135,25 @@ export function reviewLibraryHighlight(id: string, action: t.TLibraryReviewActio
   return request.post(endpoints.libraryReviewHighlight(id), { action });
 }
 
+export function listLibraryViews(): Promise<{ views: t.TLibraryView[] }> {
+  return request.get(endpoints.libraryViews());
+}
+
+export function createLibraryView(
+  name: string,
+  filter: t.TLibraryViewFilter,
+): Promise<{ view: t.TLibraryView }> {
+  return request.post(endpoints.libraryViews(), { name, filter });
+}
+
+export function renameLibraryView(id: string, name: string): Promise<{ view: t.TLibraryView }> {
+  return request.patch(endpoints.libraryView(id), { name });
+}
+
+export function deleteLibraryView(id: string): Promise<void> {
+  return request.delete(endpoints.libraryView(id));
+}
+
 export function listLibraryFolders(): Promise<{ folders: t.TLibraryFolder[] }> {
   return request.get(endpoints.libraryFolders());
 }

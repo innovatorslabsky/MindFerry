@@ -443,7 +443,11 @@ export function createLibraryHandlers({
     if (outcome.status === 'limit') {
       return fail(res, 409, 'view_limit', 'You have as many pinned views as allowed');
     }
-    res.status(outcome.status === 'created' ? 201 : 200).json({ view: outcome.view });
+    // Unlike a folder, a view carries filters, so the person must know theirs was not saved.
+    if (outcome.status === 'exists') {
+      return fail(res, 409, 'view_exists', 'A pinned view with that name already exists');
+    }
+    res.status(201).json({ view: outcome.view });
   };
 
   const renameView: Handler = async (req, res) => {

@@ -241,6 +241,11 @@ export const libraryReview = (offsetMinutes: number, extra: number) =>
 export const libraryReviewHighlight = (id: string) =>
   `${BASE_URL}/api/library/review/${encodeURIComponent(id)}`;
 
+export const libraryViews = () => `${BASE_URL}/api/library/views`;
+
+export const libraryView = (id: string) =>
+  `${BASE_URL}/api/library/views/${encodeURIComponent(id)}`;
+
 export const libraryFolders = () => `${BASE_URL}/api/library/folders`;
 
 export const libraryFolder = (id: string) =>

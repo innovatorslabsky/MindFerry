@@ -114,7 +114,7 @@ export interface LibraryMethods {
     id: string,
     name: string,
   ) => Promise<LibraryFolderRenameResult>;
-  /** Saves the list's filters under a name; one with the same name (ignoring case) is returned as it is. */
+  /** Saves the list's filters under a name; one with the same name (ignoring case) is not replaced. */
   createLibraryView: (
     userId: string,
     name: string,

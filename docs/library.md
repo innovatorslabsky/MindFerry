@@ -25,6 +25,12 @@ drawer), leading to `/library`:
   PDF, EPUB) form a column to the left of the list; on a narrow one they sit above it. A **Sort by**
   menu orders the list by recent change, date saved, title, or shortest or longest to read. Typing in
   the search box searches the title and text of everything instead; each row can be moved or deleted;
+- **Pinned views** keep the filters of the list (place, type, tag, folder and sort order) under a name,
+  in the column beside it. **Pin this view** asks for a name; pinning again under a name already used
+  is refused rather than replacing it. Opening one sets all those filters at once and leaves any search
+  behind; the view that matches what is showing is highlighted. They are kept on the server, so they
+  follow the person to another device, up to 30 of them. Deleting a folder also removes the views that
+  filtered on it. A search is not part of a view, so nothing can be pinned while one is typed;
 - each row shows a small picture, the type, the site or author, the length and the first two lines of
   the text. The picture is an EPUB's cover, or an article's lead image (`og:image`); a PDF, or a page
   with no usable image, shows an icon for its type. Documents saved before this was added have no
