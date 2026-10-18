@@ -46,12 +46,105 @@ drawer), leading to `/library`:
   You can follow up to 50 feeds.
 
 - a PDF uploaded while `keepPdfOriginals` is on can be switched from **Text** to **Page**: the page
-  is drawn from the stored file in the browser (pdf.js, pixels only). Highlights are made in the text
-  view. **Remove original file** deletes the stored copy and keeps the text, pages and highlights.
+  is drawn from the stored file in the browser (pdf.js). Select words on the page to highlight them
+  there; they show on the page image and in the text view alike (see "Highlighting on the page
+  image"). **Remove original file** deletes the stored copy and keeps the text, pages and highlights.
 
 If the text the browser shows ever differs from
 the text the server anchored highlights in, highlighting is switched off for that text with a notice,
 rather than saving highlights in the wrong place.
+
+## Keyboard and selecting several documents
+
+In the list, with no field focused:
+
+| Key       | Does                                       |
+| --------- | ------------------------------------------ |
+| `j` / `k` | move down / up the list                    |
+| `o`       | open the document                          |
+| `x`       | select or unselect it                      |
+| `e`       | archive it (`l` read later, `i` Inbox)     |
+| `#`       | delete it (asks first)                     |
+| `/`       | go to the search box                       |
+| `?`       | show this list; `Esc` clears the selection |
+
+In the reader: `h` highlights the selected text (yellow), `e` archives and goes back, `l` sets the
+document aside, `u` goes back, and `n` / `p` go to the next / previous chapter or page. Shortcuts
+never act while you type in a field and never with Ctrl, Cmd or Alt held.
+
+The checkboxes (or **Select all**) turn the list into a batch: move the selected documents to
+Inbox, Later or Archive, file them into a folder, or delete them (asks first, saying how many). A
+document that cannot be changed is counted; the others still go through.
+
+## Daily review
+
+**Daily review** (button above the list, `/library/review`) shows a few old highlights, one card at a
+time, so what you marked comes back. **Next** (`d` or →) counts it as seen today; **Don't show
+again** (`m`) keeps it out of every later review. Highlights not seen for longest come first, never
+seen ones before all; ones that could not be found again after a page changed are left out. A day's
+review is `contextHub.library.reviewPerDay` highlights (default 5) and **Review 5 more** carries on.
+"Today" follows the browser's timezone.
+
+## Ask about this
+
+**Ask about this** in the reader opens a new MindFerry chat that starts from the document: an
+article's text, or for a book the current page or chapter (**Ask about the whole book** takes the
+book from its start). Your highlights and notes are listed with it. The chat runs on the endpoint
+and model of the chat you last had open, or the deployment's default; you then keep chatting as in
+any conversation. The text is put in front of the model behind a notice that it is third-party content,
+cut at `contextHub.library.chatMaxChars` characters (default 60,000; the chat says when it was cut),
+and goes through the same content filters and size limits as an import.
+
+## Highlighting on the page image
+
+With the original PDF kept, the words of the page are laid invisibly over the page image. Selecting
+words there finds the same words in the stored page text, where highlights live, so a highlight made
+on the image appears in the text view and the other way round. Line breaks and hyphens at the end of
+a line do not matter. A passage that appears twice on a page is told apart by which one it is. If a
+selection cannot be matched, it says so and nothing is saved; try a smaller piece.
+
+## Saving from the browser
+
+The extension in `extensions/browser/` saves the page you are on (the toolbar button) or a link
+(right-click). It sends the page's HTML, so pages behind a login save too, to
+`POST /api/library/clip` with `Authorization: Bearer <Agent API key>` (Settings → API Keys). The
+body is the same as saving a page; the key can do nothing else here. See `extensions/browser/README.md`
+for loading it.
+
+## Newsletters by email
+
+In the **Feed** tab, **Get a newsletter address** makes a private address like
+`https://your-host/api/library/inbox/<secret>`. Point an email service's incoming-mail webhook at it
+and each message becomes a document in the Feed tab, tagged `newsletter`, named for its subject and
+sender. The secret is shown once, when it is made: only a hash is stored. **Make a new address**
+replaces it and the old one stops working at once; **Turn off** removes it.
+
+MindFerry does not receive email itself. It accepts a `POST` with JSON, URL-encoded or multipart
+fields, reading `from`, `subject`, `html`, `text`, `messageId` and `date`, plus the names Postmark
+(`From`, `HtmlBody`, `TextBody`, `MessageID`) and Mailgun (`sender`, `body-html`, `body-plain`,
+`Message-Id`) use. For Cloudflare Email Routing, a worker can forward a message:
+
+```js
+export default {
+  async email(message, env) {
+    const raw = await new Response(message.raw).text();
+    await fetch(env.MINDFERRY_ADDRESS, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        from: message.from,
+        subject: message.headers.get('subject'),
+        text: raw,
+      }),
+    });
+  },
+};
+```
+
+(That sends the raw message as text; use an email parser in the worker to send `html` for the best
+result.) The same message delivered twice is one document, found by `messageId`. A message with no
+HTML falls back to its text, and one with neither is refused. Attachments are ignored. Anyone who has
+the address can add documents to your Feed tab and nothing else; guesses are rate limited by IP.
 
 ## What you can save
 
@@ -183,6 +276,18 @@ and privacy implications before switching it on for a shared deployment.
 - The "copy-restricted PDF" flag is still not honoured: a stored original can be viewed and removed
   by its owner, and no export or share feature exists that would need to withhold it.
 
+## Settings
+
+```yaml
+contextHub:
+  library:
+    enabled: true
+    keepPdfOriginals: true # page image, OCR and highlighting on the image
+    autoTag: true
+    reviewPerDay: 5 # highlights in one day's review (1 to 100)
+    chatMaxChars: 60000 # most text "Ask about this" gives the model (2,000 to 400,000)
+```
+
 ## Known limits
 
 - **EPUB images** are stored with the book (raster formats only, typed from their bytes; at most 40 MiB
@@ -202,6 +307,11 @@ and privacy implications before switching it on for a shared deployment.
   container an egress policy that blocks private ranges and cloud metadata addresses.
 - **Feeds are only checked when you ask.** There is no background schedule; a refresh uses the
   feed's ETag / Last-Modified so an unchanged feed costs one cheap request.
+- **The daily review and "Ask about this" read what is stored**: a highlight whose page changed and
+  could not be found again is left out of the review, and a scanned page with no text yet has nothing
+  to ask about until it has been read with OCR.
+- **Newsletter images** load from the sender's server when you read, as they would in any mail
+  program, which can tell the sender that you read it.
 - **Pages that need JavaScript** to render cannot be fetched by URL; save them from the browser with
   `{ url, html }` instead.
 - Saving by URL stores third-party text for the user. Take legal advice before offering that
