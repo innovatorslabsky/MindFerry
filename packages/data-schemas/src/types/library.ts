@@ -300,7 +300,8 @@ export type LibraryViewCreateResult =
 
 export type LibraryViewRenameResult =
   | { status: 'renamed'; view: LibraryViewRecord }
-  | { status: 'exists' | 'not_found' };
+  | { status: 'exists' }
+  | { status: 'not_found' };
 
 export type LibraryFolderRenameResult =
   | { status: 'renamed'; folder: LibraryFolderRecord }
