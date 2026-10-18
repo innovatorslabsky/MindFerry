@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, Highlighter, List, X } from 'lucide-react';
 import { Button, Spinner, OGDialog, OGDialogTemplate, useToastContext } from '@librechat/client';
 import type {
@@ -11,12 +11,14 @@ import type {
 import type { CSSProperties } from 'react';
 import {
   useDeleteLibrarySourceMutation,
+  useUpdateLibraryDocumentMutation,
   useLibraryDocumentQuery,
   useLibraryUnitQuery,
 } from '~/data-provider';
 import ReaderBody, { type ReaderBodyHandle } from './ReaderBody';
 import { NotificationSeverity } from '~/common';
 import HighlightsPanel from './HighlightsPanel';
+import { useShortcuts } from './useShortcuts';
 import PdfPageView from './PdfPageView';
 import { useLocalize } from '~/hooks';
 import TagEditor from './TagEditor';
@@ -112,6 +114,15 @@ export default function ReaderView() {
   const registerHandle = useCallback((next: ReaderBodyHandle | null) => {
     handle.current = next;
   }, []);
+  const navigate = useNavigate();
+  const update = useUpdateLibraryDocumentMutation({
+    onSuccess: () => navigate('/library'),
+    onError: () =>
+      showToast({
+        message: localize('com_library_update_error'),
+        status: NotificationSeverity.ERROR,
+      }),
+  });
 
   const documentQuery = useLibraryDocumentQuery(id);
   const data = documentQuery.data;
@@ -141,6 +152,15 @@ export default function ReaderView() {
     }
     return isBook ? (unitQuery.data?.highlights ?? EMPTY) : data.highlights;
   }, [data, isBook, unitQuery.data]);
+
+  useShortcuts({
+    h: () => handle.current?.highlightSelection(),
+    e: () => id && update.mutate({ id, patch: { location: 'archive' } }),
+    l: () => id && update.mutate({ id, patch: { location: 'later' } }),
+    u: () => navigate('/library'),
+    n: () => isBook && unitIndex < lastUnit && selectUnit(unitIndex + 1),
+    p: () => isBook && unitIndex > 0 && selectUnit(unitIndex - 1),
+  });
 
   const onFocus = useCallback((highlight: TLibraryHighlight) => {
     handle.current?.focusHighlight(highlight);

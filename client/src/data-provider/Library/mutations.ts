@@ -91,6 +91,67 @@ export const useDeleteLibraryDocumentMutation = (
   });
 };
 
+export type BulkLibraryResult = { done: number; failed: number };
+
+/** How many of a batch of requests went through; one failing never stops the rest. */
+async function settleAll(requests: Promise<unknown>[]): Promise<BulkLibraryResult> {
+  const results = await Promise.allSettled(requests);
+  const failed = results.filter((result) => result.status === 'rejected').length;
+  return { done: results.length - failed, failed };
+}
+
+/** Moves or files several documents at once, then refreshes the lists a single time. */
+export const useBulkUpdateLibraryDocumentsMutation = (
+  options?: t.MutationOptions<
+    BulkLibraryResult,
+    { ids: string[] } & UpdateLibraryDocumentVariables['patch']
+  >,
+): UseMutationResult<
+  BulkLibraryResult,
+  unknown,
+  { ids: string[] } & UpdateLibraryDocumentVariables['patch'],
+  unknown
+> => {
+  const refresh = useRefreshLibraryLists();
+  const queryClient = useQueryClient();
+  return useMutation(
+    ({ ids, ...patch }: { ids: string[] } & UpdateLibraryDocumentVariables['patch']) =>
+      settleAll(ids.map((id) => dataService.updateLibraryDocument(id, patch))),
+    {
+      ...options,
+      onSettled: (data, error, variables, context) => {
+        refresh();
+        variables.ids.forEach((id) =>
+          queryClient.invalidateQueries([QueryKeys.libraryDocument, id]),
+        );
+        options?.onSettled?.(data, error, variables, context);
+      },
+    },
+  );
+};
+
+export const useBulkDeleteLibraryDocumentsMutation = (
+  options?: t.MutationOptions<BulkLibraryResult, { ids: string[] }>,
+): UseMutationResult<BulkLibraryResult, unknown, { ids: string[] }, unknown> => {
+  const refresh = useRefreshLibraryLists();
+  const queryClient = useQueryClient();
+  return useMutation(
+    ({ ids }: { ids: string[] }) =>
+      settleAll(ids.map((id) => dataService.deleteLibraryDocument(id))),
+    {
+      ...options,
+      onSettled: (data, error, variables, context) => {
+        refresh();
+        variables.ids.forEach((id) => {
+          queryClient.removeQueries([QueryKeys.libraryDocument, id]);
+          queryClient.removeQueries([QueryKeys.libraryUnit, id]);
+        });
+        options?.onSettled?.(data, error, variables, context);
+      },
+    },
+  );
+};
+
 export const usePreviewLibraryFeedMutation = (
   options?: t.MutationOptions<{ feed: t.TLibraryFeedPreview }, string>,
 ): UseMutationResult<{ feed: t.TLibraryFeedPreview }, unknown, string, unknown> =>

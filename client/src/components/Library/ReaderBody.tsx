@@ -30,7 +30,11 @@ const COLOR_LABEL = {
 
 const PROGRESS_DELAY_MS = 1500;
 
-export type ReaderBodyHandle = { focusHighlight: (highlight: TLibraryHighlight) => void };
+export type ReaderBodyHandle = {
+  focusHighlight: (highlight: TLibraryHighlight) => void;
+  /** Highlights whatever the reader has selected, in yellow unless told otherwise. */
+  highlightSelection: (color?: TLibraryHighlightColor) => boolean;
+};
 
 type ReaderBodyProps = {
   documentId: string;
@@ -152,6 +156,34 @@ function ReaderBody({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentId, unit?.index, html, plainText]);
 
+  const highlightSelection = useCallback(
+    (color: TLibraryHighlightColor = 'yellow') => {
+      const root = content.current;
+      const selection = window.getSelection();
+      if (
+        !root ||
+        !canHighlight ||
+        !selection ||
+        selection.rangeCount === 0 ||
+        selection.isCollapsed
+      ) {
+        return false;
+      }
+      const offsets = offsetsFromRange(root, selection.getRangeAt(0));
+      const anchor = offsets && buildAnchor(anchorText, offsets.start, offsets.end);
+      if (!anchor) {
+        return false;
+      }
+      createHighlight.mutate({ documentId, anchor, contentHash, color, unit });
+      selection.removeAllRanges();
+      setPending(null);
+      return true;
+    },
+    // `createHighlight.mutate` is stable; the rest is what a highlight is made from.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [canHighlight, anchorText, documentId, contentHash, unit?.kind, unit?.index],
+  );
+
   useEffect(() => {
     registerHandle?.({
       focusHighlight: (highlight) => {
@@ -159,9 +191,10 @@ function ReaderBody({
           scrollToHighlight(content.current, highlight);
         }
       },
+      highlightSelection,
     });
     return () => registerHandle?.(null);
-  }, [registerHandle]);
+  }, [registerHandle, highlightSelection]);
 
   /** Saves where the reader is, a moment after they stop scrolling. */
   const progressTimer = useRef<ReturnType<typeof setTimeout>>();

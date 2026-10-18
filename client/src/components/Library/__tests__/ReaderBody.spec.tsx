@@ -173,6 +173,31 @@ describe('ReaderBody: making a highlight', () => {
     expect(screen.queryByTestId('library-highlight-toolbar')).not.toBeInTheDocument();
   });
 
+  it('highlights the current selection in yellow when told to by the parent', () => {
+    let handle: { highlightSelection: (color?: string) => boolean } | null = null;
+    renderBody({
+      registerHandle: (next) => {
+        handle = next as typeof handle;
+      },
+    });
+    expect(handle!.highlightSelection()).toBe(false);
+
+    select(5, 11);
+    let made = false;
+    act(() => {
+      made = handle!.highlightSelection();
+    });
+    expect(made).toBe(true);
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        color: 'yellow',
+        anchor: expect.objectContaining({ exact: 'Memory' }),
+      }),
+    );
+    expect(screen.queryByTestId('library-highlight-toolbar')).not.toBeInTheDocument();
+  });
+
   it('works across elements: the offsets count text, not markup', () => {
     renderBody();
     select(5, 18);

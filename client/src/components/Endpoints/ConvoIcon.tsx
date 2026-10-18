@@ -3,9 +3,9 @@ import { ProviderId } from 'librechat-data-provider';
 import { Sparkles, AssistantIcon, ProviderIcon } from '@librechat/client';
 import type * as t from 'librechat-data-provider';
 import ConvoIconURL from '~/components/Endpoints/ConvoIconURL';
-import Boat from '~/components/MindFerry/Boat';
 import { cn, getEntity, getIconEndpoint } from '~/utils';
 import { useProviderIcon } from '~/hooks/Endpoint';
+import Boat from '~/components/MindFerry/Boat';
 import { isImageURL } from '~/utils/icons';
 
 /** Callers frame the mark at two thirds of the round container around it. */
