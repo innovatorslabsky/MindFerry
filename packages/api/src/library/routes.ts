@@ -12,11 +12,14 @@ import {
   WorkerUnavailableError,
 } from './worker/errors';
 import { FetchError, TooLargeError, UnsafeUrlError } from './net/safeFetch';
+import { isConversationImportError } from '../conversations/import';
+import { isContentFilterError } from '../middleware/contentFilter';
 import { PdfEncryptedError, PdfError } from './pdf/parsePdf';
 import { EpubDrmError, EpubError } from './epub/parseEpub';
 import { createHighlightSchema, LOCATIONS } from './types';
 import { contextHubRateLimitKey } from '../hub/ratelimit';
 import { UnsupportedUploadError } from './ingest/upload';
+import { convertLibraryDocumentToChat } from './chat';
 import { NotReadableError } from './ingest/extract';
 import { FeedParseError } from './feed/parseFeed';
 import { MAX_OCR_PAGE_CHARS } from './service';
@@ -101,6 +104,16 @@ const folderBodySchema = z.object({
 const feedBodySchema = z.object({ url: z.string().url().max(2048) });
 
 const reviewBodySchema = z.object({ action: z.enum(['done', 'mute']) });
+
+/** An endpoint or model name as the UI reports it: letters, digits and the punctuation model ids use. */
+const NAME_PATTERN = /^[\w.:/@ -]{1,200}$/;
+
+const chatBodySchema = z.object({
+  endpoint: z.string().regex(NAME_PATTERN).optional(),
+  model: z.string().regex(NAME_PATTERN).optional(),
+  /** A chapter or page of a book; leave out for an article or for the book from its start. */
+  unitIndex: z.number().int().nonnegative().optional(),
+});
 
 /** Largest upload accepted; also the ceiling the route's multer instance is configured with. */
 export const LIBRARY_MAX_UPLOAD_BYTES: number = 50 * 1024 * 1024;
@@ -250,6 +263,7 @@ export interface LibraryHandlers {
   exportHighlights: Handler;
   dailyReview: Handler;
   reviewHighlight: Handler;
+  chat: Handler;
   removeSource: Handler;
   list: Handler;
   get: Handler;
@@ -264,10 +278,23 @@ export interface LibraryHandlers {
 /** A service, or a function that picks one per request (so isolation settings can follow the config). */
 export type LibraryServiceSource = LibraryService | ((req: ServerRequest) => LibraryService);
 
+/**
+ * Saves a conversation, already in the shape of an import, through the app's own importer and
+ * returns the new conversation's id. Supplied by the caller: the importer lives in `/api`.
+ */
+export type LibraryChatImporter = (params: {
+  userId: string;
+  userRole?: string;
+  payload: ReturnType<typeof convertLibraryDocumentToChat>;
+  req: ServerRequest;
+}) => Promise<{ conversationId: string }>;
+
 export function createLibraryHandlers({
   service: source,
+  importConversation,
 }: {
   service: LibraryServiceSource;
+  importConversation?: LibraryChatImporter;
 }): LibraryHandlers {
   // Resolved once per request by the handler's first use; a plain service is used as is.
   const serviceFor = (req: ServerRequest): LibraryService =>
@@ -643,6 +670,43 @@ export function createLibraryHandlers({
     res.status(204).end();
   };
 
+  /** "Ask about this": opens a new chat that starts from the page, article, chapter or book. */
+  const chat: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    if (!importConversation) return fail(res, 404, 'not_found', 'Chat is not available');
+    const service = serviceFor(req);
+    const body = chatBodySchema.safeParse(req.body ?? {});
+    if (!body.success) return fail(res, 400, 'invalid_request', 'Invalid request');
+    try {
+      const found = await service.chatSource(userId, param(req, 'id'), {
+        unitIndex: body.data.unitIndex,
+      });
+      if (!found) return fail(res, 404, 'not_found', 'Document not found');
+      if (found.text.trim() === '') {
+        return fail(res, 422, 'empty_document', 'There is no text here to ask about');
+      }
+      const payload = convertLibraryDocumentToChat(found, {
+        endpoint: body.data.endpoint,
+        model: body.data.model,
+      });
+      const { conversationId } = await importConversation({
+        userId,
+        userRole: req.user?.role,
+        payload,
+        req,
+      });
+      res.status(201).json({ conversationId });
+    } catch (error) {
+      if (isContentFilterError(error) || isConversationImportError(error)) {
+        res.status(error.statusCode).json(error.body);
+        return;
+      }
+      logger.error('[library] Could not open a chat about a document:', error);
+      fail(res, 500, 'internal_error', 'Could not open the chat');
+    }
+  };
+
   const setProgress: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
@@ -679,6 +743,7 @@ export function createLibraryHandlers({
     exportHighlights,
     dailyReview,
     reviewHighlight,
+    chat,
     removeSource,
     list,
     get,

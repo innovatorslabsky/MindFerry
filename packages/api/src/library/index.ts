@@ -8,6 +8,7 @@ export {
   getLibraryKeepPdfOriginals,
   getLibraryAutoTag,
   getLibraryReviewPerDay,
+  getLibraryChatMaxChars,
 } from './config';
 export { createLibraryService } from './service';
 export { startOfDay as startOfReviewDay } from './review';

@@ -1099,6 +1099,13 @@ export async function exportLibraryHighlights(
   };
 }
 
+export function startLibraryChat(
+  id: string,
+  request_: t.TLibraryChatRequest = {},
+): Promise<t.TLibraryChatResponse> {
+  return request.post(endpoints.libraryDocumentChat(id), request_);
+}
+
 export function getLibraryDailyReview(
   offsetMinutes: number,
   extra: number,

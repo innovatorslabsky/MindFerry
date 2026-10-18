@@ -20,6 +20,7 @@ import { NotificationSeverity } from '~/common';
 import HighlightsPanel from './HighlightsPanel';
 import { useShortcuts } from './useShortcuts';
 import PdfPageView from './PdfPageView';
+import AskButtons from './AskButtons';
 import { useLocalize } from '~/hooks';
 import TagEditor from './TagEditor';
 import OcrPanel from './OcrPanel';
@@ -283,6 +284,7 @@ export default function ReaderView() {
         >
           <Highlighter className="h-4 w-4" aria-hidden="true" />
         </Button>
+        <AskButtons documentId={document.id} kind={document.kind} unitIndex={unitIndex} />
         {isOriginalLink && (
           <Button asChild variant="ghost" size="sm" className="shrink-0">
             <a href={document.normalizedUrl} target="_blank" rel="noopener noreferrer nofollow">

@@ -711,6 +711,8 @@ export const contextHubSchema = z
         autoTag: z.boolean().default(true),
         /** How many highlights make up one day's review. */
         reviewPerDay: z.number().int().min(1).max(100).default(5),
+        /** The most characters of a page or book "Ask about this" puts in front of the model. */
+        chatMaxChars: z.number().int().min(2_000).max(400_000).default(60_000),
       })
       .default({}),
   })

@@ -38,6 +38,12 @@ jest.mock('../ReaderBody', () => ({
     return <div data-testid="reader-body" />;
   },
 }));
+jest.mock('../AskButtons', () => ({
+  __esModule: true,
+  default: ({ kind, unitIndex }: { kind: string; unitIndex: number }) => (
+    <div data-testid="ask-buttons" data-kind={kind} data-unit={unitIndex} />
+  ),
+}));
 jest.mock('../OcrPanel', () => ({
   __esModule: true,
   default: ({ blankPages, currentPage }: { blankPages: number[]; currentPage: number }) => (
@@ -142,6 +148,11 @@ describe('ReaderView: an article', () => {
     expect(bodyProps.at(-1)?.unit).toBeUndefined();
     expect(screen.queryByText('com_library_contents')).not.toBeInTheDocument();
     expect(mockUnitArgs.slice(1)).toEqual([undefined]);
+  });
+
+  it('offers to ask about the article', () => {
+    renderAt('/library/d1');
+    expect(screen.getByTestId('ask-buttons')).toHaveAttribute('data-kind', 'article');
   });
 
   it('does not resume from a position recorded against different text', () => {

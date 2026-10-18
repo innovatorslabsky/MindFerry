@@ -3631,5 +3631,11 @@
   "com_library_review_more": "Review {{0}} more",
   "com_library_review_none": "Nothing to review yet.",
   "com_library_review_none_hint": "Highlights you make while reading will come back here.",
-  "com_library_review_error": "Could not save that. It may show up again."
+  "com_library_review_error": "Could not save that. It may show up again.",
+  "com_library_ask": "Ask about this",
+  "com_library_ask_page": "Ask about this page",
+  "com_library_ask_chapter": "Ask about this chapter",
+  "com_library_ask_book": "Ask about the whole book",
+  "com_library_ask_error": "Could not open a chat about this.",
+  "com_library_ask_empty": "There is no text here to ask about."
 }

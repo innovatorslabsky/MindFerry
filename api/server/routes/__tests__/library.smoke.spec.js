@@ -20,6 +20,7 @@ describe('library routes wiring', () => {
     ['/export', 'get'],
     ['/review', 'get'],
     ['/review/:id', 'post'],
+    ['/documents/:id/chat', 'post'],
     ['/folders', 'get'],
     ['/folders', 'post'],
     ['/folders/:id', 'patch'],

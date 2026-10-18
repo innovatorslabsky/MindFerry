@@ -146,6 +146,11 @@ export type TLibraryDailyReview = {
   goal: number;
 };
 
+/** What to run the chat on, and which chapter or page to ask about (leave out for an article or the book). */
+export type TLibraryChatRequest = { endpoint?: string; model?: string; unitIndex?: number };
+
+export type TLibraryChatResponse = { conversationId: string };
+
 export type TLibraryReviewAction = 'done' | 'mute';
 
 export type TLibraryUnitResponse = { unit: TLibraryUnit; highlights: TLibraryHighlight[] };

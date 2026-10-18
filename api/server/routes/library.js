@@ -7,12 +7,14 @@ const {
   getLibraryKeepPdfOriginals,
   getLibraryAutoTag,
   getLibraryReviewPerDay,
+  getLibraryChatMaxChars,
   createLibraryHandlers,
   libraryBrowseLimiter,
   librarySaveLimiter,
   LIBRARY_MAX_UPLOAD_BYTES,
 } = require('@librechat/api');
 const { configMiddleware, requireJwtAuth } = require('~/server/middleware');
+const { importHubConversation } = require('~/server/utils/import/hub');
 const db = require('~/models');
 
 const router = express.Router();
@@ -36,7 +38,8 @@ function serviceFor(req) {
   const keepPdfOriginals = getLibraryKeepPdfOriginals(req.config);
   const autoTag = getLibraryAutoTag(req.config);
   const reviewPerDay = getLibraryReviewPerDay(req.config);
-  const key = JSON.stringify({ isolation, keepPdfOriginals, autoTag, reviewPerDay });
+  const chatMaxChars = getLibraryChatMaxChars(req.config);
+  const key = JSON.stringify({ isolation, keepPdfOriginals, autoTag, reviewPerDay, chatMaxChars });
   let service = serviceBySettings.get(key);
   if (!service) {
     service = createLibraryService({
@@ -45,13 +48,17 @@ function serviceFor(req) {
       keepPdfOriginals,
       autoTag,
       reviewPerDay,
+      chatMaxChars,
     });
     serviceBySettings.set(key, service);
   }
   return service;
 }
 
-const handlers = createLibraryHandlers({ service: serviceFor });
+const handlers = createLibraryHandlers({
+  service: serviceFor,
+  importConversation: importHubConversation,
+});
 
 const browse = [requireJwtAuth, configMiddleware, libraryBrowseLimiter];
 const save = [requireJwtAuth, configMiddleware, librarySaveLimiter];
@@ -103,6 +110,7 @@ router.post('/feeds/preview', ...save, handlers.previewFeed);
 router.get('/export', ...browse, handlers.exportHighlights);
 router.get('/review', ...browse, handlers.dailyReview);
 router.post('/review/:id', ...browse, handlers.reviewHighlight);
+router.post('/documents/:id/chat', ...browse, handlers.chat);
 router.get('/folders', ...browse, handlers.listFolders);
 router.post('/folders', ...browse, handlers.createFolder);
 router.patch('/folders/:id', ...browse, handlers.renameFolder);

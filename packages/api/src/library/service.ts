@@ -24,11 +24,13 @@ import type { DailyReview, ReviewAction } from './review';
 import type { FeedFetchResult } from './feed/fetchFeed';
 import type { LibraryIngest } from './worker/ingest';
 import type { ExportFormat } from './export';
+import type { ChatSource } from './chat';
 import { EXPORT_MAX_HIGHLIGHTS, highlightsToCsv, highlightsToMarkdown } from './export';
 import { DEFAULT_REVIEW_PER_DAY, MAX_REVIEW_EXTRA, startOfDay } from './review';
 import { createAnchor, resolveAnchor } from './anchor/textQuote';
 import { fetchFeed, subscribeToUrl } from './feed/fetchFeed';
 import { saveHtml, saveUrl } from './ingest/saveDocument';
+import { DEFAULT_CHAT_MAX_CHARS, capText } from './chat';
 import { ingestUpload } from './ingest/upload';
 import { feedItemKey } from './feed/parseFeed';
 import { totalWords } from './ingest/extract';
@@ -87,6 +89,8 @@ export interface LibraryServiceDeps {
   autoTag?: boolean;
   /** Highlights in one day's review (`contextHub.library.reviewPerDay`). */
   reviewPerDay?: number;
+  /** The most text "Ask about this" puts in front of the model (`contextHub.library.chatMaxChars`). */
+  chatMaxChars?: number;
   /** Read for the day's start; tests pass a fixed one. */
   now?: () => Date;
 }
@@ -237,6 +241,15 @@ export interface LibraryService {
     userId: string,
     options?: { offsetMinutes?: number; extra?: number },
   ) => Promise<DailyReview>;
+  /**
+   * What a chat about a document is opened with: an article's text, one chapter or page of a book when
+   * `unitIndex` is given, or the book from its start up to the cap. `null` when it is not the person's.
+   */
+  chatSource: (
+    userId: string,
+    id: string,
+    options?: { unitIndex?: number },
+  ) => Promise<ChatSource | null>;
   /** `false` when the highlight is not the person's. */
   reviewHighlight: (userId: string, id: string, action: ReviewAction) => Promise<boolean>;
   getProgress: (userId: string, documentId: string) => Promise<LibraryProgressRecord | null>;
@@ -324,6 +337,7 @@ export function createLibraryService({
   keepPdfOriginals = false,
   autoTag = true,
   reviewPerDay = DEFAULT_REVIEW_PER_DAY,
+  chatMaxChars = DEFAULT_CHAT_MAX_CHARS,
   now = () => new Date(),
 }: LibraryServiceDeps): LibraryService {
   const fetchUrl = ingest.saveUrl ?? ((url: string) => saveUrl(url));
@@ -670,6 +684,56 @@ export function createLibraryService({
           : [];
       });
       return { items, reviewedToday, goal };
+    },
+
+    async chatSource(userId: string, id: string, options: { unitIndex?: number } = {}) {
+      const document = await methods.getLibraryDocument(userId, id);
+      if (!document) {
+        return null;
+      }
+      const summary = toSummary(document);
+      const highlights = await methods.listLibraryHighlights(userId, id, 200);
+      if (document.kind === 'article') {
+        const { text, truncated } = capText(document.text, chatMaxChars);
+        return { document: summary, text, truncated, highlights };
+      }
+      if (options.unitIndex !== undefined) {
+        const unit = await methods.getLibraryUnit(userId, id, options.unitIndex);
+        if (!unit) {
+          return null;
+        }
+        const { text, truncated } = capText(unit.text, chatMaxChars);
+        return {
+          document: summary,
+          unit: { kind: unit.kind, index: unit.index },
+          text,
+          truncated,
+          highlights: highlights.filter((highlight) => highlight.unit?.index === unit.index),
+        };
+      }
+      const parts: string[] = [];
+      let length = 0;
+      let truncated = false;
+      for (let index = 0; index < document.unitCount; index += 1) {
+        if (length >= chatMaxChars) {
+          truncated = true;
+          break;
+        }
+        const unit = await methods.getLibraryUnit(userId, id, index);
+        if (!unit || unit.text.trim() === '') {
+          continue;
+        }
+        const piece = `[${unit.kind} ${index + 1}]\n${unit.text}`;
+        parts.push(piece);
+        length += piece.length + 2;
+      }
+      const joined = capText(parts.join('\n\n'), chatMaxChars);
+      return {
+        document: summary,
+        text: joined.text,
+        truncated: truncated || joined.truncated,
+        highlights,
+      };
     },
 
     reviewHighlight(userId: string, id: string, action: ReviewAction) {
