@@ -3,7 +3,6 @@ import { useToastContext } from '@librechat/client';
 import { dataService } from 'librechat-data-provider';
 import type { TLibraryHighlight, TLibraryHighlightColor } from 'librechat-data-provider';
 import {
-  HIGHLIGHT_COLORS,
   buildAnchor,
   offsetAtTop,
   offsetsFromRange,
@@ -14,19 +13,11 @@ import {
   scrollToOffset,
 } from '~/utils/libraryAnchors';
 import { useCreateLibraryHighlightMutation, useSetLibraryProgressMutation } from '~/data-provider';
+import HighlightToolbar from './HighlightToolbar';
 import { NotificationSeverity } from '~/common';
 import { libraryErrorKey } from './errors';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
-
-/** Written out so each label key is visible to the unused-key check. */
-const COLOR_LABEL = {
-  yellow: 'com_library_color_yellow',
-  blue: 'com_library_color_blue',
-  green: 'com_library_color_green',
-  red: 'com_library_color_red',
-  purple: 'com_library_color_purple',
-} as const;
 
 const PROGRESS_DELAY_MS = 1500;
 
@@ -301,32 +292,7 @@ function ReaderBody({
           {plainText}
         </div>
       )}
-      {pending && (
-        <div
-          role="toolbar"
-          aria-label={localize('com_library_highlight_toolbar')}
-          className="border-border-medium bg-surface-primary fixed z-50 flex -translate-x-1/2 -translate-y-full gap-1 rounded-lg border p-1 shadow-lg"
-          style={{ top: Math.max(pending.top - 8, 8), left: pending.left }}
-          data-testid="library-highlight-toolbar"
-        >
-          {HIGHLIGHT_COLORS.map((color) => (
-            <button
-              key={color}
-              type="button"
-              // Keep the selection alive while the button takes the click.
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => onPick(color)}
-              aria-label={localize('com_library_highlight_with', {
-                0: localize(COLOR_LABEL[color]),
-              })}
-              className={cn(
-                'library-swatch h-6 w-6 rounded-full border',
-                `library-swatch-${color}`,
-              )}
-            />
-          ))}
-        </div>
-      )}
+      {pending && <HighlightToolbar top={pending.top} left={pending.left} onPick={onPick} />}
     </div>
   );
 }

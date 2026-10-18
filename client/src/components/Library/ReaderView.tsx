@@ -192,7 +192,17 @@ export default function ReaderView() {
 
   let body: JSX.Element;
   if (isPdf && pageView) {
-    body = <PdfPageView documentId={document.id} pageIndex={unitIndex} />;
+    const page = unitQuery.data?.unit.index === unitIndex ? unitQuery.data.unit : undefined;
+    body = (
+      <PdfPageView
+        documentId={document.id}
+        pageIndex={unitIndex}
+        anchorText={page?.text}
+        contentHash={page?.contentHash}
+        highlights={highlights}
+        registerHandle={registerHandle}
+      />
+    );
   } else if (!isBook && 'contentHtml' in document) {
     body = (
       <ReaderBody

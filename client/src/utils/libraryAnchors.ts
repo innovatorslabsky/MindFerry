@@ -159,7 +159,13 @@ function wrapRange(range: Range, color: TLibraryHighlightColor, id: string): voi
  * draws without touching the document; otherwise wraps text in `<mark>`, which leaves the text
  * unchanged. Returns the ids that could not be placed. Call it again to repaint.
  */
-export function paintHighlights(root: Element, highlights: readonly TLibraryHighlight[]): string[] {
+export function paintHighlights(
+  root: Element,
+  highlights: readonly TLibraryHighlight[],
+  /** Where a highlight sits in `root`'s text; its own anchor offsets unless the text is a lookalike. */
+  locate: (highlight: TLibraryHighlight) => { start: number; end: number } | null = (highlight) =>
+    highlight.anchor,
+): string[] {
   const unplaced: string[] = [];
   const custom = customHighlights();
   clearMarks(root);
@@ -172,9 +178,8 @@ export function paintHighlights(root: Element, highlights: readonly TLibraryHigh
   // Placed against the untouched text first, so one wrapped highlight cannot shift the next.
   const placed: Array<{ highlight: TLibraryHighlight; range: Range }> = [];
   for (const highlight of highlights) {
-    const range = highlight.orphaned
-      ? null
-      : rangeFromOffsets(root, highlight.anchor.start, highlight.anchor.end);
+    const where = highlight.orphaned ? null : locate(highlight);
+    const range = where ? rangeFromOffsets(root, where.start, where.end) : null;
     if (!range) {
       unplaced.push(highlight.id);
       continue;
@@ -190,9 +195,11 @@ export function paintHighlights(root: Element, highlights: readonly TLibraryHigh
     }
   } else {
     // Wrapping splits text nodes, so go from the end of the text to the start to keep earlier offsets valid.
-    const ordered = [...placed].sort((a, b) => b.highlight.anchor.start - a.highlight.anchor.start);
-    for (const { highlight } of ordered) {
-      const fresh = rangeFromOffsets(root, highlight.anchor.start, highlight.anchor.end);
+    const ordered = placed
+      .map(({ highlight }) => ({ highlight, where: locate(highlight) }))
+      .sort((a, b) => (b.where?.start ?? 0) - (a.where?.start ?? 0));
+    for (const { highlight, where } of ordered) {
+      const fresh = where ? rangeFromOffsets(root, where.start, where.end) : null;
       if (fresh) {
         wrapRange(fresh, highlight.color, highlight.id);
       }

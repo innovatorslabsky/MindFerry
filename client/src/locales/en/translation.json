@@ -3568,7 +3568,7 @@
   "com_library_view": "View",
   "com_library_view_text": "Text",
   "com_library_view_page": "Page",
-  "com_library_page_view_note": "This is the page as uploaded. Highlights are made in the text view.",
+  "com_library_page_view_note": "This is the page as uploaded. Select words on it to highlight them.",
   "com_library_page_label": "Page {{0}} of the original PDF",
   "com_library_page_error": "The original page couldn't be shown. The text view still works.",
   "com_library_source_remove": "Remove original file",
@@ -3648,5 +3648,6 @@
   "com_library_inbox_copied": "Copied.",
   "com_library_inbox_shown_once": "Copy it now: it is shown only once. Making a new one stops this one working.",
   "com_library_inbox_made": "Address made on {{0}}. Make a new one if you need to see it again.",
-  "com_library_inbox_error": "Could not change the newsletter address."
+  "com_library_inbox_error": "Could not change the newsletter address.",
+  "com_library_page_select_error": "That selection could not be matched to the page's text. Try selecting a smaller piece."
 }
