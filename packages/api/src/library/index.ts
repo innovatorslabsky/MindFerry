@@ -28,6 +28,8 @@ export {
 export type { LibraryIsolationConfig, LibraryIngest, ProcessRunner } from './worker';
 export {
   createLibraryHandlers,
+  createLibraryInboxAuth,
+  libraryInboxLimiter,
   libraryBrowseLimiter,
   librarySaveLimiter,
   LIBRARY_MAX_HTML_CHARS,

@@ -60,6 +60,10 @@ jest.mock('../FolderBar', () => ({
     <button data-testid="folder-bar" data-value={value} onClick={() => onChange('f1')} />
   ),
 }));
+jest.mock('../InboxPanel', () => ({
+  __esModule: true,
+  default: () => <div data-testid="inbox-panel" />,
+}));
 jest.mock('../FeedsPanel', () => ({
   __esModule: true,
   default: () => <div data-testid="feeds-panel" />,
@@ -173,6 +177,7 @@ describe('LibraryView: the Feed tab and tags', () => {
     fireEvent.click(screen.getByRole('button', { name: 'com_library_tab_feed' }));
     expect(mockQueryParams).toMatchObject({ location: 'feed' });
     expect(screen.getByTestId('feeds-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('inbox-panel')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('com_library_add_placeholder'), {
       target: { value: 'https://example.test/x' },
     });

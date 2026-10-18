@@ -30,6 +30,7 @@ import { useDebounce } from '~/hooks/Input';
 import ExportButtons from './ExportButtons';
 import { libraryErrorKey } from './errors';
 import FeedsPanel from './FeedsPanel';
+import InboxPanel from './InboxPanel';
 import { useLocalize } from '~/hooks';
 import FolderBar from './FolderBar';
 import { cn } from '~/utils';
@@ -527,7 +528,12 @@ export default function LibraryView() {
           </Button>
         )}
 
-        {!query && location === 'feed' && <FeedsPanel />}
+        {!query && location === 'feed' && (
+          <>
+            <FeedsPanel />
+            <InboxPanel />
+          </>
+        )}
 
         {rows.length > 0 && (
           <div

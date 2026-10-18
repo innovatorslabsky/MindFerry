@@ -9,7 +9,10 @@ const {
   getLibraryReviewPerDay,
   getLibraryChatMaxChars,
   createLibraryHandlers,
+  createLibraryInboxAuth,
+  libraryInboxLimiter,
   createRequireApiKeyAuth,
+  restoreTenantContextFromReq,
   libraryBrowseLimiter,
   librarySaveLimiter,
   LIBRARY_MAX_UPLOAD_BYTES,
@@ -109,7 +112,62 @@ function handleUpload(req, res, next) {
 }
 
 router.post('/documents', ...save, handlers.save);
-router.post('/clip', apiKeyMiddleware, configMiddleware, librarySaveLimiter, handlers.save);
+router.post(
+  '/clip',
+  apiKeyMiddleware,
+  configMiddleware,
+  restoreTenantContextFromReq,
+  librarySaveLimiter,
+  handlers.save,
+);
+
+/**
+ * Newsletters arrive from an email service, not from the person: the secret in the address is the
+ * credential. JSON and URL-encoded bodies are read by the app already; a multipart body (what some
+ * services send) is read here, after the secret has checked out, and its attachments are ignored.
+ */
+const inboxLookup = createLibraryService({ methods: db });
+const inboxAuth = createLibraryInboxAuth({
+  findOwner: (token) => inboxLookup.findInboxOwner(token),
+  findUser: db.findUser,
+});
+
+const emailParts = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 1024 * 1024, files: 5, fields: 100, fieldSize: 3 * 1024 * 1024 },
+}).any();
+
+function readEmailParts(req, res, next) {
+  if (!req.is('multipart/form-data')) {
+    return next();
+  }
+  emailParts(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({
+        error: {
+          message: 'Could not read the message',
+          type: 'invalid_request',
+          code: 'invalid_request',
+        },
+      });
+    }
+    next();
+  });
+}
+
+router.post(
+  '/inbox/:token',
+  libraryInboxLimiter,
+  inboxAuth,
+  readEmailParts,
+  configMiddleware,
+  restoreTenantContextFromReq,
+  librarySaveLimiter,
+  handlers.receiveEmail,
+);
+router.get('/inbox', ...browse, handlers.getInbox);
+router.post('/inbox', ...browse, handlers.rotateInbox);
+router.delete('/inbox', ...browse, handlers.deleteInbox);
 router.post(
   '/uploads',
   requireJwtAuth,

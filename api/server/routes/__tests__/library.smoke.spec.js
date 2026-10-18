@@ -42,11 +42,26 @@ describe('library routes wiring', () => {
     expect(route.stack.length).toBe(4);
   });
 
-  it('registers the browser clip behind an API key, config and the save rate limit', () => {
+  it('registers the browser clip behind an API key, config, tenant and the save rate limit', () => {
     const route = find('/clip', 'post');
     expect(route).toBeDefined();
-    // apiKeyMiddleware, configMiddleware, limiter, handler
-    expect(route.stack.length).toBe(4);
+    // apiKeyMiddleware, configMiddleware, tenant context, limiter, handler
+    expect(route.stack.length).toBe(5);
+  });
+
+  it('registers the newsletter address behind its own limits, its secret and the owner’s config', () => {
+    const route = find('/inbox/:token', 'post');
+    expect(route).toBeDefined();
+    // ip limiter, secret check, multipart reader, config, tenant context, limiter, handler
+    expect(route.stack.length).toBe(7);
+  });
+
+  it.each([
+    ['/inbox', 'get'],
+    ['/inbox', 'post'],
+    ['/inbox', 'delete'],
+  ])('registers %s %s behind auth, config and a rate limit', (path, method) => {
+    expect(find(path, method)?.stack.length).toBe(4);
   });
 
   it('registers the upload behind auth, config, a rate limit and the file parser', () => {
@@ -86,6 +101,10 @@ describe('library routes wiring', () => {
       'listLibraryHighlights',
       'updateLibraryHighlight',
       'deleteLibraryHighlight',
+      'rotateLibraryInbox',
+      'getLibraryInbox',
+      'deleteLibraryInbox',
+      'findLibraryInboxOwner',
       'listLibraryReviewHighlights',
       'countLibraryReviewedSince',
       'markLibraryHighlightReviewed',

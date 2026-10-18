@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { rateLimit } from 'express-rate-limit';
-import { logger } from '@librechat/data-schemas';
-import type { RequestHandler, Response } from 'express';
+import { logger, runAsSystem } from '@librechat/data-schemas';
+import type { NextFunction, RequestHandler, Response } from 'express';
 import type { ServerRequest } from '../types/http';
 import type { LibraryService } from './service';
 import {
@@ -18,6 +18,7 @@ import { PdfEncryptedError, PdfError } from './pdf/parsePdf';
 import { EpubDrmError, EpubError } from './epub/parseEpub';
 import { createHighlightSchema, LOCATIONS } from './types';
 import { contextHubRateLimitKey } from '../hub/ratelimit';
+import { isInboxToken, parseInboundEmail } from './inbox';
 import { UnsupportedUploadError } from './ingest/upload';
 import { convertLibraryDocumentToChat } from './chat';
 import { NotReadableError } from './ingest/extract';
@@ -50,6 +51,17 @@ export const librarySaveLimiter: RequestHandler = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => contextHubRateLimitKey(req as ServerRequest),
+});
+
+/**
+ * A newsletter address is a secret in a URL that anyone can try, so every guess is limited by where it
+ * comes from, the only thing known before the secret has been checked.
+ */
+export const libraryInboxLimiter: RequestHandler = rateLimit({
+  windowMs: LIBRARY_RATE_WINDOW_MS,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 /** Largest page a client may hand over directly; the server-side fetch has its own 5 MiB cap. */
@@ -264,6 +276,10 @@ export interface LibraryHandlers {
   dailyReview: Handler;
   reviewHighlight: Handler;
   chat: Handler;
+  getInbox: Handler;
+  rotateInbox: Handler;
+  deleteInbox: Handler;
+  receiveEmail: Handler;
   removeSource: Handler;
   list: Handler;
   get: Handler;
@@ -707,6 +723,45 @@ export function createLibraryHandlers({
     }
   };
 
+  const getInbox: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const inbox = await serviceFor(req).getInbox(userId);
+    res.status(200).json({ inbox: inbox ? { createdAt: inbox.createdAt } : null });
+  };
+
+  /** The one time the secret is shown: only its hash is stored. */
+  const rotateInbox: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const { token, createdAt } = await serviceFor(req).rotateInbox(userId);
+    res.status(201).json({ token, createdAt });
+  };
+
+  const deleteInbox: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    await serviceFor(req).deleteInbox(userId);
+    res.status(204).end();
+  };
+
+  /**
+   * What an email service posts for a message sent to someone's newsletter address. The sender is
+   * not the person, so nothing about the answer tells a guesser anything: every refusal is a 404.
+   */
+  const receiveEmail: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const email = parseInboundEmail(req.body);
+    if (!email) return fail(res, 422, 'empty_message', 'The message has no text');
+    try {
+      const result = await serviceFor(req).receiveEmail(userId, email);
+      res.status(result.created ? 201 : 200).json({ document: { id: result.document.id } });
+    } catch (error) {
+      saveFailure(res, error);
+    }
+  };
+
   const setProgress: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
@@ -744,6 +799,10 @@ export function createLibraryHandlers({
     dailyReview,
     reviewHighlight,
     chat,
+    getInbox,
+    rotateInbox,
+    deleteInbox,
+    receiveEmail,
     removeSource,
     list,
     get,
@@ -753,5 +812,36 @@ export function createLibraryHandlers({
     patchHighlight,
     removeHighlight,
     setProgress,
+  };
+}
+
+export interface LibraryInboxAuthDeps {
+  /** Whose address a secret is; from the service, which reads across tenants for this one lookup. */
+  findOwner: (token: string) => Promise<{ userId: string; tenantId?: string } | null>;
+  findUser: (query: { _id: string }) => Promise<Record<string, unknown> | null>;
+}
+
+/**
+ * Turns the secret in a newsletter address into the person it belongs to, as if they had signed in,
+ * so everything after it (config, tenant, handler) works as for any request of theirs. A token that
+ * is malformed, unknown, or whose owner is gone gets the same 404.
+ */
+export function createLibraryInboxAuth({
+  findOwner,
+  findUser,
+}: LibraryInboxAuthDeps): (req: ServerRequest, res: Response, next: NextFunction) => Promise<void> {
+  return async (req, res, next) => {
+    const token = (req.params as Record<string, unknown> | undefined)?.token;
+    if (!isInboxToken(token)) return fail(res, 404, 'not_found', 'Not found');
+    try {
+      const owner = await findOwner(token);
+      const user = owner ? await runAsSystem(async () => findUser({ _id: owner.userId })) : null;
+      if (!owner || !user) return fail(res, 404, 'not_found', 'Not found');
+      (req as unknown as { user: unknown }).user = { ...user, id: owner.userId };
+      next();
+    } catch (error) {
+      logger.error('[library] Could not look up a newsletter address:', error);
+      fail(res, 500, 'internal_error', 'Could not receive the message');
+    }
   };
 }

@@ -1,7 +1,7 @@
 import React from 'react';
+import { RecoilRoot } from 'recoil';
 import { MemoryRouter } from 'react-router-dom';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { RecoilRoot } from 'recoil';
 import { mockClient } from 'test/libraryMocks';
 
 const mockStart = jest.fn();

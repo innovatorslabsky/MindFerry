@@ -186,6 +186,33 @@ export const useStartLibraryChatMutation = (
   );
 };
 
+/** Makes the newsletter address, or replaces it; the new secret comes back once. */
+export const useRotateLibraryInboxMutation = (
+  options?: t.MutationOptions<t.TLibraryInboxCreated, void>,
+): UseMutationResult<t.TLibraryInboxCreated, unknown, void, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation(() => dataService.rotateLibraryInbox(), {
+    ...options,
+    onSuccess: (data, variables, context) => {
+      queryClient.invalidateQueries([QueryKeys.libraryInbox]);
+      options?.onSuccess?.(data, variables, context);
+    },
+  });
+};
+
+export const useDeleteLibraryInboxMutation = (
+  options?: t.MutationOptions<void, void>,
+): UseMutationResult<void, unknown, void, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation(() => dataService.deleteLibraryInbox(), {
+    ...options,
+    onSuccess: (data, variables, context) => {
+      queryClient.invalidateQueries([QueryKeys.libraryInbox]);
+      options?.onSuccess?.(data, variables, context);
+    },
+  });
+};
+
 export const usePreviewLibraryFeedMutation = (
   options?: t.MutationOptions<{ feed: t.TLibraryFeedPreview }, string>,
 ): UseMutationResult<{ feed: t.TLibraryFeedPreview }, unknown, string, unknown> =>

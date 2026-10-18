@@ -2,10 +2,10 @@ import type { Response } from 'express';
 import type { ServerRequest } from '../../types/http';
 import type { LibraryChatImporter } from '../routes';
 import { createFakeLibraryMethods } from './helpers/fakeLibraryMethods';
+import { ConversationImportError } from '../../conversations/import';
 import { capText, convertLibraryDocumentToChat } from '../chat';
 import { createLibraryService } from '../service';
 import { createLibraryHandlers } from '../routes';
-import { ConversationImportError } from '../../conversations/import';
 
 const user = 'u1';
 const HASH = 'a'.repeat(64);

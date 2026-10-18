@@ -230,6 +230,8 @@ export const libraryFeedPreview = () => `${BASE_URL}/api/library/feeds/preview`;
 export const libraryExport = (format: 'markdown' | 'csv', documentId?: string) =>
   `${BASE_URL}/api/library/export?format=${format}${documentId ? `&documentId=${encodeURIComponent(documentId)}` : ''}`;
 
+export const libraryInbox = () => `${BASE_URL}/api/library/inbox`;
+
 export const libraryDocumentChat = (id: string) =>
   `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/chat`;
 

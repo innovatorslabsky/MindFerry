@@ -1099,6 +1099,18 @@ export async function exportLibraryHighlights(
   };
 }
 
+export function getLibraryInbox(): Promise<{ inbox: t.TLibraryInbox }> {
+  return request.get(endpoints.libraryInbox());
+}
+
+export function rotateLibraryInbox(): Promise<t.TLibraryInboxCreated> {
+  return request.post(endpoints.libraryInbox(), {});
+}
+
+export function deleteLibraryInbox(): Promise<void> {
+  return request.delete(endpoints.libraryInbox());
+}
+
 export function startLibraryChat(
   id: string,
   request_: t.TLibraryChatRequest = {},

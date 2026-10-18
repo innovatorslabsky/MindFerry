@@ -19,6 +19,7 @@ import { createHubOAuthClientModel } from './hubOAuthClient';
 import { createAgentCategoryModel } from './agentCategory';
 import { createLibrarySourceModel } from './librarySource';
 import { createLibraryFolderModel } from './libraryFolder';
+import { createLibraryInboxModel } from './libraryInbox';
 import { createChatProjectModel } from './chatProject';
 import { createAgentApiKeyModel } from './agentApiKey';
 import { createTransactionModel } from './transaction';
@@ -84,6 +85,7 @@ export function createModels(mongoose: typeof import('mongoose')): {
   LibraryUnit: ReturnType<typeof createLibraryUnitModel>;
   LibraryResource: ReturnType<typeof createLibraryResourceModel>;
   LibraryFeed: ReturnType<typeof createLibraryFeedModel>;
+  LibraryInbox: ReturnType<typeof createLibraryInboxModel>;
   LibrarySource: ReturnType<typeof createLibrarySourceModel>;
   LibraryFolder: ReturnType<typeof createLibraryFolderModel>;
   AgentCategory: ReturnType<typeof createAgentCategoryModel>;
@@ -146,6 +148,7 @@ export function createModels(mongoose: typeof import('mongoose')): {
     LibraryUnit: createLibraryUnitModel(mongoose),
     LibraryResource: createLibraryResourceModel(mongoose),
     LibraryFeed: createLibraryFeedModel(mongoose),
+    LibraryInbox: createLibraryInboxModel(mongoose),
     LibrarySource: createLibrarySourceModel(mongoose),
     LibraryFolder: createLibraryFolderModel(mongoose),
     AgentCategory: createAgentCategoryModel(mongoose),

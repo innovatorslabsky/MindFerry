@@ -140,3 +140,19 @@ export const useLibraryReviewQuery = (
     },
   );
 };
+
+/** Whether the person has a newsletter address, and since when. The secret itself is never returned. */
+export const useLibraryInboxQuery = (
+  config?: UseQueryOptions<{ inbox: t.TLibraryInbox }>,
+): QueryObserverResult<{ inbox: t.TLibraryInbox }> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+  return useQuery<{ inbox: t.TLibraryInbox }>(
+    [QueryKeys.libraryInbox],
+    () => dataService.getLibraryInbox(),
+    {
+      refetchOnWindowFocus: false,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};

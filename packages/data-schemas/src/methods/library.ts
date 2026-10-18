@@ -14,6 +14,8 @@ import type {
   LibraryFeedAddResult,
   LibraryFeedInput,
   LibraryFeedRecord,
+  LibraryInboxInfo,
+  LibraryInboxOwner,
   LibraryFeedRefreshRecord,
   LibraryFeedState,
   LibraryHighlightInput,
@@ -35,10 +37,12 @@ import type { ILibraryProgress } from '~/schema/libraryProgress';
 import type { ILibraryResource } from '~/schema/libraryResource';
 import type { ILibrarySource } from '~/schema/librarySource';
 import type { ILibraryFolder } from '~/schema/libraryFolder';
+import type { ILibraryInbox } from '~/schema/libraryInbox';
 import type { ILibraryUnit } from '~/schema/libraryUnit';
 import type { ILibraryFeed } from '~/schema/libraryFeed';
 import { LIBRARY_SOURCE_CHUNK_BYTES } from '~/schema/librarySource';
 import { tenantSafeBulkWrite } from '~/utils/tenantBulkWrite';
+import { runAsSystem } from '~/config/tenantContext';
 import logger from '~/config/winston';
 
 export interface LibraryMethods {
@@ -159,6 +163,15 @@ export interface LibraryMethods {
     documentId: string,
     results: LibraryReanchor[],
   ) => Promise<number>;
+  /** Makes the person's newsletter address, or replaces it; the old one stops working. */
+  rotateLibraryInbox: (userId: string, tokenHash: string) => Promise<LibraryInboxInfo>;
+  getLibraryInbox: (userId: string) => Promise<LibraryInboxInfo | null>;
+  deleteLibraryInbox: (userId: string) => Promise<boolean>;
+  /**
+   * Whose address a secret is. Meant for the request that arrives with only the secret, so it reads
+   * across tenants; everything after it must run in the owner's tenant.
+   */
+  findLibraryInboxOwner: (tokenHash: string) => Promise<LibraryInboxOwner | null>;
   getLibraryProgress: (userId: string, documentId: string) => Promise<LibraryProgressRecord | null>;
   setLibraryProgress: (
     userId: string,
@@ -1189,9 +1202,43 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     return result.deletedCount > 0;
   }
 
+  async function rotateLibraryInbox(userId: string, tokenHash: string): Promise<LibraryInboxInfo> {
+    const doc = (await mongoose.models.LibraryInbox.findOneAndUpdate(
+      { userId: toObjectId(userId) },
+      { $set: { tokenHash } },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    ).lean()) as unknown as ILibraryInbox;
+    return { createdAt: doc.updatedAt };
+  }
+
+  async function getLibraryInbox(userId: string): Promise<LibraryInboxInfo | null> {
+    const doc = (await mongoose.models.LibraryInbox.findOne({
+      userId: toObjectId(userId),
+    }).lean()) as unknown as ILibraryInbox | null;
+    return doc ? { createdAt: doc.updatedAt } : null;
+  }
+
+  async function deleteLibraryInbox(userId: string): Promise<boolean> {
+    const result = await mongoose.models.LibraryInbox.deleteOne({ userId: toObjectId(userId) });
+    return result.deletedCount > 0;
+  }
+
+  async function findLibraryInboxOwner(tokenHash: string): Promise<LibraryInboxOwner | null> {
+    const doc = (await runAsSystem(async () =>
+      mongoose.models.LibraryInbox.findOne({ tokenHash }).lean(),
+    )) as unknown as ILibraryInbox | null;
+    if (!doc) {
+      return null;
+    }
+    return {
+      userId: doc.userId.toString(),
+      ...(doc.tenantId ? { tenantId: doc.tenantId } : {}),
+    };
+  }
+
   async function deleteAllLibraryData(userId: string): Promise<LibraryDataDeleteResult> {
     const owner = toObjectId(userId);
-    const [documents, highlights, progress, units, resources, sources, folders, feeds] =
+    const [documents, highlights, progress, units, resources, sources, folders, feeds, inboxes] =
       await Promise.all([
         mongoose.models.LibraryDocument.deleteMany({ userId: owner }),
         mongoose.models.LibraryHighlight.deleteMany({ userId: owner }),
@@ -1201,6 +1248,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
         mongoose.models.LibrarySource.deleteMany({ userId: owner }),
         mongoose.models.LibraryFolder.deleteMany({ userId: owner }),
         mongoose.models.LibraryFeed.deleteMany({ userId: owner }),
+        mongoose.models.LibraryInbox.deleteMany({ userId: owner }),
       ]);
     return {
       documents: documents.deletedCount,
@@ -1211,6 +1259,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       sources: sources.deletedCount,
       folders: folders.deletedCount,
       feeds: feeds.deletedCount,
+      inboxes: inboxes.deletedCount,
     };
   }
 
@@ -1238,6 +1287,10 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     listLibraryHighlights,
     updateLibraryHighlight,
     deleteLibraryHighlight,
+    rotateLibraryInbox,
+    getLibraryInbox,
+    deleteLibraryInbox,
+    findLibraryInboxOwner,
     listLibraryReviewHighlights,
     countLibraryReviewedSince,
     markLibraryHighlightReviewed,

@@ -24,13 +24,17 @@ import type { DailyReview, ReviewAction } from './review';
 import type { FeedFetchResult } from './feed/fetchFeed';
 import type { LibraryIngest } from './worker/ingest';
 import type { ExportFormat } from './export';
+import type { InboundEmail } from './inbox';
 import type { ChatSource } from './chat';
 import { EXPORT_MAX_HIGHLIGHTS, highlightsToCsv, highlightsToMarkdown } from './export';
+import { emailKey, generateInboxToken, hashInboxToken, textToHtml } from './inbox';
 import { DEFAULT_REVIEW_PER_DAY, MAX_REVIEW_EXTRA, startOfDay } from './review';
 import { createAnchor, resolveAnchor } from './anchor/textQuote';
 import { fetchFeed, subscribeToUrl } from './feed/fetchFeed';
 import { saveHtml, saveUrl } from './ingest/saveDocument';
 import { DEFAULT_CHAT_MAX_CHARS, capText } from './chat';
+import { NotReadableError } from './ingest/extract';
+import { urlKey } from './ingest/normalizeUrl';
 import { ingestUpload } from './ingest/upload';
 import { feedItemKey } from './feed/parseFeed';
 import { totalWords } from './ingest/extract';
@@ -67,6 +71,10 @@ type Methods = Pick<
   | 'listLibraryHighlights'
   | 'updateLibraryHighlight'
   | 'deleteLibraryHighlight'
+  | 'rotateLibraryInbox'
+  | 'getLibraryInbox'
+  | 'deleteLibraryInbox'
+  | 'findLibraryInboxOwner'
   | 'listLibraryReviewHighlights'
   | 'countLibraryReviewedSince'
   | 'markLibraryHighlightReviewed'
@@ -250,6 +258,18 @@ export interface LibraryService {
     id: string,
     options?: { unitIndex?: number },
   ) => Promise<ChatSource | null>;
+  /** When the person's newsletter address was made, or `null` if they have none. */
+  getInbox: (userId: string) => Promise<{ createdAt: Date } | null>;
+  /**
+   * Makes the address, or replaces it. The secret in it is returned here and never again: only a hash
+   * is kept, so it cannot be read back later.
+   */
+  rotateInbox: (userId: string) => Promise<{ token: string; createdAt: Date }>;
+  deleteInbox: (userId: string) => Promise<boolean>;
+  /** Whose address a secret in a request is; `null` if it is no one's. */
+  findInboxOwner: (token: string) => Promise<{ userId: string; tenantId?: string } | null>;
+  /** Saves a newsletter to the person's Feed tab. The same message again updates the same document. */
+  receiveEmail: (userId: string, email: InboundEmail) => Promise<SaveResult>;
   /** `false` when the highlight is not the person's. */
   reviewHighlight: (userId: string, id: string, action: ReviewAction) => Promise<boolean>;
   getProgress: (userId: string, documentId: string) => Promise<LibraryProgressRecord | null>;
@@ -353,6 +373,7 @@ export function createLibraryService({
     userId: string,
     draft: DocumentDraft,
     location?: LibraryLocationValue,
+    extraTags: string[] = [],
   ): Promise<SaveResult> {
     const saved = await methods.saveLibraryDocument(userId, {
       urlKey: draft.urlKey,
@@ -369,20 +390,26 @@ export function createLibraryService({
       readingMinutes: draft.readingMinutes,
       fetchedAt: new Date(draft.fetchedAt),
       location,
-      tags: autoTag
-        ? suggestTags({
-            kind: 'article',
-            title: draft.title,
-            text: draft.text,
-            lang: draft.lang,
-            normalizedUrl: draft.normalizedUrl,
-          })
-        : undefined,
+      tags: initialTags(draft, extraTags),
     });
     const reanchored = saved.contentChanged
       ? await reanchor(userId, saved.document)
       : { kept: 0, orphaned: 0 };
     return { document: toSummary(saved.document), created: saved.created, reanchored };
+  }
+
+  function initialTags(draft: DocumentDraft, extraTags: string[]): string[] | undefined {
+    const suggested = autoTag
+      ? suggestTags({
+          kind: 'article',
+          title: draft.title,
+          text: draft.text,
+          lang: draft.lang,
+          normalizedUrl: draft.normalizedUrl,
+        })
+      : [];
+    const tags = [...new Set([...extraTags, ...suggested])];
+    return tags.length > 0 ? tags : undefined;
   }
 
   /** Saves the items of a feed read that have not been seen, newest first, and remembers them all. */
@@ -684,6 +711,56 @@ export function createLibraryService({
           : [];
       });
       return { items, reviewedToday, goal };
+    },
+
+    getInbox(userId: string) {
+      return methods.getLibraryInbox(userId);
+    },
+
+    async rotateInbox(userId: string) {
+      const token = generateInboxToken();
+      const { createdAt } = await methods.rotateLibraryInbox(userId, hashInboxToken(token));
+      return { token, createdAt };
+    },
+
+    deleteInbox(userId: string) {
+      return methods.deleteLibraryInbox(userId);
+    },
+
+    findInboxOwner(token: string) {
+      return methods.findLibraryInboxOwner(hashInboxToken(token));
+    },
+
+    async receiveEmail(userId: string, email: InboundEmail) {
+      const key = emailKey(email);
+      const subject = email.subject || 'Newsletter';
+      // Relative links in a message have no page to resolve against; this address is never fetched.
+      const base = `https://mail.invalid/${key}`;
+      let draft: DocumentDraft;
+      try {
+        draft = await fromHtml(base, email.html ?? textToHtml(subject, email.text ?? ''));
+      } catch (error) {
+        if (!(error instanceof NotReadableError) || !email.text) {
+          throw error;
+        }
+        draft = await fromHtml(base, textToHtml(subject, email.text));
+      }
+      const normalizedUrl = `mail://${key}`;
+      const site = email.fromName ?? email.fromAddress?.split('@')[1] ?? null;
+      return persist(
+        userId,
+        {
+          ...draft,
+          sourceUrl: normalizedUrl,
+          normalizedUrl,
+          urlKey: urlKey(normalizedUrl),
+          title: subject,
+          siteName: site,
+          byline: email.fromAddress ?? draft.byline,
+        },
+        'feed',
+        ['newsletter'],
+      );
     },
 
     async chatSource(userId: string, id: string, options: { unitIndex?: number } = {}) {

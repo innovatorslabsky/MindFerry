@@ -8,6 +8,7 @@ import libraryDocumentSchema from '~/schema/libraryDocument';
 import libraryProgressSchema from '~/schema/libraryProgress';
 import libraryResourceSchema from '~/schema/libraryResource';
 import libraryFolderSchema from '~/schema/libraryFolder';
+import libraryInboxSchema from '~/schema/libraryInbox';
 import libraryUnitSchema from '~/schema/libraryUnit';
 import libraryFeedSchema from '~/schema/libraryFeed';
 
@@ -64,6 +65,9 @@ beforeAll(async () => {
   }
   if (!mongoose.models.LibraryFeed) {
     mongoose.model('LibraryFeed', libraryFeedSchema);
+  }
+  if (!mongoose.models.LibraryInbox) {
+    mongoose.model('LibraryInbox', libraryInboxSchema);
   }
   methods = createLibraryMethods(mongoose);
   await mongoose.connect(mongoServer.getUri());
@@ -270,6 +274,7 @@ describe('deletion', () => {
       sources: 0,
       folders: 0,
       feeds: 0,
+      inboxes: 0,
     });
     expect(await methods.listLibraryDocuments(userB, { limit: 10 })).toHaveLength(1);
     expect(await methods.listLibraryHighlights(userB)).toHaveLength(1);
@@ -999,5 +1004,42 @@ describe('daily review', () => {
     expect(await methods.markLibraryHighlightReviewed(userB, made[1].id)).toBe(false);
     expect(await methods.markLibraryHighlightReviewed(userA, 'not-an-id')).toBe(false);
     expect(await methods.listLibraryReviewHighlights(userA, startOfToday(), 0)).toEqual([]);
+  });
+});
+
+describe('the newsletter address', () => {
+  const HASH_A = 'c'.repeat(64);
+  const HASH_B = 'd'.repeat(64);
+
+  it('belongs to one person and is found by its secret', async () => {
+    expect(await methods.getLibraryInbox(userA)).toBeNull();
+
+    const made = await methods.rotateLibraryInbox(userA, HASH_A);
+
+    expect(made.createdAt).toBeInstanceOf(Date);
+    expect(await methods.getLibraryInbox(userA)).toEqual(made);
+    expect(await methods.findLibraryInboxOwner(HASH_A)).toEqual({ userId: userA });
+    expect(await methods.findLibraryInboxOwner(HASH_B)).toBeNull();
+    expect(await methods.getLibraryInbox(userB)).toBeNull();
+  });
+
+  it('is replaced, not added to, when made again: the old secret stops working', async () => {
+    await methods.rotateLibraryInbox(userA, HASH_A);
+    await methods.rotateLibraryInbox(userA, HASH_B);
+
+    expect(await methods.findLibraryInboxOwner(HASH_A)).toBeNull();
+    expect(await methods.findLibraryInboxOwner(HASH_B)).toEqual({ userId: userA });
+    expect(await mongoose.models.LibraryInbox.countDocuments({})).toBe(1);
+  });
+
+  it('can be turned off, and goes with the rest of a person’s library data', async () => {
+    await methods.rotateLibraryInbox(userA, HASH_A);
+    expect(await methods.deleteLibraryInbox(userA)).toBe(true);
+    expect(await methods.deleteLibraryInbox(userA)).toBe(false);
+    expect(await methods.findLibraryInboxOwner(HASH_A)).toBeNull();
+
+    await methods.rotateLibraryInbox(userB, HASH_B);
+    expect(await methods.deleteAllLibraryData(userB)).toMatchObject({ inboxes: 1 });
+    expect(await methods.getLibraryInbox(userB)).toBeNull();
   });
 });

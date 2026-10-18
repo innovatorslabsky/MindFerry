@@ -151,6 +151,12 @@ export type TLibraryChatRequest = { endpoint?: string; model?: string; unitIndex
 
 export type TLibraryChatResponse = { conversationId: string };
 
+/** When the person's newsletter address was made; `null` if they have none. */
+export type TLibraryInbox = { createdAt: string } | null;
+
+/** The secret that completes the newsletter address. Shown once; only a hash is kept. */
+export type TLibraryInboxCreated = { token: string; createdAt: string };
+
 export type TLibraryReviewAction = 'done' | 'mute';
 
 export type TLibraryUnitResponse = { unit: TLibraryUnit; highlights: TLibraryHighlight[] };

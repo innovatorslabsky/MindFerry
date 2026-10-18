@@ -22,6 +22,7 @@ export function createFakeLibraryMethods() {
   const resources = new Map<string, LibraryResourceRecord & { userId: string }>();
   const sources = new Map<string, Uint8Array>();
   const reviews = new Map<string, { reviewedAt: Date; muted: boolean }>();
+  const inboxes = new Map<string, { tokenHash: string; createdAt: Date }>();
   const folders = new Map<string, LibraryFolderRecord & { userId: string }>();
   const feeds = new Map<string, LibraryFeedState & { userId: string }>();
 
@@ -197,6 +198,24 @@ export function createFakeLibraryMethods() {
       if (!h || h.userId !== userId) return false;
       highlights.delete(id);
       return true;
+    },
+    async rotateLibraryInbox(userId, tokenHash) {
+      const createdAt = new Date();
+      inboxes.set(userId, { tokenHash, createdAt });
+      return { createdAt };
+    },
+    async getLibraryInbox(userId) {
+      const inbox = inboxes.get(userId);
+      return inbox ? { createdAt: inbox.createdAt } : null;
+    },
+    async deleteLibraryInbox(userId) {
+      return inboxes.delete(userId);
+    },
+    async findLibraryInboxOwner(tokenHash) {
+      for (const [userId, inbox] of inboxes) {
+        if (inbox.tokenHash === tokenHash) return { userId };
+      }
+      return null;
     },
     async listLibraryReviewHighlights(userId, since, limit) {
       const seen = (h: LibraryHighlightRecord & { userId: string }) =>
