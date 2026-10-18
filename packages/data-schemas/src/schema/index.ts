@@ -44,6 +44,7 @@ export { default as libraryResourceSchema } from './libraryResource';
 export { default as libraryFeedSchema } from './libraryFeed';
 export { default as librarySourceSchema } from './librarySource';
 export { default as libraryFolderSchema } from './libraryFolder';
+export { default as libraryViewSchema } from './libraryView';
 export { default as systemGrantSchema } from './systemGrant';
 export { default as auditLogSchema } from './auditLog';
 export { default as configSchema } from './config';

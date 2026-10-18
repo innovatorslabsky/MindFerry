@@ -216,6 +216,7 @@ export interface LibraryDataDeleteResult {
   resources: number;
   sources: number;
   folders: number;
+  views: number;
   feeds: number;
   inboxes: number;
 }
@@ -276,6 +277,30 @@ export interface LibraryFolderRecord {
 export type LibraryFolderCreateResult =
   | { status: 'created' | 'exists'; folder: LibraryFolderRecord }
   | { status: 'limit' };
+
+/** The filters of the list that a pinned view keeps. `folder` is a folder id, or `none`. */
+export interface LibraryViewFilter {
+  location?: LibraryLocationValue;
+  kind?: LibraryKindValue;
+  tag?: string;
+  folder?: string;
+  sort?: LibrarySortValue;
+}
+
+export interface LibraryViewRecord {
+  id: string;
+  name: string;
+  filter: LibraryViewFilter;
+  createdAt: Date;
+}
+
+export type LibraryViewCreateResult =
+  | { status: 'created' | 'exists'; view: LibraryViewRecord }
+  | { status: 'limit' };
+
+export type LibraryViewRenameResult =
+  | { status: 'renamed'; view: LibraryViewRecord }
+  | { status: 'exists' | 'not_found' };
 
 export type LibraryFolderRenameResult =
   | { status: 'renamed'; folder: LibraryFolderRecord }
