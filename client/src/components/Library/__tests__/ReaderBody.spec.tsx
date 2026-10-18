@@ -329,3 +329,32 @@ describe('ReaderBody: book pictures', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:fake-url');
   });
 });
+
+describe('ReaderBody: reading progress', () => {
+  const scrollTo = (box: HTMLElement, top: number) => {
+    Object.defineProperty(box, 'scrollHeight', { configurable: true, value: 1200 });
+    Object.defineProperty(box, 'clientHeight', { configurable: true, value: 200 });
+    box.scrollTop = top;
+    fireEvent.scroll(box);
+  };
+
+  it('shows how far down the text the reader is', () => {
+    renderBody();
+    scrollTo(screen.getByTestId('library-reader-scroll'), 500);
+    expect(screen.getByText('com_library_progress_percent:50')).toBeInTheDocument();
+  });
+
+  it('scrolls when the slider is moved', () => {
+    renderBody();
+    const box = screen.getByTestId('library-reader-scroll');
+    scrollTo(box, 0);
+    fireEvent.change(screen.getByTestId('library-progress-slider'), { target: { value: '25' } });
+    expect(box.scrollTop).toBe(250);
+  });
+
+  it('counts the chapters before this one towards the whole book', () => {
+    renderBody({ unit: { kind: 'chapter', index: 1 }, unitCount: 4 });
+    scrollTo(screen.getByTestId('library-reader-scroll'), 500);
+    expect(screen.getByText('com_library_progress_percent:38')).toBeInTheDocument();
+  });
+});

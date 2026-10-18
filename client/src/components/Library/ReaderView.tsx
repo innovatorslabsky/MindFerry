@@ -249,6 +249,7 @@ export default function ReaderView() {
         contentHash={unit.contentHash}
         highlights={highlights}
         unit={{ kind: 'chapter', index: unit.index }}
+        unitCount={document.unitCount}
         resumeAt={resumeOffset(data.progress, unit.contentHash, unit.index)}
         registerHandle={registerHandle}
       />

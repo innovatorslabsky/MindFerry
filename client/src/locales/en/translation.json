@@ -3649,5 +3649,7 @@
   "com_library_inbox_shown_once": "Copy it now: it is shown only once. Making a new one stops this one working.",
   "com_library_inbox_made": "Address made on {{0}}. Make a new one if you need to see it again.",
   "com_library_inbox_error": "Could not change the newsletter address.",
-  "com_library_page_select_error": "That selection could not be matched to the page's text. Try selecting a smaller piece."
+  "com_library_page_select_error": "That selection could not be matched to the page's text. Try selecting a smaller piece.",
+  "com_library_progress": "Reading progress",
+  "com_library_progress_percent": "{{0}}% read"
 }
