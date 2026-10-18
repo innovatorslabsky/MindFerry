@@ -23,6 +23,7 @@ import type { DocumentDraft } from './ingest/saveDocument';
 import type { DailyReview, ReviewAction } from './review';
 import type { FeedFetchResult } from './feed/fetchFeed';
 import type { LibraryIngest } from './worker/ingest';
+import type { FetchedImage } from './ingest/image';
 import type { ExportFormat } from './export';
 import type { InboundEmail } from './inbox';
 import type { ChatSource } from './chat';
@@ -34,6 +35,7 @@ import { fetchFeed, subscribeToUrl } from './feed/fetchFeed';
 import { saveHtml, saveUrl } from './ingest/saveDocument';
 import { DEFAULT_CHAT_MAX_CHARS, capText } from './chat';
 import { NotReadableError } from './ingest/extract';
+import { fetchThumbnail } from './ingest/image';
 import { urlKey } from './ingest/normalizeUrl';
 import { ingestUpload } from './ingest/upload';
 import { feedItemKey } from './feed/parseFeed';
@@ -53,6 +55,7 @@ type Methods = Pick<
   | 'listLibraryUnits'
   | 'getLibraryUnit'
   | 'getLibraryResource'
+  | 'setLibraryThumbnail'
   | 'saveLibraryUnitText'
   | 'createLibraryFolder'
   | 'listLibraryFolders'
@@ -91,6 +94,8 @@ export interface LibraryServiceDeps {
    * restricted child process.
    */
   ingest?: Partial<LibraryIngest>;
+  /** Fetches the lead image of a saved page for lists. Defaults to a guarded fetch of the address. */
+  fetchImage?: (url: string) => Promise<FetchedImage | null>;
   /** Keep the original file of each uploaded PDF (`contextHub.library.keepPdfOriginals`). */
   keepPdfOriginals?: boolean;
   /** Tag each new document with its site and keywords (default on). */
@@ -354,6 +359,7 @@ export const MAX_ITEMS_ON_FOLLOW = 5;
 export function createLibraryService({
   methods,
   ingest = {},
+  fetchImage = (url: string) => fetchThumbnail(url),
   keepPdfOriginals = false,
   autoTag = true,
   reviewPerDay = DEFAULT_REVIEW_PER_DAY,
@@ -374,6 +380,7 @@ export function createLibraryService({
     draft: DocumentDraft,
     location?: LibraryLocationValue,
     extraTags: string[] = [],
+    withThumbnail = true,
   ): Promise<SaveResult> {
     const saved = await methods.saveLibraryDocument(userId, {
       urlKey: draft.urlKey,
@@ -395,7 +402,15 @@ export function createLibraryService({
     const reanchored = saved.contentChanged
       ? await reanchor(userId, saved.document)
       : { kept: 0, orphaned: 0 };
-    return { document: toSummary(saved.document), created: saved.created, reanchored };
+    let summary = toSummary(saved.document);
+    // A picture only helps a list, so failing to get one never fails the save.
+    if (withThumbnail && draft.imageUrl && !summary.thumbnailPath) {
+      const image = await fetchImage(draft.imageUrl).catch(() => null);
+      if (image && (await methods.setLibraryThumbnail(userId, summary.id, image))) {
+        summary = { ...summary, thumbnailPath: '__thumbnail__' };
+      }
+    }
+    return { document: summary, created: saved.created, reanchored };
   }
 
   function initialTags(draft: DocumentDraft, extraTags: string[]): string[] | undefined {
@@ -760,6 +775,8 @@ export function createLibraryService({
         },
         'feed',
         ['newsletter'],
+        // A newsletter's lead image is often a tracking pixel; fetching it would tell the sender.
+        false,
       );
     },
 

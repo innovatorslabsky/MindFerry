@@ -1075,3 +1075,47 @@ describe('listing: excerpt, kind and sort', () => {
     expect(await titles({ kind: 'pdf' })).toEqual(['Charlie']);
   });
 });
+
+describe('thumbnails', () => {
+  const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+  it('keeps one picture for an article and lists its path', async () => {
+    const saved = await methods.saveLibraryDocument(userA, doc());
+    expect(
+      await methods.setLibraryThumbnail(userA, saved.document.id, {
+        mediaType: 'image/png',
+        bytes: png,
+      }),
+    ).toBe(true);
+    const [listed] = await methods.listLibraryDocuments(userA, { limit: 10 });
+    expect(listed.thumbnailPath).toBe('__thumbnail__');
+    const image = await methods.getLibraryResource(userA, saved.document.id, '__thumbnail__');
+    expect([...(image?.bytes ?? [])]).toEqual([...png]);
+  });
+
+  it('replaces the picture rather than adding another', async () => {
+    const saved = await methods.saveLibraryDocument(userA, doc());
+    const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0]);
+    await methods.setLibraryThumbnail(userA, saved.document.id, {
+      mediaType: 'image/png',
+      bytes: png,
+    });
+    await methods.setLibraryThumbnail(userA, saved.document.id, {
+      mediaType: 'image/jpeg',
+      bytes: jpeg,
+    });
+    const image = await methods.getLibraryResource(userA, saved.document.id, '__thumbnail__');
+    expect(image?.mediaType).toBe('image/jpeg');
+  });
+
+  it('refuses a document that belongs to someone else', async () => {
+    const saved = await methods.saveLibraryDocument(userA, doc());
+    expect(
+      await methods.setLibraryThumbnail(userB, saved.document.id, {
+        mediaType: 'image/png',
+        bytes: png,
+      }),
+    ).toBe(false);
+    expect(await methods.getLibraryResource(userB, saved.document.id, '__thumbnail__')).toBeNull();
+  });
+});

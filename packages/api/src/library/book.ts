@@ -92,6 +92,7 @@ function epubToBook(
     readingMinutes: draft.readingMinutes,
     toc: tocFromEpub(draft),
     resources: draft.resources.map(({ path, mediaType, bytes }) => ({ path, mediaType, bytes })),
+    thumbnailPath: draft.coverPath ?? undefined,
     fetchedAt: now,
     units: draft.chapters.map((chapter) => ({
       index: chapter.index,

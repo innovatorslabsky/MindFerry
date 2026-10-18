@@ -4,6 +4,7 @@ import { JSDOM, VirtualConsole } from 'jsdom';
 import type { UnzipFileInfo } from 'fflate';
 import { readingMinutes, sanitizeArticleHtml, totalWords } from '../ingest/extract';
 import { editFragment, htmlToText, plainText } from '../ingest/html';
+import { sniffImage } from '../ingest/image';
 
 export class EpubError extends Error {
   override name = 'EpubError';
@@ -141,22 +142,6 @@ const first = (el: Element, name: string): Element | null => kids(el, name)[0] ?
 const text = (el: Element | null): string | null => el?.textContent?.trim() || null;
 const descendants = (el: Element | Document, name: string): Element[] =>
   Array.from(el.getElementsByTagName('*')).filter((e) => e.localName === name);
-
-function sniffImage(bytes: Uint8Array): EpubResource['mediaType'] | null {
-  const b = bytes;
-  if (b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47)
-    return 'image/png';
-  if (b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
-  if (b.length > 6 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38)
-    return 'image/gif';
-  if (
-    b.length > 12 &&
-    strFromU8(b.subarray(0, 4)) === 'RIFF' &&
-    strFromU8(b.subarray(8, 12)) === 'WEBP'
-  )
-    return 'image/webp';
-  return null; // SVG is deliberately excluded: it can carry script.
-}
 
 interface ManifestItem {
   id: string;

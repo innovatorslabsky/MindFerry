@@ -60,6 +60,12 @@ jest.mock('../FolderBar', () => ({
     <button data-testid="folder-bar" data-value={value} onClick={() => onChange('f1')} />
   ),
 }));
+jest.mock('../Thumbnail', () => ({
+  __esModule: true,
+  default: ({ document }: { document: { id: string; thumbnailPath?: string } }) => (
+    <div data-testid="thumbnail" data-id={document.id} data-path={document.thumbnailPath ?? ''} />
+  ),
+}));
 jest.mock('../InboxPanel', () => ({
   __esModule: true,
   default: () => <div data-testid="inbox-panel" />,
@@ -364,6 +370,17 @@ describe('LibraryView: bulk actions and keyboard', () => {
 });
 
 describe('LibraryView: excerpt, kind and sort', () => {
+  it('gives each row its picture', () => {
+    mockList = {
+      data: { documents: [doc({ thumbnailPath: '__thumbnail__' }), doc({ id: 'd2' })] },
+      isLoading: false,
+      isError: false,
+    };
+    renderView();
+    const pictures = screen.getAllByTestId('thumbnail');
+    expect(pictures.map((p) => p.getAttribute('data-path'))).toEqual(['__thumbnail__', '']);
+  });
+
   it('shows the opening of each document under its title', () => {
     mockList = {
       data: {

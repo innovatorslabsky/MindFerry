@@ -89,6 +89,25 @@ export const useLibrarySourceQuery = (
   );
 };
 
+/** The small picture shown beside a document in a list: fetched with the session, kept for a while. */
+export const useLibraryThumbnailQuery = (
+  id: string,
+  path: string | undefined,
+): QueryObserverResult<Blob> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+  return useQuery<Blob>(
+    [QueryKeys.libraryThumbnail, id, path],
+    () => dataService.getLibraryResource(id, path as string),
+    {
+      refetchOnWindowFocus: false,
+      retry: false,
+      staleTime: 10 * 60 * 1000,
+      cacheTime: 10 * 60 * 1000,
+      enabled: queriesEnabled && path != null,
+    },
+  );
+};
+
 /** The feeds this person follows. */
 export const useLibraryFeedsQuery = (
   config?: UseQueryOptions<{ feeds: t.TLibraryFeed[] }>,

@@ -12,11 +12,11 @@ import {
   WorkerUnavailableError,
 } from './worker/errors';
 import { FetchError, TooLargeError, UnsafeUrlError } from './net/safeFetch';
+import { createHighlightSchema, KINDS, LOCATIONS, SORTS } from './types';
 import { isConversationImportError } from '../conversations/import';
 import { isContentFilterError } from '../middleware/contentFilter';
 import { PdfEncryptedError, PdfError } from './pdf/parsePdf';
 import { EpubDrmError, EpubError } from './epub/parseEpub';
-import { createHighlightSchema, KINDS, LOCATIONS, SORTS } from './types';
 import { contextHubRateLimitKey } from '../hub/ratelimit';
 import { isInboxToken, parseInboundEmail } from './inbox';
 import { UnsupportedUploadError } from './ingest/upload';

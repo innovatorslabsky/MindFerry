@@ -42,6 +42,8 @@ export interface LibraryDocumentInput {
   toc?: LibraryTocRecord[];
   needsOcr?: boolean;
   truncated?: boolean;
+  /** Path of a stored resource to show as the document's picture. */
+  thumbnailPath?: string;
   fetchedAt: Date;
   /** Only applied when the document is new; saving a page again never moves it out of the archive. */
   location?: LibraryLocationValue;
@@ -69,6 +71,8 @@ export interface LibraryDocumentSummary {
   toc: LibraryTocRecord[];
   needsOcr?: boolean;
   truncated?: boolean;
+  /** Path of a stored resource that is the document's picture, when it has one. */
+  thumbnailPath?: string;
   /** The original PDF is kept, so its pages can be shown as images. */
   hasSource: boolean;
   location: LibraryLocationValue;
