@@ -254,7 +254,8 @@ export interface LibraryFeedInput {
 }
 
 export type LibraryFeedAddResult =
-  { status: 'added' | 'exists'; feed: LibraryFeedRecord } | { status: 'limit' };
+  | { status: 'added' | 'exists'; feed: LibraryFeedRecord }
+  | { status: 'limit' };
 
 export interface LibraryFeedRefreshRecord {
   title?: string;
@@ -273,7 +274,8 @@ export interface LibraryFolderRecord {
 }
 
 export type LibraryFolderCreateResult =
-  { status: 'created' | 'exists'; folder: LibraryFolderRecord } | { status: 'limit' };
+  | { status: 'created' | 'exists'; folder: LibraryFolderRecord }
+  | { status: 'limit' };
 
 export type LibraryFolderRenameResult =
   | { status: 'renamed'; folder: LibraryFolderRecord }
