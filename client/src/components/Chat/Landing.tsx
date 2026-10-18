@@ -78,7 +78,8 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
     [conversation?.spec, startupConfig],
   );
 
-  const showBoat = !isAgent && !isAssistant && modelSpec?.iconURL == null;
+  /** The boat stands in wherever there is no agent or assistant to show, such as before one is picked. */
+  const showBoat = (entity == null || (!isAgent && !isAssistant)) && modelSpec?.iconURL == null;
   const brandedSpecLabel = modelSpec?.showOnLanding ? modelSpec.label : '';
   const brandedSpecDescription = (modelSpec?.showOnLanding && modelSpec.description) || '';
   const name = isTemporary ? '' : (entity?.name ?? brandedSpecLabel);
