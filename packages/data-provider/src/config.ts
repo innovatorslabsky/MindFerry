@@ -709,6 +709,8 @@ export const contextHubSchema = z
         keepPdfOriginals: z.boolean().default(false),
         /** Tag each new document with its site and a few keywords. On unless turned off. */
         autoTag: z.boolean().default(true),
+        /** How many highlights make up one day's review. */
+        reviewPerDay: z.number().int().min(1).max(100).default(5),
       })
       .default({}),
   })

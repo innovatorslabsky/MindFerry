@@ -1,5 +1,6 @@
 import LibraryGate from './LibraryGate';
 import LibraryView from './LibraryView';
+import ReviewView from './ReviewView';
 import ReaderView from './ReaderView';
 
 export function LibraryListRoute() {
@@ -14,6 +15,14 @@ export function LibraryReaderRoute() {
   return (
     <LibraryGate>
       <ReaderView />
+    </LibraryGate>
+  );
+}
+
+export function LibraryReviewRoute() {
+  return (
+    <LibraryGate>
+      <ReviewView />
     </LibraryGate>
   );
 }

@@ -20,10 +20,12 @@ import type {
   LibraryUnitSummary,
 } from '@librechat/data-schemas';
 import type { DocumentDraft } from './ingest/saveDocument';
+import type { DailyReview, ReviewAction } from './review';
 import type { FeedFetchResult } from './feed/fetchFeed';
 import type { LibraryIngest } from './worker/ingest';
 import type { ExportFormat } from './export';
 import { EXPORT_MAX_HIGHLIGHTS, highlightsToCsv, highlightsToMarkdown } from './export';
+import { DEFAULT_REVIEW_PER_DAY, MAX_REVIEW_EXTRA, startOfDay } from './review';
 import { createAnchor, resolveAnchor } from './anchor/textQuote';
 import { fetchFeed, subscribeToUrl } from './feed/fetchFeed';
 import { saveHtml, saveUrl } from './ingest/saveDocument';
@@ -63,6 +65,9 @@ type Methods = Pick<
   | 'listLibraryHighlights'
   | 'updateLibraryHighlight'
   | 'deleteLibraryHighlight'
+  | 'listLibraryReviewHighlights'
+  | 'countLibraryReviewedSince'
+  | 'markLibraryHighlightReviewed'
   | 'reanchorLibraryHighlights'
   | 'getLibraryProgress'
   | 'setLibraryProgress'
@@ -80,6 +85,10 @@ export interface LibraryServiceDeps {
   keepPdfOriginals?: boolean;
   /** Tag each new document with its site and keywords (default on). */
   autoTag?: boolean;
+  /** Highlights in one day's review (`contextHub.library.reviewPerDay`). */
+  reviewPerDay?: number;
+  /** Read for the day's start; tests pass a fixed one. */
+  now?: () => Date;
 }
 
 export interface SaveResult {
@@ -220,6 +229,16 @@ export interface LibraryService {
     patch: LibraryHighlightPatch,
   ) => Promise<LibraryHighlightRecord | null>;
   removeHighlight: (userId: string, id: string) => Promise<boolean>;
+  /**
+   * Today's review: highlights not seen yet today, up to the day's goal. `extra` raises the goal for
+   * a person who wants to keep going; `offsetMinutes` is the browser's timezone offset.
+   */
+  dailyReview: (
+    userId: string,
+    options?: { offsetMinutes?: number; extra?: number },
+  ) => Promise<DailyReview>;
+  /** `false` when the highlight is not the person's. */
+  reviewHighlight: (userId: string, id: string, action: ReviewAction) => Promise<boolean>;
   getProgress: (userId: string, documentId: string) => Promise<LibraryProgressRecord | null>;
   setProgress: (
     userId: string,
@@ -304,6 +323,8 @@ export function createLibraryService({
   ingest = {},
   keepPdfOriginals = false,
   autoTag = true,
+  reviewPerDay = DEFAULT_REVIEW_PER_DAY,
+  now = () => new Date(),
 }: LibraryServiceDeps): LibraryService {
   const fetchUrl = ingest.saveUrl ?? ((url: string) => saveUrl(url));
   const fromHtml = ingest.saveHtml ?? (async (url: string, html: string) => saveHtml(url, html));
@@ -615,6 +636,44 @@ export function createLibraryService({
             : highlightsToMarkdown(documents, rows),
         count: rows.length,
       };
+    },
+
+    async dailyReview(userId: string, options: { offsetMinutes?: number; extra?: number } = {}) {
+      const since = startOfDay(now(), options.offsetMinutes);
+      const extra = Math.min(Math.max(Math.trunc(options.extra ?? 0), 0), MAX_REVIEW_EXTRA);
+      const goal = reviewPerDay + extra;
+      const reviewedToday = await methods.countLibraryReviewedSince(userId, since);
+      const highlights = await methods.listLibraryReviewHighlights(
+        userId,
+        since,
+        Math.max(goal - reviewedToday, 0),
+      );
+      const documents = await methods.listLibraryDocumentsByIds(
+        userId,
+        highlights.map((highlight) => highlight.documentId),
+      );
+      const byId = new Map(documents.map((document) => [document.id, document]));
+      const items = highlights.flatMap((highlight) => {
+        const document = byId.get(highlight.documentId);
+        return document
+          ? [
+              {
+                highlight,
+                document: {
+                  id: document.id,
+                  title: document.title,
+                  siteName: document.siteName,
+                  kind: document.kind,
+                },
+              },
+            ]
+          : [];
+      });
+      return { items, reviewedToday, goal };
+    },
+
+    reviewHighlight(userId: string, id: string, action: ReviewAction) {
+      return methods.markLibraryHighlightReviewed(userId, id, { mute: action === 'mute' });
     },
 
     createFolder(userId: string, name: string) {

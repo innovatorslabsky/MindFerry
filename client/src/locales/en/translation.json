@@ -3619,5 +3619,17 @@
   "com_library_shortcut_inbox": "Move to Inbox",
   "com_library_shortcut_delete": "Delete",
   "com_library_shortcut_search": "Search",
-  "com_library_shortcut_clear": "Clear selection"
+  "com_library_shortcut_clear": "Clear selection",
+  "com_library_review_link": "Daily review",
+  "com_library_review_title": "Daily review",
+  "com_library_review_progress": "{{0}} of {{1}}",
+  "com_library_review_next": "Next",
+  "com_library_review_mute": "Don't show again",
+  "com_library_review_keys": "Keys: d or → for next, m to stop showing it.",
+  "com_library_review_done": "That's today's review.",
+  "com_library_review_done_hint": "Come back tomorrow, or go through a few more now.",
+  "com_library_review_more": "Review {{0}} more",
+  "com_library_review_none": "Nothing to review yet.",
+  "com_library_review_none_hint": "Highlights you make while reading will come back here.",
+  "com_library_review_error": "Could not save that. It may show up again."
 }

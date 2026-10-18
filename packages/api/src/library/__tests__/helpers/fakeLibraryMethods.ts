@@ -21,6 +21,7 @@ export function createFakeLibraryMethods() {
   const units = new Map<string, LibraryUnitRecord & { userId: string }>();
   const resources = new Map<string, LibraryResourceRecord & { userId: string }>();
   const sources = new Map<string, Uint8Array>();
+  const reviews = new Map<string, { reviewedAt: Date; muted: boolean }>();
   const folders = new Map<string, LibraryFolderRecord & { userId: string }>();
   const feeds = new Map<string, LibraryFeedState & { userId: string }>();
 
@@ -195,6 +196,35 @@ export function createFakeLibraryMethods() {
       const h = highlights.get(id);
       if (!h || h.userId !== userId) return false;
       highlights.delete(id);
+      return true;
+    },
+    async listLibraryReviewHighlights(userId, since, limit) {
+      const seen = (h: LibraryHighlightRecord & { userId: string }) =>
+        (reviews.get(h.id)?.reviewedAt ?? new Date(0)).getTime();
+      return [...highlights.values()]
+        .filter(
+          (h) =>
+            h.userId === userId &&
+            !h.orphaned &&
+            !reviews.get(h.id)?.muted &&
+            (reviews.get(h.id)?.reviewedAt ?? new Date(0)) < since,
+        )
+        .sort((a, b) => seen(a) - seen(b) || b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, Math.max(limit, 0))
+        .map((h) => ({ ...h }));
+    },
+    async countLibraryReviewedSince(userId, since) {
+      return [...highlights.values()].filter(
+        (h) => h.userId === userId && (reviews.get(h.id)?.reviewedAt ?? new Date(0)) >= since,
+      ).length;
+    },
+    async markLibraryHighlightReviewed(userId, id, options = {}) {
+      const h = highlights.get(id);
+      if (!h || h.userId !== userId) return false;
+      reviews.set(id, {
+        reviewedAt: new Date(),
+        muted: options.mute === true || !!reviews.get(id)?.muted,
+      });
       return true;
     },
     async reanchorLibraryHighlights(userId, documentId, results) {

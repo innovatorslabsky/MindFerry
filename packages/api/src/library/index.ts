@@ -7,8 +7,11 @@ export {
   getLibraryIsolation,
   getLibraryKeepPdfOriginals,
   getLibraryAutoTag,
+  getLibraryReviewPerDay,
 } from './config';
 export { createLibraryService } from './service';
+export { startOfDay as startOfReviewDay } from './review';
+export type { DailyReview, ReviewItem, ReviewAction } from './review';
 export type {
   LibraryService,
   LibraryServiceDeps,

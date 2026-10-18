@@ -136,6 +136,23 @@ export interface LibraryMethods {
     patch: LibraryHighlightPatch,
   ) => Promise<LibraryHighlightRecord | null>;
   deleteLibraryHighlight: (userId: string, id: string) => Promise<boolean>;
+  /**
+   * Highlights for the daily review: placed ones the person has not muted and not seen since `since`,
+   * least recently reviewed first (never reviewed first of all), then newest.
+   */
+  listLibraryReviewHighlights: (
+    userId: string,
+    since: Date,
+    limit: number,
+  ) => Promise<LibraryHighlightRecord[]>;
+  /** How many highlights the person has been through in the review since `since`. */
+  countLibraryReviewedSince: (userId: string, since: Date) => Promise<number>;
+  /** Records that the review showed a highlight; `mute` also keeps it out of later reviews. */
+  markLibraryHighlightReviewed: (
+    userId: string,
+    id: string,
+    options?: { mute?: boolean },
+  ) => Promise<boolean>;
   /** Applies re-anchoring results in one write; highlights that did not resolve are kept as orphans. */
   reanchorLibraryHighlights: (
     userId: string,
@@ -952,6 +969,55 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     return result.deletedCount > 0;
   }
 
+  async function listLibraryReviewHighlights(
+    userId: string,
+    since: Date,
+    limit: number,
+  ): Promise<LibraryHighlightRecord[]> {
+    if (limit <= 0) {
+      return [];
+    }
+    const docs = (await mongoose.models.LibraryHighlight.find({
+      userId: toObjectId(userId),
+      orphaned: false,
+      reviewMuted: { $ne: true },
+      $or: [
+        { reviewedAt: { $exists: false } },
+        { reviewedAt: null },
+        { reviewedAt: { $lt: since } },
+      ],
+    })
+      .sort({ reviewedAt: 1, createdAt: -1, _id: -1 })
+      .limit(limit)
+      .lean()) as unknown as ILibraryHighlight[];
+    return docs.map(toHighlightRecord);
+  }
+
+  async function countLibraryReviewedSince(userId: string, since: Date): Promise<number> {
+    return mongoose.models.LibraryHighlight.countDocuments({
+      userId: toObjectId(userId),
+      reviewedAt: { $gte: since },
+    });
+  }
+
+  async function markLibraryHighlightReviewed(
+    userId: string,
+    id: string,
+    options: { mute?: boolean } = {},
+  ): Promise<boolean> {
+    if (!Types.ObjectId.isValid(id)) {
+      return false;
+    }
+    const result = await mongoose.models.LibraryHighlight.updateOne(
+      { _id: toObjectId(id), userId: toObjectId(userId) },
+      {
+        $set: { reviewedAt: new Date(), ...(options.mute === true ? { reviewMuted: true } : {}) },
+        $inc: { reviewCount: 1 },
+      },
+    );
+    return result.matchedCount > 0;
+  }
+
   async function reanchorLibraryHighlights(
     userId: string,
     documentId: string,
@@ -1172,6 +1238,9 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     listLibraryHighlights,
     updateLibraryHighlight,
     deleteLibraryHighlight,
+    listLibraryReviewHighlights,
+    countLibraryReviewedSince,
+    markLibraryHighlightReviewed,
     reanchorLibraryHighlights,
     getLibraryProgress,
     setLibraryProgress,

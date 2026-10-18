@@ -100,6 +100,8 @@ const folderBodySchema = z.object({
 
 const feedBodySchema = z.object({ url: z.string().url().max(2048) });
 
+const reviewBodySchema = z.object({ action: z.enum(['done', 'mute']) });
+
 /** Largest upload accepted; also the ceiling the route's multer instance is configured with. */
 export const LIBRARY_MAX_UPLOAD_BYTES: number = 50 * 1024 * 1024;
 
@@ -246,6 +248,8 @@ export interface LibraryHandlers {
   saveUnitText: Handler;
   getSource: Handler;
   exportHighlights: Handler;
+  dailyReview: Handler;
+  reviewHighlight: Handler;
   removeSource: Handler;
   list: Handler;
   get: Handler;
@@ -611,6 +615,34 @@ export function createLibraryHandlers({
     res.status(204).end();
   };
 
+  const dailyReview: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const service = serviceFor(req);
+    const query = (req.query ?? {}) as Record<string, unknown>;
+    const number = (raw: unknown): number | undefined => {
+      const parsed = typeof raw === 'string' ? Number.parseInt(raw, 10) : NaN;
+      return Number.isFinite(parsed) ? parsed : undefined;
+    };
+    res.status(200).json(
+      await service.dailyReview(userId, {
+        offsetMinutes: number(query.offset),
+        extra: number(query.extra),
+      }),
+    );
+  };
+
+  const reviewHighlight: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const service = serviceFor(req);
+    const body = reviewBodySchema.safeParse(req.body);
+    if (!body.success) return fail(res, 400, 'invalid_request', 'action must be done or mute');
+    const found = await service.reviewHighlight(userId, param(req, 'id'), body.data.action);
+    if (!found) return fail(res, 404, 'not_found', 'Highlight not found');
+    res.status(204).end();
+  };
+
   const setProgress: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
@@ -645,6 +677,8 @@ export function createLibraryHandlers({
     saveUnitText,
     getSource,
     exportHighlights,
+    dailyReview,
+    reviewHighlight,
     removeSource,
     list,
     get,

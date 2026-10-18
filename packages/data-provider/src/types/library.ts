@@ -132,6 +132,22 @@ export type TLibrarySaveResponse = {
   reanchored?: { kept: number; orphaned: number };
 };
 
+export type TLibraryReviewItem = {
+  highlight: TLibraryHighlight;
+  document: Pick<TLibraryDocumentSummary, 'id' | 'title' | 'siteName' | 'kind'>;
+};
+
+/** One day's review of old highlights. */
+export type TLibraryDailyReview = {
+  items: TLibraryReviewItem[];
+  /** Highlights gone through since the day began. */
+  reviewedToday: number;
+  /** How many make up the day's review, counting any "review more". */
+  goal: number;
+};
+
+export type TLibraryReviewAction = 'done' | 'mute';
+
 export type TLibraryUnitResponse = { unit: TLibraryUnit; highlights: TLibraryHighlight[] };
 
 export type TLibraryCreateHighlight = {

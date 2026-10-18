@@ -152,6 +152,17 @@ export const useBulkDeleteLibraryDocumentsMutation = (
   );
 };
 
+/** Going through the review is a quiet write: the cards on screen already moved on. */
+export const useReviewLibraryHighlightMutation = (): UseMutationResult<
+  void,
+  unknown,
+  { id: string; action: t.TLibraryReviewAction },
+  unknown
+> =>
+  useMutation(({ id, action }: { id: string; action: t.TLibraryReviewAction }) =>
+    dataService.reviewLibraryHighlight(id, action),
+  );
+
 export const usePreviewLibraryFeedMutation = (
   options?: t.MutationOptions<{ feed: t.TLibraryFeedPreview }, string>,
 ): UseMutationResult<{ feed: t.TLibraryFeedPreview }, unknown, string, unknown> =>

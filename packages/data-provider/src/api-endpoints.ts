@@ -230,6 +230,12 @@ export const libraryFeedPreview = () => `${BASE_URL}/api/library/feeds/preview`;
 export const libraryExport = (format: 'markdown' | 'csv', documentId?: string) =>
   `${BASE_URL}/api/library/export?format=${format}${documentId ? `&documentId=${encodeURIComponent(documentId)}` : ''}`;
 
+export const libraryReview = (offsetMinutes: number, extra: number) =>
+  `${BASE_URL}/api/library/review?offset=${offsetMinutes}&extra=${extra}`;
+
+export const libraryReviewHighlight = (id: string) =>
+  `${BASE_URL}/api/library/review/${encodeURIComponent(id)}`;
+
 export const libraryFolders = () => `${BASE_URL}/api/library/folders`;
 
 export const libraryFolder = (id: string) =>

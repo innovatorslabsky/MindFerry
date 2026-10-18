@@ -1,5 +1,6 @@
 import type { AppConfig } from '@librechat/data-schemas';
 import type { LibraryIsolationConfig } from './worker';
+import { DEFAULT_REVIEW_PER_DAY } from './review';
 
 const ISOLATION_DEFAULTS: LibraryIsolationConfig = {
   mode: 'process',
@@ -17,6 +18,11 @@ export function getLibraryIsolation(config: AppConfig | undefined): LibraryIsola
 /** New documents are tagged with their site and keywords unless the operator turns it off. */
 export function getLibraryAutoTag(config: AppConfig | undefined): boolean {
   return config?.contextHub?.library?.autoTag !== false;
+}
+
+/** How many highlights the daily review shows in a day (`contextHub.library.reviewPerDay`). */
+export function getLibraryReviewPerDay(config: AppConfig | undefined): number {
+  return config?.contextHub?.library?.reviewPerDay ?? DEFAULT_REVIEW_PER_DAY;
 }
 
 /**

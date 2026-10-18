@@ -53,6 +53,11 @@ const loadLibraryView = () =>
     Component: m.LibraryListRoute,
   }));
 
+const loadLibraryReview = () =>
+  importWithRecovery(() => import('~/components/Library')).then((m) => ({
+    Component: m.LibraryReviewRoute,
+  }));
+
 const loadLibraryReader = () =>
   importWithRecovery(() => import('~/components/Library')).then((m) => ({
     Component: m.LibraryReaderRoute,
@@ -198,6 +203,10 @@ export const router = createBrowserRouter(
                 {
                   path: 'library',
                   lazy: loadLibraryView,
+                },
+                {
+                  path: 'library/review',
+                  lazy: loadLibraryReview,
                 },
                 {
                   path: 'library/:id',

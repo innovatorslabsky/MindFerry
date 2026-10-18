@@ -928,3 +928,76 @@ describe('listLibraryDocumentsByIds', () => {
     expect(await methods.listLibraryDocumentsByIds(userA, [])).toEqual([]);
   });
 });
+
+describe('daily review', () => {
+  const startOfToday = () => {
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  };
+
+  const seed = async (count: number) => {
+    const { document } = await methods.saveLibraryDocument(userA, doc());
+    const made = [];
+    for (let i = 0; i < count; i += 1) {
+      made.push(
+        (await methods.createLibraryHighlight(
+          userA,
+          highlight(document.id, {
+            anchor: { exact: `Quote ${i}`, prefix: '', suffix: '', start: i, end: i + 7 },
+          }),
+        ))!,
+      );
+    }
+    return made;
+  };
+
+  it('offers every highlight once, newest first, until some have been reviewed', async () => {
+    const made = await seed(3);
+    const listed = await methods.listLibraryReviewHighlights(userA, startOfToday(), 10);
+    expect(listed.map((h) => h.id)).toEqual([made[2].id, made[1].id, made[0].id]);
+  });
+
+  it('leaves out what was reviewed today, and counts it', async () => {
+    const made = await seed(3);
+    expect(await methods.markLibraryHighlightReviewed(userA, made[2].id)).toBe(true);
+
+    const listed = await methods.listLibraryReviewHighlights(userA, startOfToday(), 10);
+    expect(listed.map((h) => h.id)).toEqual([made[1].id, made[0].id]);
+    expect(await methods.countLibraryReviewedSince(userA, startOfToday())).toBe(1);
+  });
+
+  it('brings a highlight back on a later day, after those never reviewed', async () => {
+    const made = await seed(2);
+    await methods.markLibraryHighlightReviewed(userA, made[1].id);
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    const listed = await methods.listLibraryReviewHighlights(userA, tomorrow, 10);
+
+    expect(listed.map((h) => h.id)).toEqual([made[0].id, made[1].id]);
+  });
+
+  it('keeps a muted highlight out for good', async () => {
+    const made = await seed(2);
+    await methods.markLibraryHighlightReviewed(userA, made[1].id, { mute: true });
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    const listed = await methods.listLibraryReviewHighlights(userA, tomorrow, 10);
+
+    expect(listed.map((h) => h.id)).toEqual([made[0].id]);
+  });
+
+  it('skips orphaned highlights, honours the limit, and never crosses users', async () => {
+    const made = await seed(3);
+    await methods.reanchorLibraryHighlights(userA, made[0].documentId, [
+      { id: made[0].id, anchor: null, contentHash: HASH },
+    ]);
+
+    const listed = await methods.listLibraryReviewHighlights(userA, startOfToday(), 1);
+    expect(listed).toHaveLength(1);
+    expect(listed[0].id).not.toBe(made[0].id);
+    expect(await methods.listLibraryReviewHighlights(userB, startOfToday(), 10)).toEqual([]);
+    expect(await methods.markLibraryHighlightReviewed(userB, made[1].id)).toBe(false);
+    expect(await methods.markLibraryHighlightReviewed(userA, 'not-an-id')).toBe(false);
+    expect(await methods.listLibraryReviewHighlights(userA, startOfToday(), 0)).toEqual([]);
+  });
+});

@@ -25,14 +25,14 @@ import {
   useUploadLibraryFileMutation,
 } from '~/data-provider';
 import { NotificationSeverity } from '~/common';
-import { useDebounce } from '~/hooks/Input';
 import { useShortcuts } from './useShortcuts';
-import { cn } from '~/utils';
+import { useDebounce } from '~/hooks/Input';
 import ExportButtons from './ExportButtons';
 import { libraryErrorKey } from './errors';
 import FeedsPanel from './FeedsPanel';
 import { useLocalize } from '~/hooks';
 import FolderBar from './FolderBar';
+import { cn } from '~/utils';
 
 const LOCATIONS: readonly TLibraryLocation[] = ['inbox', 'later', 'archive', 'feed'] as const;
 const PAGE_SIZE = 50;
@@ -502,7 +502,10 @@ export default function LibraryView() {
           </div>
         )}
 
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link to="/library/review">{localize('com_library_review_link')}</Link>
+          </Button>
           <ExportButtons />
         </div>
 

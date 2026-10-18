@@ -6,6 +6,7 @@ const {
   getLibraryIsolation,
   getLibraryKeepPdfOriginals,
   getLibraryAutoTag,
+  getLibraryReviewPerDay,
   createLibraryHandlers,
   libraryBrowseLimiter,
   librarySaveLimiter,
@@ -34,7 +35,8 @@ function serviceFor(req) {
   const isolation = getLibraryIsolation(req.config);
   const keepPdfOriginals = getLibraryKeepPdfOriginals(req.config);
   const autoTag = getLibraryAutoTag(req.config);
-  const key = JSON.stringify({ isolation, keepPdfOriginals, autoTag });
+  const reviewPerDay = getLibraryReviewPerDay(req.config);
+  const key = JSON.stringify({ isolation, keepPdfOriginals, autoTag, reviewPerDay });
   let service = serviceBySettings.get(key);
   if (!service) {
     service = createLibraryService({
@@ -42,6 +44,7 @@ function serviceFor(req) {
       ingest: createLibraryIngest(isolation),
       keepPdfOriginals,
       autoTag,
+      reviewPerDay,
     });
     serviceBySettings.set(key, service);
   }
@@ -98,6 +101,8 @@ router.post(
 );
 router.post('/feeds/preview', ...save, handlers.previewFeed);
 router.get('/export', ...browse, handlers.exportHighlights);
+router.get('/review', ...browse, handlers.dailyReview);
+router.post('/review/:id', ...browse, handlers.reviewHighlight);
 router.get('/folders', ...browse, handlers.listFolders);
 router.post('/folders', ...browse, handlers.createFolder);
 router.patch('/folders/:id', ...browse, handlers.renameFolder);
