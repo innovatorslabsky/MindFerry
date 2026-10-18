@@ -23,7 +23,7 @@ export interface FetchedImage {
 }
 
 /** Largest picture kept for a list. Bigger ones are skipped rather than shrunk, as nothing here decodes images. */
-export const MAX_THUMBNAIL_BYTES = 300 * 1024;
+export const MAX_THUMBNAIL_BYTES: number = 300 * 1024;
 
 /**
  * Fetches the lead image of a page for a list, through the same guarded fetch as pages. Nothing is
