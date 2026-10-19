@@ -11,6 +11,10 @@ import type {
   LibraryFolderCreateResult,
   LibraryFolderRecord,
   LibraryFolderRenameResult,
+  LibraryViewCreateResult,
+  LibraryViewFilter,
+  LibraryViewRecord,
+  LibraryViewRenameResult,
   LibraryFeedAddResult,
   LibraryFeedInput,
   LibraryFeedRecord,
@@ -40,6 +44,7 @@ import type { ILibraryResource } from '~/schema/libraryResource';
 import type { ILibrarySource } from '~/schema/librarySource';
 import type { ILibraryFolder } from '~/schema/libraryFolder';
 import type { ILibraryInbox } from '~/schema/libraryInbox';
+import type { ILibraryView } from '~/schema/libraryView';
 import type { ILibraryUnit } from '~/schema/libraryUnit';
 import type { ILibraryFeed } from '~/schema/libraryFeed';
 import { LIBRARY_SOURCE_CHUNK_BYTES } from '~/schema/librarySource';
@@ -109,6 +114,17 @@ export interface LibraryMethods {
     id: string,
     name: string,
   ) => Promise<LibraryFolderRenameResult>;
+  /** Saves the list's filters under a name; one with the same name (ignoring case) is not replaced. */
+  createLibraryView: (
+    userId: string,
+    name: string,
+    filter: LibraryViewFilter,
+    maxViews: number,
+  ) => Promise<LibraryViewCreateResult>;
+  listLibraryViews: (userId: string) => Promise<LibraryViewRecord[]>;
+  renameLibraryView: (userId: string, id: string, name: string) => Promise<LibraryViewRenameResult>;
+  /** `false` when it is not the user's. */
+  deleteLibraryView: (userId: string, id: string) => Promise<boolean>;
   /** Deletes the folder only: its documents stay, now in no folder. `false` when it is not the user's. */
   deleteLibraryFolder: (userId: string, id: string) => Promise<boolean>;
   /** Chapter or page titles and sizes, in order, without their text. */
@@ -767,6 +783,92 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       : { status: 'not_found' };
   }
 
+  function toViewRecord(doc: ILibraryView): LibraryViewRecord {
+    const { location, kind, tag, folder, sort } = doc.filter ?? {};
+    return {
+      id: (doc._id as Types.ObjectId).toString(),
+      name: doc.name,
+      filter: {
+        ...(location ? { location } : {}),
+        ...(kind ? { kind } : {}),
+        ...(tag ? { tag } : {}),
+        ...(folder ? { folder } : {}),
+        ...(sort ? { sort } : {}),
+      },
+      createdAt: doc.createdAt,
+    };
+  }
+
+  async function createLibraryView(
+    userId: string,
+    name: string,
+    filter: LibraryViewFilter,
+    maxViews: number,
+  ): Promise<LibraryViewCreateResult> {
+    const LibraryView = mongoose.models.LibraryView;
+    const owner = toObjectId(userId);
+    const clean = name.trim().replace(/\s+/g, ' ');
+    const nameKey = clean.toLowerCase();
+    const existing = (await LibraryView.findOne({
+      userId: owner,
+      nameKey,
+    }).lean()) as unknown as ILibraryView | null;
+    if (existing) {
+      return { status: 'exists', view: toViewRecord(existing) };
+    }
+    if ((await LibraryView.countDocuments({ userId: owner })) >= maxViews) {
+      return { status: 'limit' };
+    }
+    const created = (await LibraryView.findOneAndUpdate(
+      { userId: owner, nameKey },
+      { $setOnInsert: { userId: owner, name: clean, nameKey, filter } },
+      { upsert: true, new: true },
+    ).lean()) as unknown as ILibraryView;
+    return { status: 'created', view: toViewRecord(created) };
+  }
+
+  async function listLibraryViews(userId: string): Promise<LibraryViewRecord[]> {
+    const views = (await mongoose.models.LibraryView.find({ userId: toObjectId(userId) })
+      .sort({ createdAt: 1, _id: 1 })
+      .lean()) as unknown as ILibraryView[];
+    return views.map(toViewRecord);
+  }
+
+  async function renameLibraryView(
+    userId: string,
+    id: string,
+    name: string,
+  ): Promise<LibraryViewRenameResult> {
+    if (!Types.ObjectId.isValid(id)) {
+      return { status: 'not_found' };
+    }
+    const owner = toObjectId(userId);
+    const viewId = toObjectId(id);
+    const clean = name.trim().replace(/\s+/g, ' ');
+    const nameKey = clean.toLowerCase();
+    const LibraryView = mongoose.models.LibraryView;
+    if (await LibraryView.exists({ userId: owner, nameKey, _id: { $ne: viewId } })) {
+      return { status: 'exists' };
+    }
+    const renamed = (await LibraryView.findOneAndUpdate(
+      { _id: viewId, userId: owner },
+      { $set: { name: clean, nameKey } },
+      { new: true },
+    ).lean()) as unknown as ILibraryView | null;
+    return renamed ? { status: 'renamed', view: toViewRecord(renamed) } : { status: 'not_found' };
+  }
+
+  async function deleteLibraryView(userId: string, id: string): Promise<boolean> {
+    if (!Types.ObjectId.isValid(id)) {
+      return false;
+    }
+    const result = await mongoose.models.LibraryView.deleteOne({
+      _id: toObjectId(id),
+      userId: toObjectId(userId),
+    });
+    return result.deletedCount > 0;
+  }
+
   async function deleteLibraryFolder(userId: string, id: string): Promise<boolean> {
     if (!Types.ObjectId.isValid(id)) {
       return false;
@@ -777,10 +879,14 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     if (result.deletedCount === 0) {
       return false;
     }
-    await mongoose.models.LibraryDocument.updateMany(
-      { userId: owner, folderId },
-      { $unset: { folderId: '' } },
-    );
+    await Promise.all([
+      mongoose.models.LibraryDocument.updateMany(
+        { userId: owner, folderId },
+        { $unset: { folderId: '' } },
+      ),
+      // A view of a folder that is gone would show nothing and could not be explained.
+      mongoose.models.LibraryView.deleteMany({ userId: owner, 'filter.folder': id }),
+    ]);
     return true;
   }
 
@@ -1311,18 +1417,29 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
 
   async function deleteAllLibraryData(userId: string): Promise<LibraryDataDeleteResult> {
     const owner = toObjectId(userId);
-    const [documents, highlights, progress, units, resources, sources, folders, feeds, inboxes] =
-      await Promise.all([
-        mongoose.models.LibraryDocument.deleteMany({ userId: owner }),
-        mongoose.models.LibraryHighlight.deleteMany({ userId: owner }),
-        mongoose.models.LibraryProgress.deleteMany({ userId: owner }),
-        mongoose.models.LibraryUnit.deleteMany({ userId: owner }),
-        mongoose.models.LibraryResource.deleteMany({ userId: owner }),
-        mongoose.models.LibrarySource.deleteMany({ userId: owner }),
-        mongoose.models.LibraryFolder.deleteMany({ userId: owner }),
-        mongoose.models.LibraryFeed.deleteMany({ userId: owner }),
-        mongoose.models.LibraryInbox.deleteMany({ userId: owner }),
-      ]);
+    const [
+      documents,
+      highlights,
+      progress,
+      units,
+      resources,
+      sources,
+      folders,
+      feeds,
+      inboxes,
+      views,
+    ] = await Promise.all([
+      mongoose.models.LibraryDocument.deleteMany({ userId: owner }),
+      mongoose.models.LibraryHighlight.deleteMany({ userId: owner }),
+      mongoose.models.LibraryProgress.deleteMany({ userId: owner }),
+      mongoose.models.LibraryUnit.deleteMany({ userId: owner }),
+      mongoose.models.LibraryResource.deleteMany({ userId: owner }),
+      mongoose.models.LibrarySource.deleteMany({ userId: owner }),
+      mongoose.models.LibraryFolder.deleteMany({ userId: owner }),
+      mongoose.models.LibraryFeed.deleteMany({ userId: owner }),
+      mongoose.models.LibraryInbox.deleteMany({ userId: owner }),
+      mongoose.models.LibraryView.deleteMany({ userId: owner }),
+    ]);
     return {
       documents: documents.deletedCount,
       highlights: highlights.deletedCount,
@@ -1333,6 +1450,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       folders: folders.deletedCount,
       feeds: feeds.deletedCount,
       inboxes: inboxes.deletedCount,
+      views: views.deletedCount,
     };
   }
 
@@ -1350,6 +1468,10 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     listLibraryFolders,
     renameLibraryFolder,
     deleteLibraryFolder,
+    createLibraryView,
+    listLibraryViews,
+    renameLibraryView,
+    deleteLibraryView,
     saveLibrarySource,
     getLibrarySource,
     deleteLibrarySource,

@@ -124,6 +124,22 @@ export const useLibraryFeedsQuery = (
   );
 };
 
+/** The views this person pinned: named sets of list filters. */
+export const useLibraryViewsQuery = (
+  config?: UseQueryOptions<{ views: t.TLibraryView[] }>,
+): QueryObserverResult<{ views: t.TLibraryView[] }> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+  return useQuery<{ views: t.TLibraryView[] }>(
+    [QueryKeys.libraryViews],
+    () => dataService.listLibraryViews(),
+    {
+      refetchOnWindowFocus: false,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
 /** The folders this person files documents into, with how many each holds. */
 export const useLibraryFoldersQuery = (
   config?: UseQueryOptions<{ folders: t.TLibraryFolder[] }>,

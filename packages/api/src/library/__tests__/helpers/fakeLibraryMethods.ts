@@ -9,6 +9,7 @@ import type {
   LibraryProgressRecord,
   LibraryResourceRecord,
   LibraryUnitRecord,
+  LibraryViewRecord,
 } from '@librechat/data-schemas';
 
 /** In-memory stand-in for the data-schemas library methods, keyed by user so isolation is testable. */
@@ -24,6 +25,7 @@ export function createFakeLibraryMethods() {
   const reviews = new Map<string, { reviewedAt: Date; muted: boolean }>();
   const inboxes = new Map<string, { tokenHash: string; createdAt: Date }>();
   const folders = new Map<string, LibraryFolderRecord & { userId: string }>();
+  const views = new Map<string, LibraryViewRecord & { userId: string }>();
   const feeds = new Map<string, LibraryFeedState & { userId: string }>();
 
   const methods: LibraryMethods = {
@@ -342,6 +344,36 @@ export function createFakeLibraryMethods() {
       for (const d of documents.values()) if (d.folderId === id) delete d.folderId;
       return true;
     },
+    async createLibraryView(userId, name, filter, maxViews) {
+      const clean = name.trim().replace(/\s+/g, ' ');
+      const mine = [...views.values()].filter((v) => v.userId === userId);
+      const existing = mine.find((v) => v.name.toLowerCase() === clean.toLowerCase());
+      if (existing) return { status: 'exists', view: { ...existing } };
+      if (mine.length >= maxViews) return { status: 'limit' };
+      const view = { id: nextId(), userId, name: clean, filter, createdAt: new Date() };
+      views.set(view.id, view);
+      return { status: 'created', view: { ...view } };
+    },
+    async listLibraryViews(userId) {
+      return [...views.values()].filter((v) => v.userId === userId).map((v) => ({ ...v }));
+    },
+    async renameLibraryView(userId, id, name) {
+      const view = views.get(id);
+      if (!view || view.userId !== userId) return { status: 'not_found' };
+      const clean = name.trim().replace(/\s+/g, ' ');
+      const clash = [...views.values()].some(
+        (v) => v.userId === userId && v.id !== id && v.name.toLowerCase() === clean.toLowerCase(),
+      );
+      if (clash) return { status: 'exists' };
+      view.name = clean;
+      return { status: 'renamed', view: { ...view } };
+    },
+    async deleteLibraryView(userId, id) {
+      const view = views.get(id);
+      if (!view || view.userId !== userId) return false;
+      views.delete(id);
+      return true;
+    },
     async saveLibrarySource(userId, documentId, bytes) {
       const doc = documents.get(documentId);
       if (!doc || doc.userId !== userId || doc.kind !== 'pdf' || bytes.byteLength === 0)
@@ -404,8 +436,9 @@ export function createFakeLibraryMethods() {
         folders: 0,
         feeds: 0,
         inboxes: 0,
+        views: 0,
       };
     },
   };
-  return { methods, documents, highlights, progress, feeds, sources, folders, resources };
+  return { methods, documents, highlights, progress, feeds, sources, folders, views, resources };
 }

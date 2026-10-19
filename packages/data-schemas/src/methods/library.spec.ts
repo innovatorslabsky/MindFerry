@@ -9,6 +9,7 @@ import libraryProgressSchema from '~/schema/libraryProgress';
 import libraryResourceSchema from '~/schema/libraryResource';
 import libraryFolderSchema from '~/schema/libraryFolder';
 import libraryInboxSchema from '~/schema/libraryInbox';
+import libraryViewSchema from '~/schema/libraryView';
 import libraryUnitSchema from '~/schema/libraryUnit';
 import libraryFeedSchema from '~/schema/libraryFeed';
 
@@ -59,6 +60,9 @@ beforeAll(async () => {
   }
   if (!mongoose.models.LibraryFolder) {
     mongoose.model('LibraryFolder', libraryFolderSchema);
+  }
+  if (!mongoose.models.LibraryView) {
+    mongoose.model('LibraryView', libraryViewSchema);
   }
   if (!mongoose.models.LibrarySource) {
     mongoose.model('LibrarySource', librarySourceSchema);
@@ -275,6 +279,7 @@ describe('deletion', () => {
       folders: 0,
       feeds: 0,
       inboxes: 0,
+      views: 0,
     });
     expect(await methods.listLibraryDocuments(userB, { limit: 10 })).toHaveLength(1);
     expect(await methods.listLibraryHighlights(userB)).toHaveLength(1);
@@ -1117,5 +1122,69 @@ describe('thumbnails', () => {
       }),
     ).toBe(false);
     expect(await methods.getLibraryResource(userB, saved.document.id, '__thumbnail__')).toBeNull();
+  });
+});
+
+describe('pinned views', () => {
+  const filter = { location: 'later' as const, kind: 'pdf' as const, sort: 'shortest' as const };
+
+  it('keeps a name and its filters, and lists them in the order they were made', async () => {
+    const first = await methods.createLibraryView(userA, ' Short  reads ', filter, 20);
+    await methods.createLibraryView(userA, 'Papers', { kind: 'pdf', tag: 'paper' }, 20);
+    expect(first.status).toBe('created');
+    const views = await methods.listLibraryViews(userA);
+    expect(views.map((v) => v.name)).toEqual(['Short reads', 'Papers']);
+    expect(views[0].filter).toEqual(filter);
+    expect(views[1].filter).toEqual({ kind: 'pdf', tag: 'paper' });
+  });
+
+  it('returns the view that already has the name, ignoring case', async () => {
+    await methods.createLibraryView(userA, 'Shortlist', filter, 20);
+    const again = await methods.createLibraryView(userA, 'shortlist', { kind: 'epub' }, 20);
+    expect(again.status).toBe('exists');
+    expect(await methods.listLibraryViews(userA)).toHaveLength(1);
+  });
+
+  it('stops at the limit', async () => {
+    await methods.createLibraryView(userA, 'One', {}, 2);
+    await methods.createLibraryView(userA, 'Two', {}, 2);
+    expect((await methods.createLibraryView(userA, 'Three', {}, 2)).status).toBe('limit');
+  });
+
+  it('renames a view, but not onto another one', async () => {
+    const one = await methods.createLibraryView(userA, 'One', {}, 20);
+    await methods.createLibraryView(userA, 'Two', {}, 20);
+    if (one.status === 'limit') throw new Error('unexpected');
+    expect((await methods.renameLibraryView(userA, one.view.id, 'Two')).status).toBe('exists');
+    const renamed = await methods.renameLibraryView(userA, one.view.id, 'Uno');
+    expect(renamed.status).toBe('renamed');
+    expect((await methods.listLibraryViews(userA)).map((v) => v.name)).toEqual(['Uno', 'Two']);
+  });
+
+  it('keeps views apart between users', async () => {
+    const mine = await methods.createLibraryView(userA, 'Mine', {}, 20);
+    if (mine.status === 'limit') throw new Error('unexpected');
+    expect(await methods.listLibraryViews(userB)).toEqual([]);
+    expect((await methods.renameLibraryView(userB, mine.view.id, 'Stolen')).status).toBe(
+      'not_found',
+    );
+    expect(await methods.deleteLibraryView(userB, mine.view.id)).toBe(false);
+    expect(await methods.deleteLibraryView(userA, mine.view.id)).toBe(true);
+  });
+
+  it('drops the views of a folder when the folder is deleted', async () => {
+    const folder = await methods.createLibraryFolder(userA, 'Psychology', 50);
+    if (folder.status === 'limit') throw new Error('unexpected');
+    await methods.createLibraryView(userA, 'In folder', { folder: folder.folder.id }, 20);
+    await methods.createLibraryView(userA, 'Elsewhere', { folder: 'none' }, 20);
+    await methods.deleteLibraryFolder(userA, folder.folder.id);
+    expect((await methods.listLibraryViews(userA)).map((v) => v.name)).toEqual(['Elsewhere']);
+  });
+
+  it('is removed with everything else a person saved', async () => {
+    await methods.createLibraryView(userA, 'Mine', {}, 20);
+    const deleted = await methods.deleteAllLibraryData(userA);
+    expect(deleted.views).toBe(1);
+    expect(await methods.listLibraryViews(userA)).toEqual([]);
   });
 });

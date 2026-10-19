@@ -3660,5 +3660,13 @@
   "com_library_sort_created": "Date saved",
   "com_library_sort_title": "Title",
   "com_library_sort_shortest": "Shortest first",
-  "com_library_sort_longest": "Longest first"
+  "com_library_sort_longest": "Longest first",
+  "com_library_pinned": "Pinned views",
+  "com_library_view_pin": "Pin this view",
+  "com_library_view_name": "Name for this view",
+  "com_library_view_save": "Pin",
+  "com_library_view_unpin": "Unpin {{0}}",
+  "com_library_view_error": "Could not save the pinned view.",
+  "com_library_error_view_exists": "A pinned view with that name already exists.",
+  "com_library_error_view_limit": "You have as many pinned views as allowed."
 }

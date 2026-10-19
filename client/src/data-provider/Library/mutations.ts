@@ -370,6 +370,60 @@ export const useDeleteLibrarySourceMutation = (
   });
 };
 
+export const useCreateLibraryViewMutation = (
+  options?: t.MutationOptions<
+    { view: t.TLibraryView },
+    { name: string; filter: t.TLibraryViewFilter }
+  >,
+): UseMutationResult<
+  { view: t.TLibraryView },
+  unknown,
+  { name: string; filter: t.TLibraryViewFilter },
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation(
+    ({ name, filter }: { name: string; filter: t.TLibraryViewFilter }) =>
+      dataService.createLibraryView(name, filter),
+    {
+      ...options,
+      onSuccess: (data, variables, context) => {
+        queryClient.invalidateQueries([QueryKeys.libraryViews]);
+        options?.onSuccess?.(data, variables, context);
+      },
+    },
+  );
+};
+
+export const useRenameLibraryViewMutation = (
+  options?: t.MutationOptions<{ view: t.TLibraryView }, { id: string; name: string }>,
+): UseMutationResult<{ view: t.TLibraryView }, unknown, { id: string; name: string }, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation(
+    ({ id, name }: { id: string; name: string }) => dataService.renameLibraryView(id, name),
+    {
+      ...options,
+      onSuccess: (data, variables, context) => {
+        queryClient.invalidateQueries([QueryKeys.libraryViews]);
+        options?.onSuccess?.(data, variables, context);
+      },
+    },
+  );
+};
+
+export const useDeleteLibraryViewMutation = (
+  options?: t.MutationOptions<void, { id: string }>,
+): UseMutationResult<void, unknown, { id: string }, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation(({ id }: { id: string }) => dataService.deleteLibraryView(id), {
+    ...options,
+    onSuccess: (data, variables, context) => {
+      queryClient.invalidateQueries([QueryKeys.libraryViews]);
+      options?.onSuccess?.(data, variables, context);
+    },
+  });
+};
+
 export const useCreateLibraryFolderMutation = (
   options?: t.MutationOptions<{ folder: t.TLibraryFolder }, string>,
 ): UseMutationResult<{ folder: t.TLibraryFolder }, unknown, string, unknown> => {
@@ -414,6 +468,8 @@ export const useDeleteLibraryFolderMutation = (
     onSuccess: (data, variables, context) => {
       queryClient.invalidateQueries([QueryKeys.libraryFolders]);
       queryClient.invalidateQueries([QueryKeys.libraryDocuments]);
+      // The server drops the views of a folder that is gone.
+      queryClient.invalidateQueries([QueryKeys.libraryViews]);
       options?.onSuccess?.(data, variables, context);
     },
   });

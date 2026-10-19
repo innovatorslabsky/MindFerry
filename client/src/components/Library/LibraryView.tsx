@@ -15,6 +15,7 @@ import type {
   TLibraryKind,
   TLibraryLocation,
   TLibrarySort,
+  TLibraryViewFilter,
 } from 'librechat-data-provider';
 import {
   useBulkDeleteLibraryDocumentsMutation,
@@ -31,6 +32,7 @@ import { useShortcuts } from './useShortcuts';
 import { useDebounce } from '~/hooks/Input';
 import ExportButtons from './ExportButtons';
 import { libraryErrorKey } from './errors';
+import PinnedViews from './PinnedViews';
 import FeedsPanel from './FeedsPanel';
 import InboxPanel from './InboxPanel';
 import { useLocalize } from '~/hooks';
@@ -354,6 +356,17 @@ export default function LibraryView() {
     upload.mutate(form);
   };
 
+  /** Shows what a pinned view keeps, leaving any search behind. */
+  const openView = (filter: TLibraryViewFilter) => {
+    setSearch('');
+    setLocation(filter.location ?? 'inbox');
+    setKind(filter.kind ?? '');
+    setTag(filter.tag ?? '');
+    setFolder(filter.folder ?? '');
+    setSort(filter.sort ?? 'updated');
+    setLimit(PAGE_SIZE);
+  };
+
   const rows = documents.data?.documents ?? [];
   const busy = save.isLoading || upload.isLoading;
 
@@ -520,6 +533,18 @@ export default function LibraryView() {
           <Button asChild variant="outline" size="sm" className="md:justify-start">
             <Link to="/library/review">{localize('com_library_review_link')}</Link>
           </Button>
+
+          <PinnedViews
+            current={{
+              location,
+              kind: kind || undefined,
+              tag: tag || undefined,
+              folder: folder || undefined,
+              sort,
+            }}
+            canPin={!query}
+            onOpen={openView}
+          />
         </nav>
 
         <div className="flex min-w-0 flex-col gap-4">

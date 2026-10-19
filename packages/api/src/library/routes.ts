@@ -113,6 +113,21 @@ const folderBodySchema = z.object({
     .pipe(z.string().min(1).max(64)),
 });
 
+const viewBodySchema = z.object({
+  name: folderBodySchema.shape.name,
+  filter: z
+    .object({
+      location: z.enum(LOCATIONS).optional(),
+      kind: z.enum(KINDS).optional(),
+      tag: z.string().trim().min(1).max(64).optional(),
+      folder: z.string().trim().min(1).max(64).optional(),
+      sort: z.enum(SORTS).optional(),
+    })
+    .strict(),
+});
+
+const viewRenameSchema = viewBodySchema.pick({ name: true });
+
 const feedBodySchema = z.object({ url: z.string().url().max(2048) });
 
 const reviewBodySchema = z.object({ action: z.enum(['done', 'mute']) });
@@ -264,6 +279,10 @@ export interface LibraryHandlers {
   createFolder: Handler;
   renameFolder: Handler;
   deleteFolder: Handler;
+  listViews: Handler;
+  createView: Handler;
+  renameView: Handler;
+  deleteView: Handler;
   followFeed: Handler;
   listFeeds: Handler;
   refreshFeed: Handler;
@@ -404,6 +423,53 @@ export function createLibraryHandlers({
     const service = serviceFor(req);
     const removed = await service.deleteFolder(userId, param(req, 'id'));
     if (!removed) return fail(res, 404, 'not_found', 'Folder not found');
+    res.status(204).end();
+  };
+
+  const listViews: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const service = serviceFor(req);
+    res.status(200).json({ views: await service.listViews(userId) });
+  };
+
+  const createView: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const service = serviceFor(req);
+    const body = viewBodySchema.safeParse(req.body);
+    if (!body.success) return fail(res, 400, 'invalid_request', 'A name and filters are required');
+    const outcome = await service.createView(userId, body.data.name, body.data.filter);
+    if (outcome.status === 'limit') {
+      return fail(res, 409, 'view_limit', 'You have as many pinned views as allowed');
+    }
+    // Unlike a folder, a view carries filters, so the person must know theirs was not saved.
+    if (outcome.status === 'exists') {
+      return fail(res, 409, 'view_exists', 'A pinned view with that name already exists');
+    }
+    res.status(201).json({ view: outcome.view });
+  };
+
+  const renameView: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const service = serviceFor(req);
+    const body = viewRenameSchema.safeParse(req.body);
+    if (!body.success) return fail(res, 400, 'invalid_request', 'A name is required');
+    const outcome = await service.renameView(userId, param(req, 'id'), body.data.name);
+    if (outcome.status === 'not_found') return fail(res, 404, 'not_found', 'View not found');
+    if (outcome.status === 'exists') {
+      return fail(res, 409, 'view_exists', 'A pinned view with that name already exists');
+    }
+    res.status(200).json({ view: outcome.view });
+  };
+
+  const deleteView: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const service = serviceFor(req);
+    const removed = await service.deleteView(userId, param(req, 'id'));
+    if (!removed) return fail(res, 404, 'not_found', 'View not found');
     res.status(204).end();
   };
 
@@ -791,6 +857,10 @@ export function createLibraryHandlers({
     createFolder,
     renameFolder,
     deleteFolder,
+    listViews,
+    createView,
+    renameView,
+    deleteView,
     followFeed,
     listFeeds,
     refreshFeed,
