@@ -13,6 +13,7 @@ import {
   scrollToOffset,
 } from '~/utils/libraryAnchors';
 import { useCreateLibraryHighlightMutation, useSetLibraryProgressMutation } from '~/data-provider';
+import { OUTLINE_SELECTOR } from '~/utils/libraryOutline';
 import HighlightToolbar from './HighlightToolbar';
 import { NotificationSeverity } from '~/common';
 import { libraryErrorKey } from './errors';
@@ -25,6 +26,8 @@ export type ReaderBodyHandle = {
   focusHighlight: (highlight: TLibraryHighlight) => void;
   /** Highlights whatever the reader has selected, in yellow unless told otherwise. */
   highlightSelection: (color?: TLibraryHighlightColor) => boolean;
+  /** Scrolls to the nth heading of the text. */
+  scrollToHeading?: (index: number) => void;
 };
 
 type ReaderBodyProps = {
@@ -188,6 +191,11 @@ function ReaderBody({
         }
       },
       highlightSelection,
+      scrollToHeading: (index) => {
+        content.current
+          ?.querySelectorAll(OUTLINE_SELECTOR)
+          [index]?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+      },
     });
     return () => registerHandle?.(null);
   }, [registerHandle, highlightSelection]);
@@ -330,7 +338,7 @@ function ReaderBody({
           className="h-1 min-w-0 flex-1 cursor-pointer accent-current"
           data-testid="library-progress-slider"
         />
-        <span className="text-text-secondary w-12 shrink-0 text-right text-xs tabular-nums">
+        <span className="text-text-secondary min-w-14 shrink-0 text-right text-xs whitespace-nowrap tabular-nums">
           {localize('com_library_progress_percent', { 0: percent })}
         </span>
       </div>

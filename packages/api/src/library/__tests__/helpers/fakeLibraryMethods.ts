@@ -164,6 +164,9 @@ export function createFakeLibraryMethods() {
         delete doc.folderId;
       }
       Object.assign(doc, rest);
+      for (const field of ['byline', 'note', 'summary'] as const) {
+        if (field in patch && !doc[field]) delete doc[field];
+      }
       return { ...doc };
     },
     async deleteLibraryDocument(userId, id) {

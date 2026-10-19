@@ -34,6 +34,12 @@ export interface ILibraryDocument extends Document {
   contentHash: string;
   /** The opening of `text`, for a line under the title in a listing. */
   excerpt?: string;
+  /** The person's own note on the document. */
+  note?: string;
+  /** A short summary the person keeps with the document. */
+  summary?: string;
+  /** The person changed the title or author, so saving the page again must not put the page's back. */
+  metaEdited?: boolean;
   wordCount: number;
   readingMinutes: number;
   /** Chapters (EPUB) or pages (PDF); 0 for an article. */
@@ -73,6 +79,9 @@ const libraryDocumentSchema: Schema<ILibraryDocument> = new Schema(
     contentHash: { type: String, required: true },
     excerpt: { type: String },
     thumbnailPath: { type: String },
+    note: { type: String },
+    summary: { type: String },
+    metaEdited: { type: Boolean },
     wordCount: { type: Number, required: true, default: 0 },
     readingMinutes: { type: Number, required: true, default: 0 },
     unitCount: { type: Number, required: true, default: 0 },

@@ -1076,7 +1076,7 @@ export function uploadLibraryFile(data: FormData): Promise<t.TLibrarySaveRespons
 
 export function updateLibraryDocument(
   id: string,
-  patch: { location?: t.TLibraryLocation; tags?: string[]; folderId?: string | null },
+  patch: t.TLibraryDocumentPatch,
 ): Promise<{ document: t.TLibraryDocumentSummary }> {
   return request.patch(endpoints.libraryDocument(id), patch);
 }

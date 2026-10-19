@@ -278,6 +278,8 @@ function toSummary(doc: ILibraryDocument): LibraryDocumentSummary {
     publishedTime: doc.publishedTime,
     contentHash: doc.contentHash,
     ...(doc.excerpt ? { excerpt: doc.excerpt } : {}),
+    ...(doc.note ? { note: doc.note } : {}),
+    ...(doc.summary ? { summary: doc.summary } : {}),
     ...(doc.thumbnailPath ? { thumbnailPath: doc.thumbnailPath } : {}),
     wordCount: doc.wordCount,
     readingMinutes: doc.readingMinutes,
@@ -390,12 +392,15 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     try {
       const before = (await LibraryDocument.findOne(
         { userId: owner, urlKey: input.urlKey },
-        { contentHash: 1 },
-      ).lean()) as unknown as Pick<ILibraryDocument, 'contentHash'> | null;
+        { contentHash: 1, metaEdited: 1 },
+      ).lean()) as unknown as Pick<ILibraryDocument, 'contentHash' | 'metaEdited'> | null;
+      // A title or author the person changed stays, whatever the page says when it is saved again.
+      const { title: _title, byline: _byline, ...rest } = content;
+      const fresh = before?.metaEdited ? rest : content;
       const saved = (await LibraryDocument.findOneAndUpdate(
         { userId: owner, urlKey: input.urlKey },
         {
-          $set: { ...content, excerpt: makeExcerpt(content.text), userId: owner },
+          $set: { ...fresh, excerpt: makeExcerpt(content.text), userId: owner },
           $setOnInsert: { location: location ?? 'inbox', tags: tags ?? [] },
         },
         { upsert: true, new: true },
@@ -1019,6 +1024,28 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       set.tags = patch.tags;
     }
     const unset: Record<string, ''> = {};
+    if (patch.title !== undefined) {
+      set.title = patch.title;
+      set.metaEdited = true;
+    }
+    if (patch.byline !== undefined) {
+      set.metaEdited = true;
+      if (patch.byline) {
+        set.byline = patch.byline;
+      } else {
+        unset.byline = '';
+      }
+    }
+    for (const field of ['note', 'summary'] as const) {
+      if (patch[field] === undefined) {
+        continue;
+      }
+      if (patch[field]) {
+        set[field] = patch[field];
+      } else {
+        unset[field] = '';
+      }
+    }
     if (patch.folderId === null) {
       unset.folderId = '';
     } else if (patch.folderId !== undefined) {

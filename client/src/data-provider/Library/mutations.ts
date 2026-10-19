@@ -46,7 +46,7 @@ export const useUploadLibraryFileMutation = (
 
 export type UpdateLibraryDocumentVariables = {
   id: string;
-  patch: { location?: t.TLibraryLocation; tags?: string[]; folderId?: string | null };
+  patch: t.TLibraryDocumentPatch;
 };
 
 export const useUpdateLibraryDocumentMutation = (

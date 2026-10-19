@@ -26,6 +26,10 @@ export type TLibraryDocumentSummary = {
   contentHash: string;
   /** The opening of the text, for a line under the title in a list. Absent on older documents. */
   excerpt?: string;
+  /** The person's own note on the document. */
+  note?: string;
+  /** A short summary the person keeps with the document. */
+  summary?: string;
   wordCount: number;
   readingMinutes: number;
   /** Chapters (EPUB) or pages (PDF); 0 for an article. */
@@ -46,6 +50,19 @@ export type TLibraryDocumentSummary = {
   fetchedAt: string;
   createdAt: string;
   updatedAt: string;
+};
+
+/** What can be changed on a saved document. */
+export type TLibraryDocumentPatch = {
+  location?: TLibraryLocation;
+  tags?: string[];
+  folderId?: string | null;
+  title?: string;
+  /** Null or empty takes the author off. */
+  byline?: string | null;
+  /** Empty removes the note, or the summary. */
+  note?: string;
+  summary?: string;
 };
 
 /** An article with its text. Highlight offsets are `textContent` offsets of `contentHtml`. */

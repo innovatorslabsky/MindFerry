@@ -25,6 +25,14 @@ drawer), leading to `/library`:
   PDF, EPUB) form a column to the left of the list; on a narrow one they sit above it. A **Sort by**
   menu orders the list by recent change, date saved, title, or shortest or longest to read. Typing in
   the search box searches the title and text of everything instead; each row can be moved or deleted;
+- the reader has an **Info** and a **Notebook** tab beside the text. Notebook holds a note of your own
+  for the document (saved when you click away, up to 5,000 characters) above the highlights. Info
+  holds a short summary you write (up to 2,000 characters), the document's details (type, site, author,
+  published date, length, when you saved it, a link to the source) and **Edit metadata**, which changes
+  the title and the author. A title or author you changed is kept when the same page is saved again.
+  There is no automatic summary: nothing writes one for you yet;
+- an article with two or more headings shows them as a **Contents** column to the left of the text,
+  and choosing one scrolls there. Books keep their own contents;
 - **Pinned views** keep the filters of the list (place, type, tag, folder and sort order) under a name,
   in the column beside it. **Pin this view** asks for a name; pinning again under a name already used
   is refused rather than replacing it. Opening one sets all those filters at once and leaves any search
