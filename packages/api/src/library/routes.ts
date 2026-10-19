@@ -83,6 +83,12 @@ const patchDocumentSchema = z
     tags: z.array(z.string().min(1).max(64)).max(50).optional(),
     /** A folder id, or null to take the document out of its folder. */
     folderId: z.string().min(1).max(64).nullable().optional(),
+    title: z.string().trim().min(1).max(300).optional(),
+    /** Null or empty takes the author off. */
+    byline: z.string().trim().max(200).nullable().optional(),
+    /** Empty removes the note, or the summary. */
+    note: z.string().max(5000).optional(),
+    summary: z.string().max(2000).optional(),
   })
   .refine((patch) => Object.values(patch).some((value) => value !== undefined), {
     message: 'Nothing to update',

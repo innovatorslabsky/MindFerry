@@ -65,6 +65,10 @@ export interface LibraryDocumentSummary {
   contentHash: string;
   /** The opening of the text, for a line under the title in a listing. Absent on documents saved before it existed. */
   excerpt?: string;
+  /** The person's own note on the document. */
+  note?: string;
+  /** A short summary the person keeps with the document. */
+  summary?: string;
   wordCount: number;
   readingMinutes: number;
   unitCount: number;
@@ -143,6 +147,14 @@ export interface LibraryDocumentSaveResult {
 export interface LibraryDocumentPatch {
   location?: LibraryLocationValue;
   tags?: string[];
+  /** Setting the title or author keeps them through later saves of the same page. */
+  title?: string;
+  /** `null` or an empty string takes the author off. */
+  byline?: string | null;
+  /** An empty string removes the note. */
+  note?: string;
+  /** An empty string removes the summary. */
+  summary?: string;
   /** A folder id to file the document in, or `null` to take it out of its folder. */
   folderId?: string | null;
 }

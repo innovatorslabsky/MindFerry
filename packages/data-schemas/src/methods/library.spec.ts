@@ -1188,3 +1188,57 @@ describe('pinned views', () => {
     expect(await methods.listLibraryViews(userA)).toEqual([]);
   });
 });
+
+describe('editing a document', () => {
+  it('keeps a note and a summary, and removes them when emptied', async () => {
+    const saved = await methods.saveLibraryDocument(userA, doc());
+    const id = saved.document.id;
+    const updated = await methods.updateLibraryDocument(userA, id, {
+      note: 'Check the sources',
+      summary: 'Memory fades.',
+    });
+    expect(updated?.note).toBe('Check the sources');
+    expect(updated?.summary).toBe('Memory fades.');
+    const cleared = await methods.updateLibraryDocument(userA, id, { note: '', summary: '' });
+    expect(cleared?.note).toBeUndefined();
+    expect(cleared?.summary).toBeUndefined();
+  });
+
+  it('keeps an edited title and author when the same page is saved again', async () => {
+    const saved = await methods.saveLibraryDocument(userA, doc({ byline: 'Original Author' }));
+    await methods.updateLibraryDocument(userA, saved.document.id, {
+      title: 'My title',
+      byline: 'Me',
+    });
+    await methods.saveLibraryDocument(
+      userA,
+      doc({
+        title: 'Page title changed',
+        byline: 'Someone else',
+        text: 'Memory decays on a curve.',
+      }),
+    );
+    const read = await methods.getLibraryDocument(userA, saved.document.id);
+    expect(read?.title).toBe('My title');
+    expect(read?.byline).toBe('Me');
+  });
+
+  it('takes the author off with an empty value, and still keeps that on a re-save', async () => {
+    const saved = await methods.saveLibraryDocument(userA, doc({ byline: 'Original Author' }));
+    const cleared = await methods.updateLibraryDocument(userA, saved.document.id, { byline: null });
+    expect(cleared?.byline).toBeUndefined();
+    await methods.saveLibraryDocument(userA, doc({ byline: 'Original Author' }));
+    expect((await methods.getLibraryDocument(userA, saved.document.id))?.byline).toBeUndefined();
+  });
+
+  it('lets a page that was never edited follow the page', async () => {
+    const saved = await methods.saveLibraryDocument(userA, doc({ title: 'First' }));
+    await methods.saveLibraryDocument(userA, doc({ title: 'Second' }));
+    expect((await methods.getLibraryDocument(userA, saved.document.id))?.title).toBe('Second');
+  });
+
+  it('does not touch another person’s document', async () => {
+    const saved = await methods.saveLibraryDocument(userA, doc());
+    expect(await methods.updateLibraryDocument(userB, saved.document.id, { note: 'x' })).toBeNull();
+  });
+});
