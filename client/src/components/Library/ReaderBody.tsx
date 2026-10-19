@@ -17,6 +17,7 @@ import HighlightToolbar from './HighlightToolbar';
 import { NotificationSeverity } from '~/common';
 import { libraryErrorKey } from './errors';
 import { useLocalize } from '~/hooks';
+import { OUTLINE_SELECTOR } from '~/utils/libraryOutline';
 import { cn } from '~/utils';
 
 const PROGRESS_DELAY_MS = 1500;
@@ -25,6 +26,8 @@ export type ReaderBodyHandle = {
   focusHighlight: (highlight: TLibraryHighlight) => void;
   /** Highlights whatever the reader has selected, in yellow unless told otherwise. */
   highlightSelection: (color?: TLibraryHighlightColor) => boolean;
+  /** Scrolls to the nth heading of the text. */
+  scrollToHeading?: (index: number) => void;
 };
 
 type ReaderBodyProps = {
@@ -188,6 +191,11 @@ function ReaderBody({
         }
       },
       highlightSelection,
+      scrollToHeading: (index) => {
+        content.current
+          ?.querySelectorAll(OUTLINE_SELECTOR)
+          [index]?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+      },
     });
     return () => registerHandle?.(null);
   }, [registerHandle, highlightSelection]);

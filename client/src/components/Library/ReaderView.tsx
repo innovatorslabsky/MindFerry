@@ -17,8 +17,9 @@ import {
 } from '~/data-provider';
 import ReaderBody, { type ReaderBodyHandle } from './ReaderBody';
 import { NotificationSeverity } from '~/common';
-import HighlightsPanel from './HighlightsPanel';
+import ReaderSidePanel, { type ReaderPanelTab } from './ReaderSidePanel';
 import { useShortcuts } from './useShortcuts';
+import { outlineOf, type OutlineEntry } from '~/utils/libraryOutline';
 import PdfPageView from './PdfPageView';
 import AskButtons from './AskButtons';
 import { useLocalize } from '~/hooks';
@@ -94,6 +95,39 @@ function Contents({
   );
 }
 
+/** The headings of an article, to jump between its parts. */
+function Outline({
+  entries,
+  onSelect,
+}: {
+  entries: OutlineEntry[];
+  onSelect: (index: number) => void;
+}) {
+  const localize = useLocalize();
+  const top = Math.min(...entries.map((entry) => entry.level));
+  return (
+    <nav aria-label={localize('com_library_contents')} className="flex h-full flex-col">
+      <h2 className="text-text-primary border-border-light border-b px-3 py-3 text-sm font-semibold">
+        {localize('com_library_contents')}
+      </h2>
+      <ul className="min-h-0 flex-1 overflow-y-auto py-1">
+        {entries.map((entry) => (
+          <li key={entry.index}>
+            <button
+              type="button"
+              onClick={() => onSelect(entry.index)}
+              className="text-text-secondary hover:bg-surface-hover hover:text-text-primary w-full truncate py-1.5 pr-3 pl-(--indent) text-left text-sm"
+              style={{ '--indent': `${0.75 + (entry.level - top) * 0.75}rem` } as CSSProperties}
+            >
+              {entry.text}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
 /** One document: an article, or a book read a chapter or page at a time. */
 export default function ReaderView() {
   const localize = useLocalize();
@@ -102,6 +136,8 @@ export default function ReaderView() {
   const handle = useRef<ReaderBodyHandle | null>(null);
   /** On a narrow screen the contents and highlights are a sheet over the text instead of side columns. */
   const [sheet, setSheet] = useState<'contents' | 'highlights' | null>(null);
+  /** Which side panel is open. Notebook first, since highlighting is what the reader is doing. */
+  const [panelTab, setPanelTab] = useState<ReaderPanelTab>('notebook');
   const [confirmRemove, setConfirmRemove] = useState(false);
   const { showToast } = useToastContext();
   const removeSource = useDeleteLibrarySourceMutation({
@@ -130,6 +166,9 @@ export default function ReaderView() {
   const document = data?.document;
   const isBook = document != null && document.kind !== 'article';
   const units = data?.units;
+  const articleHtml = document != null && 'contentHtml' in document ? document.contentHtml : '';
+  const outline = useMemo(() => (isBook ? [] : outlineOf(articleHtml)), [isBook, articleHtml]);
+  const hasOutline = outline.length >= 2;
 
   const requested = Number.parseInt(params.get('unit') ?? '', 10);
   const lastUnit = Math.max(0, (document?.unitCount ?? 1) - 1);
@@ -162,6 +201,11 @@ export default function ReaderView() {
     n: () => isBook && unitIndex < lastUnit && selectUnit(unitIndex + 1),
     p: () => isBook && unitIndex > 0 && selectUnit(unitIndex - 1),
   });
+
+  const selectHeading = useCallback((index: number) => {
+    handle.current?.scrollToHeading?.(index);
+    setSheet(null);
+  }, []);
 
   const onFocus = useCallback((highlight: TLibraryHighlight) => {
     handle.current?.focusHighlight(highlight);
@@ -273,7 +317,7 @@ export default function ReaderView() {
             {[document.siteName, document.byline].filter(Boolean).join(' · ')}
           </p>
         </div>
-        {isBook && units && (
+        {((isBook && units) || hasOutline) && (
           <Button
             variant="ghost"
             size="icon"
@@ -310,6 +354,11 @@ export default function ReaderView() {
         {isBook && units && (
           <aside className="border-border-light hidden w-60 shrink-0 border-r md:block">
             <Contents document={document} units={units} current={unitIndex} onSelect={selectUnit} />
+          </aside>
+        )}
+        {hasOutline && (
+          <aside className="border-border-light hidden w-60 shrink-0 border-r md:block">
+            <Outline entries={outline} onSelect={selectHeading} />
           </aside>
         )}
         <main className="flex min-w-0 flex-1 flex-col py-6">
@@ -396,7 +445,13 @@ export default function ReaderView() {
           )}
         </main>
         <aside className="border-border-light hidden w-72 shrink-0 border-l lg:block">
-          <HighlightsPanel documentId={document.id} highlights={highlights} onFocus={onFocus} />
+          <ReaderSidePanel
+            document={document}
+            highlights={highlights}
+            tab={panelTab}
+            onTab={setPanelTab}
+            onFocus={onFocus}
+          />
         </aside>
       </div>
       <OGDialog open={confirmRemove} onOpenChange={setConfirmRemove}>
@@ -439,10 +494,20 @@ export default function ReaderView() {
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </Button>
-          {sheet === 'contents' && isBook && units ? (
+          {sheet === 'contents' && isBook && units && (
             <Contents document={document} units={units} current={unitIndex} onSelect={selectUnit} />
-          ) : (
-            <HighlightsPanel documentId={document.id} highlights={highlights} onFocus={onFocus} />
+          )}
+          {sheet === 'contents' && hasOutline && (
+            <Outline entries={outline} onSelect={selectHeading} />
+          )}
+          {sheet === 'highlights' && (
+            <ReaderSidePanel
+              document={document}
+              highlights={highlights}
+              tab={panelTab}
+              onTab={setPanelTab}
+              onFocus={onFocus}
+            />
           )}
         </div>
       )}

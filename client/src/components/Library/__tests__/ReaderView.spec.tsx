@@ -56,6 +56,10 @@ jest.mock('../PdfPageView', () => ({
     <div data-testid="pdf-page" data-page={pageIndex} />
   ),
 }));
+jest.mock('../InfoPanel', () => ({
+  __esModule: true,
+  default: () => <div data-testid="info-panel" />,
+}));
 jest.mock('../TagEditor', () => ({
   __esModule: true,
   default: ({ tags }: { tags: string[] }) => <div data-testid="tag-editor">{tags.join(',')}</div>,
@@ -567,5 +571,62 @@ describe('ReaderView: keyboard', () => {
     fireEvent.keyDown(window, { key: 'u' });
 
     expect(mockNavigate).toHaveBeenCalledWith('/library');
+  });
+});
+
+describe('ReaderView: the side panel and the outline of an article', () => {
+  const HTML = '<h1>Title</h1><p>x</p><h2>Part one</h2><h2>Part two</h2>';
+  beforeEach(() => {
+    mockDocument = {
+      isLoading: false,
+      isError: false,
+      data: {
+        document: { ...summary(), contentHtml: HTML, text: 'x' },
+        highlights: [highlight('h1')],
+        progress: null,
+      },
+    };
+  });
+
+  it('lists the headings of an article and scrolls to the one chosen', () => {
+    renderAt('/library/d1');
+    const scrollToHeading = jest.fn();
+    act(() => {
+      (bodyProps[bodyProps.length - 1].registerHandle as (h: unknown) => void)({
+        focusHighlight: jest.fn(),
+        highlightSelection: jest.fn(),
+        scrollToHeading,
+      });
+    });
+    const outline = screen.getAllByRole('navigation', { name: 'com_library_contents' })[0];
+    expect(
+      within(outline)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Title', 'Part one', 'Part two']);
+    fireEvent.click(within(outline).getByRole('button', { name: 'Part two' }));
+    expect(scrollToHeading).toHaveBeenCalledWith(2);
+  });
+
+  it('shows no outline for an article with fewer than two headings', () => {
+    mockDocument = {
+      isLoading: false,
+      isError: false,
+      data: {
+        document: { ...summary(), contentHtml: '<h1>Only</h1><p>x</p>', text: 'x' },
+        highlights: [],
+        progress: null,
+      },
+    };
+    renderAt('/library/d1');
+    expect(screen.queryByRole('navigation', { name: 'com_library_contents' })).toBeNull();
+  });
+
+  it('opens on the Notebook and switches to Info', () => {
+    renderAt('/library/d1');
+    expect(screen.getByTestId('highlights-panel')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'com_library_panel_info' }));
+    expect(screen.getByTestId('info-panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('highlights-panel')).toBeNull();
   });
 });
