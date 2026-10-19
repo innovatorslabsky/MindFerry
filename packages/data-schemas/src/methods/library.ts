@@ -144,6 +144,8 @@ export interface LibraryMethods {
     query: string,
     limit: number,
   ) => Promise<LibraryDocumentSummary[]>;
+  /** How many documents the person has saved. */
+  countLibraryDocuments: (userId: string) => Promise<number>;
   updateLibraryDocument: (
     userId: string,
     id: string,
@@ -988,6 +990,10 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     return docs.map(toSummary);
   }
 
+  async function countLibraryDocuments(userId: string): Promise<number> {
+    return mongoose.models.LibraryDocument.countDocuments({ userId: toObjectId(userId) });
+  }
+
   async function searchLibraryDocuments(
     userId: string,
     query: string,
@@ -1504,6 +1510,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     deleteLibrarySource,
     listLibraryDocuments,
     searchLibraryDocuments,
+    countLibraryDocuments,
     updateLibraryDocument,
     deleteLibraryDocument,
     createLibraryHighlight,

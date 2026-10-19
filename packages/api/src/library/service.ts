@@ -31,12 +31,14 @@ import type { FetchedImage } from './ingest/image';
 import type { ExportFormat } from './export';
 import type { InboundEmail } from './inbox';
 import type { ChatSource } from './chat';
+import type { AskEntry, AskMode, AskSource } from './ask';
 import { EXPORT_MAX_HIGHLIGHTS, highlightsToCsv, highlightsToMarkdown } from './export';
 import { emailKey, generateInboxToken, hashInboxToken, textToHtml } from './inbox';
 import { DEFAULT_REVIEW_PER_DAY, MAX_REVIEW_EXTRA, startOfDay } from './review';
 import { createAnchor, resolveAnchor } from './anchor/textQuote';
 import { fetchFeed, subscribeToUrl } from './feed/fetchFeed';
 import { saveHtml, saveUrl } from './ingest/saveDocument';
+import { ASK_LIMITS, MIN_CHARS_PER_DOCUMENT, needsTopic } from './ask';
 import { DEFAULT_CHAT_MAX_CHARS, capText } from './chat';
 import { NotReadableError } from './ingest/extract';
 import { fetchThumbnail } from './ingest/image';
@@ -76,6 +78,7 @@ type Methods = Pick<
   | 'listLibraryDocumentsByIds'
   | 'listLibraryDocuments'
   | 'searchLibraryDocuments'
+  | 'countLibraryDocuments'
   | 'updateLibraryDocument'
   | 'deleteLibraryDocument'
   | 'createLibraryHighlight'
@@ -280,6 +283,17 @@ export interface LibraryService {
     id: string,
     options?: { unitIndex?: number },
   ) => Promise<ChatSource | null>;
+  /** How many documents the person has saved. */
+  count: (userId: string) => Promise<number>;
+  /**
+   * What a chat about the whole library is opened with: a few documents picked for the mode, by search
+   * for the ones about a subject and by date for the rest. `empty` when nothing is saved, `no_matches`
+   * when nothing fits.
+   */
+  askSource: (
+    userId: string,
+    request: { mode: AskMode; topic?: string },
+  ) => Promise<AskSource | { status: 'empty' | 'no_matches' }>;
   /** When the person's newsletter address was made, or `null` if they have none. */
   getInbox: (userId: string) => Promise<{ createdAt: Date } | null>;
   /**
@@ -797,6 +811,67 @@ export function createLibraryService({
         // A newsletter's lead image is often a tracking pixel; fetching it would tell the sender.
         false,
       );
+    },
+
+    count(userId: string) {
+      return methods.countLibraryDocuments(userId);
+    },
+
+    async askSource(userId: string, request: { mode: AskMode; topic?: string }) {
+      const { mode } = request;
+      const topic = request.topic?.trim().slice(0, 300) || undefined;
+      const limits = ASK_LIMITS[mode];
+      let documents: LibraryDocumentSummary[];
+      if (needsTopic(mode) || topic) {
+        if (!topic) {
+          return { status: 'no_matches' as const };
+        }
+        const found = await methods.searchLibraryDocuments(userId, topic, limits.documents * 3);
+        // What to read next is only what has not been read, so the archive is left out.
+        documents = (
+          mode === 'recommend' ? found.filter((doc) => doc.location !== 'archive') : found
+        ).slice(0, limits.documents);
+      } else if (mode === 'recommend') {
+        const [inbox, later] = await Promise.all(
+          (['inbox', 'later'] as const).map((location) =>
+            methods.listLibraryDocuments(userId, {
+              location,
+              sort: 'created',
+              limit: limits.documents,
+            }),
+          ),
+        );
+        documents = [...inbox, ...later].slice(0, limits.documents);
+      } else {
+        documents = await methods.listLibraryDocuments(userId, {
+          sort: 'created',
+          limit: limits.documents,
+        });
+      }
+      if (documents.length === 0) {
+        const total = await methods.countLibraryDocuments(userId);
+        return { status: total === 0 ? ('empty' as const) : ('no_matches' as const) };
+      }
+
+      const budget = Math.max(MIN_CHARS_PER_DOCUMENT, Math.floor(chatMaxChars / documents.length));
+      const entries: AskEntry[] = await Promise.all(
+        documents.map(async (document) => {
+          if (!limits.fullText) {
+            return { document, text: document.excerpt ?? '', truncated: false, highlights: [] };
+          }
+          const [full, highlights] = await Promise.all([
+            methods.getLibraryDocument(userId, document.id),
+            methods.listLibraryHighlights(userId, document.id, 20),
+          ]);
+          const { text, truncated } = capText(full?.text ?? '', budget);
+          return { document, text, truncated, highlights };
+        }),
+      );
+      const recentHighlights =
+        mode === 'recommend'
+          ? await methods.listLibraryHighlights(userId, undefined, 20)
+          : undefined;
+      return { mode, topic, entries, recentHighlights };
     },
 
     async chatSource(userId: string, id: string, options: { unitIndex?: number } = {}) {

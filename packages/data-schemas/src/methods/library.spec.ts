@@ -1242,3 +1242,14 @@ describe('editing a document', () => {
     expect(await methods.updateLibraryDocument(userB, saved.document.id, { note: 'x' })).toBeNull();
   });
 });
+
+describe('counting documents', () => {
+  it('counts only the person’s own', async () => {
+    await methods.saveLibraryDocument(userA, doc({ urlKey: 'c1' }));
+    await methods.saveLibraryDocument(userA, doc({ urlKey: 'c2' }));
+    await methods.saveLibraryDocument(userB, doc({ urlKey: 'c3' }));
+    expect(await methods.countLibraryDocuments(userA)).toBe(2);
+    expect(await methods.countLibraryDocuments(userB)).toBe(1);
+    expect(await methods.countLibraryDocuments(new mongoose.Types.ObjectId().toString())).toBe(0);
+  });
+});
