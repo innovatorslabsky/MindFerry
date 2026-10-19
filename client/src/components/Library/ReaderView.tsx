@@ -15,11 +15,11 @@ import {
   useLibraryDocumentQuery,
   useLibraryUnitQuery,
 } from '~/data-provider';
+import ReaderSidePanel, { type ReaderPanelTab } from './ReaderSidePanel';
+import { outlineOf, type OutlineEntry } from '~/utils/libraryOutline';
 import ReaderBody, { type ReaderBodyHandle } from './ReaderBody';
 import { NotificationSeverity } from '~/common';
-import ReaderSidePanel, { type ReaderPanelTab } from './ReaderSidePanel';
 import { useShortcuts } from './useShortcuts';
-import { outlineOf, type OutlineEntry } from '~/utils/libraryOutline';
 import PdfPageView from './PdfPageView';
 import AskButtons from './AskButtons';
 import { useLocalize } from '~/hooks';
