@@ -533,6 +533,9 @@ export default function LibraryView() {
           <Button asChild variant="outline" size="sm" className="md:justify-start">
             <Link to="/library/review">{localize('com_library_review_link')}</Link>
           </Button>
+          <Button asChild variant="outline" size="sm" className="md:justify-start">
+            <Link to="/library/ask">{localize('com_library_ask_library_link')}</Link>
+          </Button>
 
           <PinnedViews
             current={{

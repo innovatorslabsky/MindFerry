@@ -58,6 +58,11 @@ const loadLibraryReview = () =>
     Component: m.LibraryReviewRoute,
   }));
 
+const loadLibraryAsk = () =>
+  importWithRecovery(() => import('~/components/Library')).then((m) => ({
+    Component: m.LibraryAskRoute,
+  }));
+
 const loadLibraryReader = () =>
   importWithRecovery(() => import('~/components/Library')).then((m) => ({
     Component: m.LibraryReaderRoute,
@@ -207,6 +212,10 @@ export const router = createBrowserRouter(
                 {
                   path: 'library/review',
                   lazy: loadLibraryReview,
+                },
+                {
+                  path: 'library/ask',
+                  lazy: loadLibraryAsk,
                 },
                 {
                   path: 'library/:id',

@@ -156,6 +156,18 @@ export const useLibraryFoldersQuery = (
   );
 };
 
+/** How many documents the person has saved, for "N documents at your service". */
+export const useLibraryCountQuery = (
+  config?: UseQueryOptions<t.TLibraryCount>,
+): QueryObserverResult<t.TLibraryCount> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+  return useQuery<t.TLibraryCount>([QueryKeys.libraryCount], () => dataService.getLibraryCount(), {
+    refetchOnWindowFocus: false,
+    ...config,
+    enabled: (config?.enabled ?? true) === true && queriesEnabled,
+  });
+};
+
 /**
  * Today's review of old highlights. It is read once and then worked through on screen, so it is
  * never refetched by itself: that would reshuffle the cards under the reader's eyes.

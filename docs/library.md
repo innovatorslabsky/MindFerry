@@ -115,6 +115,23 @@ any conversation. The text is put in front of the model behind a notice that it 
 cut at `contextHub.library.chatMaxChars` characters (default 60,000; the chat says when it was cut),
 and goes through the same content filters and size limits as an import.
 
+## Ask your library
+
+**Ask your library** (button above the list, `/library/ask`) opens a chat about the whole library
+instead of one document. It says how many documents you have, and you pick what to do:
+
+- **Find**, **Learn** and **Research** take a topic. The best matches are found with the library
+  search; Find lists up to 10 with their summaries, Learn reads the top 3 in full, Research reads
+  the top 6 and compares them.
+- **Catch up** lists the 8 documents you saved last. **Recommend** lists up to 12 from your inbox and
+  later list (never the archive) with your latest highlights, and suggests what to read next.
+
+The documents are picked once, when the chat is created, and put in front of the model behind the
+same third-party notice as "Ask about this". The text is shared out under
+`contextHub.library.chatMaxChars`, so reading more documents means less of each. The chat runs on
+the endpoint and model of the chat you last had open. Follow-up questions are about those documents:
+the chat does not search the library again, so start a new one to look at something else.
+
 ## Highlighting on the page image
 
 With the original PDF kept, the words of the page are laid invisibly over the page image. Selecting
@@ -334,7 +351,7 @@ contextHub:
   container an egress policy that blocks private ranges and cloud metadata addresses.
 - **Feeds are only checked when you ask.** There is no background schedule; a refresh uses the
   feed's ETag / Last-Modified so an unchanged feed costs one cheap request.
-- **The daily review and "Ask about this" read what is stored**: a highlight whose page changed and
+- **The daily review, "Ask about this" and "Ask your library" read what is stored**: a highlight whose page changed and
   could not be found again is left out of the review, and a scanned page with no text yet has nothing
   to ask about until it has been read with OCR.
 - **Newsletter images** load from the sender's server when you read, as they would in any mail
