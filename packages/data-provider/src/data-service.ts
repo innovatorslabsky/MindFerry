@@ -1124,6 +1124,13 @@ export function startLibraryChat(
   return request.post(endpoints.libraryDocumentChat(id), request_);
 }
 
+export function summarizeLibraryDocument(
+  id: string,
+  request_: t.TLibrarySummaryRequest,
+): Promise<t.TLibrarySummaryResponse> {
+  return request.post(endpoints.librarySummary(id), request_);
+}
+
 export function startLibraryAsk(request_: t.TLibraryAskRequest): Promise<t.TLibraryChatResponse> {
   return request.post(endpoints.libraryAsk(), request_);
 }

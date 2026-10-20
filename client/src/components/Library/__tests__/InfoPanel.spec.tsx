@@ -6,12 +6,15 @@ const mockUpdate = jest.fn();
 const mockToast = jest.fn();
 let mockUpdateOptions: { onSuccess?: () => void; onError?: () => void } | undefined;
 
+jest.mock('recoil', () => ({ ...jest.requireActual('recoil'), useRecoilValue: () => null }));
+jest.mock('~/store', () => ({ __esModule: true, default: { conversationByIndex: () => 'convo' } }));
 jest.mock('~/hooks', () => ({
   useLocalize: () => (key: string, vars?: Record<string, unknown>) =>
     vars ? `${key}:${Object.values(vars).join(',')}` : key,
 }));
 jest.mock('~/common', () => ({ NotificationSeverity: { ERROR: 'error', SUCCESS: 'success' } }));
 jest.mock('~/data-provider', () => ({
+  useSummarizeLibraryDocumentMutation: () => ({ mutate: jest.fn(), isLoading: false }),
   useUpdateLibraryDocumentMutation: (options: typeof mockUpdateOptions) => {
     mockUpdateOptions = options;
     return { mutate: mockUpdate, isLoading: false };

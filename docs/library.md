@@ -132,6 +132,28 @@ same third-party notice as "Ask about this". The text is shared out under
 the endpoint and model of the chat you last had open. Follow-up questions are about those documents:
 the chat does not search the library again, so start a new one to look at something else.
 
+## Summaries written by a model
+
+**Summarize with AI** in the Info panel asks a model for a short summary of the document: 3 to 5
+sentences in the document's own language. The model is the endpoint and model of the chat you last had
+open, run with your own credentials (your own key, or the deployment's key for that endpoint), so
+there is nothing for an operator to configure. If you have no chat open, it asks you to open one first;
+agent and assistant chats cannot be used.
+
+The summary is a draft: it replaces nothing until you press **Keep summary**, and you can edit it first
+or discard it. A summary you keep is the same field you can type into, and it is listed with the
+document in "Ask about this" and "Ask your library".
+
+- The text goes to the model the same way as in "Ask about this": behind the third-party notice, cut at
+  `contextHub.library.chatMaxChars` (the prompt says so when it was cut), and a book is read from its
+  start, so its summary reflects the first part.
+- The call is recorded as spending against your balance (context `library-summary`) when balances are
+  on. A person with no credits left is turned away before the call. There is no reservation, so one call
+  can overdraw by the cost of one summary.
+- The route (`POST /api/library/documents/:id/summary`) shares the stricter save rate limit, returns the
+  draft without saving it, and answers `402 insufficient_balance`, `422 model_unavailable` or
+  `502 model_failed` (a failure reported without the provider's message).
+
 ## Highlighting on the page image
 
 With the original PDF kept, the words of the page are laid invisibly over the page image. Selecting

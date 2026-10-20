@@ -3712,5 +3712,15 @@
   "com_library_ask_mode_catchup": "Catch up",
   "com_library_ask_mode_catchup_hint": "Catch up on what you saved most recently.",
   "com_library_ask_mode_recommend": "Recommend",
-  "com_library_ask_mode_recommend_hint": "Get a suggestion of what to read next from your inbox and later list."
+  "com_library_ask_mode_recommend_hint": "Get a suggestion of what to read next from your inbox and later list.",
+  "com_library_summary_write": "Summarize with AI",
+  "com_library_summary_rewrite": "Rewrite with AI",
+  "com_library_summary_draft": "Draft summary",
+  "com_library_summary_keep": "Keep summary",
+  "com_library_summary_discard": "Discard",
+  "com_library_summary_unsaved": "Not saved yet. Edit it, then keep it.",
+  "com_library_summary_no_model": "Open a chat with a model first, then try again.",
+  "com_library_summary_error": "Could not write a summary. Try again.",
+  "com_library_summary_error_model": "This model cannot write a summary. Pick another in a chat.",
+  "com_library_summary_error_balance": "You have no credits left to write a summary."
 }

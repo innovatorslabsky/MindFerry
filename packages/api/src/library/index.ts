@@ -11,6 +11,8 @@ export {
   getLibraryChatMaxChars,
 } from './config';
 export { createLibraryService } from './service';
+export { createLibraryTextGenerator, LibraryModelError } from './llm';
+export type { LibraryTextGenerator } from './llm';
 export { startOfDay as startOfReviewDay } from './review';
 export type { DailyReview, ReviewItem, ReviewAction } from './review';
 export type {

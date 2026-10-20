@@ -177,6 +177,12 @@ export type TLibraryChatRequest = { endpoint?: string; model?: string; unitIndex
 export type TLibraryChatResponse = { conversationId: string };
 
 /** What the person wants to do with the whole library. */
+/** The model to write a summary with; the person's own credentials are used. */
+export type TLibrarySummaryRequest = { endpoint: string; model: string };
+
+/** A draft summary: it is not saved until the person keeps it. */
+export type TLibrarySummaryResponse = { summary: string };
+
 export type TLibraryAskMode = 'find' | 'learn' | 'research' | 'catchup' | 'recommend';
 
 /** `topic` is required for find, learn and research. */

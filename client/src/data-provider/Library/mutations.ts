@@ -163,6 +163,21 @@ export const useReviewLibraryHighlightMutation = (): UseMutationResult<
     dataService.reviewLibraryHighlight(id, action),
   );
 
+/** Asks a model for a draft summary of a document; nothing is saved by this. */
+export const useSummarizeLibraryDocumentMutation = (
+  options?: t.MutationOptions<t.TLibrarySummaryResponse, { id: string } & t.TLibrarySummaryRequest>,
+): UseMutationResult<
+  t.TLibrarySummaryResponse,
+  unknown,
+  { id: string } & t.TLibrarySummaryRequest,
+  unknown
+> =>
+  useMutation(
+    ({ id, ...request }: { id: string } & t.TLibrarySummaryRequest) =>
+      dataService.summarizeLibraryDocument(id, request),
+    options,
+  );
+
 /** Opens a new chat that starts from a pick of the whole library. */
 export const useStartLibraryAskMutation = (
   options?: t.MutationOptions<t.TLibraryChatResponse, t.TLibraryAskRequest>,
