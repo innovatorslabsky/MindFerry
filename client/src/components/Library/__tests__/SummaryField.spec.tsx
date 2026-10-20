@@ -41,6 +41,7 @@ const renderField = (value = '') =>
 
 beforeEach(() => {
   mockConversation = { endpoint: 'openAI', model: 'gpt-x' };
+  localStorage.clear();
 });
 afterEach(() => jest.clearAllMocks());
 
@@ -54,6 +55,17 @@ describe('SummaryField', () => {
   it('offers to rewrite when there is already a summary', () => {
     renderField('Mine.');
     expect(screen.getByRole('button', { name: 'com_library_summary_rewrite' })).toBeInTheDocument();
+  });
+
+  it('falls back to the last chat the app stored when none is open', () => {
+    mockConversation = null;
+    localStorage.setItem(
+      'lastConversationSetup_0',
+      JSON.stringify({ endpoint: 'Mock', model: 'mock-model' }),
+    );
+    renderField();
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_summary_write' }));
+    expect(mockSummarize).toHaveBeenCalledWith({ id: 'd1', endpoint: 'Mock', model: 'mock-model' });
   });
 
   it('says so when there is no chat model to use, and asks nothing', () => {

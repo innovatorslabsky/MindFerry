@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useRecoilValue } from 'recoil';
 import { Sparkles } from 'lucide-react';
 import { Button, Spinner, useToastContext } from '@librechat/client';
 import {
@@ -7,11 +6,10 @@ import {
   useUpdateLibraryDocumentMutation,
 } from '~/data-provider';
 import { NotificationSeverity } from '~/common';
+import { useChatTarget } from './chatTarget';
 import { libraryErrorKey } from './errors';
-import { targetOf } from './chatTarget';
 import { useLocalize } from '~/hooks';
 import NoteField from './NoteField';
-import store from '~/store';
 
 /**
  * The summary a person keeps with a document. They can write it themselves, or ask the model of the
@@ -28,7 +26,7 @@ export default function SummaryField({
 }) {
   const localize = useLocalize();
   const { showToast } = useToastContext();
-  const conversation = useRecoilValue(store.conversationByIndex(0));
+  const chatTarget = useChatTarget();
   const [draft, setDraft] = useState<string | null>(null);
   const fail = (key: Parameters<typeof localize>[0]) =>
     showToast({ message: localize(key), status: NotificationSeverity.ERROR });
@@ -44,7 +42,7 @@ export default function SummaryField({
 
   const draft_ = draft !== null;
   const write = () => {
-    const target = targetOf(conversation);
+    const target = chatTarget;
     if (!target) {
       fail('com_library_summary_no_model');
       return;
