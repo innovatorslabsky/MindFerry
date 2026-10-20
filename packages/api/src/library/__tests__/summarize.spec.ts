@@ -4,9 +4,9 @@ import type { ServerRequest } from '../../types/http';
 import type { LibraryTextGenerator } from '../llm';
 import { buildSummaryPrompt, cleanSummary, SUMMARY_MAX_CHARS } from '../summarize';
 import { createFakeLibraryMethods } from './helpers/fakeLibraryMethods';
+import { getLibrarySummaryModel } from '../config';
 import { createLibraryService } from '../service';
 import { createLibraryHandlers } from '../routes';
-import { getLibrarySummaryModel } from '../config';
 import { LibraryModelError } from '../llm';
 
 const user = 'u1';

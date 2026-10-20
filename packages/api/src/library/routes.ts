@@ -16,6 +16,7 @@ import { FetchError, TooLargeError, UnsafeUrlError } from './net/safeFetch';
 import { createHighlightSchema, KINDS, LOCATIONS, SORTS } from './types';
 import { ASK_MODES, convertLibraryAskToChat, needsTopic } from './ask';
 import { isConversationImportError } from '../conversations/import';
+import { getLibrarySummaryModel, isLibraryEnabled } from './config';
 import { isContentFilterError } from '../middleware/contentFilter';
 import { buildSummaryPrompt, cleanSummary } from './summarize';
 import { PdfEncryptedError, PdfError } from './pdf/parsePdf';
@@ -27,7 +28,6 @@ import { convertLibraryDocumentToChat } from './chat';
 import { NotReadableError } from './ingest/extract';
 import { FeedParseError } from './feed/parseFeed';
 import { MAX_OCR_PAGE_CHARS } from './service';
-import { getLibrarySummaryModel, isLibraryEnabled } from './config';
 import { LibraryModelError } from './llm';
 
 /**

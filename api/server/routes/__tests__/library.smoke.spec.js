@@ -21,7 +21,6 @@ describe('library routes wiring', () => {
     ['/review', 'get'],
     ['/review/:id', 'post'],
     ['/documents/:id/chat', 'post'],
-    ['/documents/:id/summary', 'post'],
     ['/ask', 'post'],
     ['/count', 'get'],
     ['/folders', 'get'],
@@ -47,6 +46,13 @@ describe('library routes wiring', () => {
     expect(route).toBeDefined();
     // requireJwtAuth, configMiddleware, limiter, handler
     expect(route.stack.length).toBe(4);
+  });
+
+  it('registers the summary behind auth, config, the save limit and the daily allowance', () => {
+    const route = find('/documents/:id/summary', 'post');
+    expect(route).toBeDefined();
+    // requireJwtAuth, configMiddleware, save limiter, daily summary limiter, handler
+    expect(route.stack.length).toBe(5);
   });
 
   it('registers the browser clip behind an API key, config, tenant and the save rate limit', () => {
