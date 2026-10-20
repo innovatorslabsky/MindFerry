@@ -4,8 +4,8 @@ import { Button, Input, useToastContext } from '@librechat/client';
 import type { TLibraryDocumentSummary } from 'librechat-data-provider';
 import { useUpdateLibraryDocumentMutation } from '~/data-provider';
 import { NotificationSeverity } from '~/common';
+import SummaryField from './SummaryField';
 import { useLocalize } from '~/hooks';
-import NoteField from './NoteField';
 
 export const MAX_SUMMARY_LENGTH = 2000;
 const MAX_TITLE_LENGTH = 300;
@@ -140,14 +140,10 @@ export default function InfoPanel({ document }: { document: TLibraryDocumentSumm
         <h3 className="text-text-primary text-sm font-semibold">
           {localize('com_library_summary')}
         </h3>
-        <NoteField
-          key={`${document.id}:${document.summary ?? ''}`}
+        <SummaryField
           documentId={document.id}
-          field="summary"
           value={document.summary ?? ''}
           maxLength={MAX_SUMMARY_LENGTH}
-          label={localize('com_library_summary')}
-          placeholder={localize('com_library_summary_placeholder')}
         />
       </section>
 

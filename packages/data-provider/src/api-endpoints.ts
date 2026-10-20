@@ -235,6 +235,9 @@ export const libraryInbox = () => `${BASE_URL}/api/library/inbox`;
 export const libraryDocumentChat = (id: string) =>
   `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/chat`;
 
+export const librarySummary = (id: string) =>
+  `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/summary`;
+
 export const libraryAsk = () => `${BASE_URL}/api/library/ask`;
 
 export const libraryCount = () => `${BASE_URL}/api/library/count`;

@@ -3,6 +3,7 @@ import { rateLimit } from 'express-rate-limit';
 import { logger, runAsSystem } from '@librechat/data-schemas';
 import type { NextFunction, RequestHandler, Response } from 'express';
 import type { ServerRequest } from '../types/http';
+import type { LibraryTextGenerator } from './llm';
 import type { LibraryService } from './service';
 import {
   ParseTimeoutError,
@@ -16,6 +17,7 @@ import { createHighlightSchema, KINDS, LOCATIONS, SORTS } from './types';
 import { ASK_MODES, convertLibraryAskToChat, needsTopic } from './ask';
 import { isConversationImportError } from '../conversations/import';
 import { isContentFilterError } from '../middleware/contentFilter';
+import { buildSummaryPrompt, cleanSummary } from './summarize';
 import { PdfEncryptedError, PdfError } from './pdf/parsePdf';
 import { EpubDrmError, EpubError } from './epub/parseEpub';
 import { contextHubRateLimitKey } from '../hub/ratelimit';
@@ -26,6 +28,7 @@ import { NotReadableError } from './ingest/extract';
 import { FeedParseError } from './feed/parseFeed';
 import { MAX_OCR_PAGE_CHARS } from './service';
 import { isLibraryEnabled } from './config';
+import { LibraryModelError } from './llm';
 
 /**
  * HTTP surface of the reading library, for MindFerry's own UI. Every handler is gated by
@@ -147,6 +150,11 @@ const chatBodySchema = z.object({
   model: z.string().regex(NAME_PATTERN).optional(),
   /** A chapter or page of a book; leave out for an article or for the book from its start. */
   unitIndex: z.number().int().nonnegative().optional(),
+});
+
+const summaryBodySchema = z.object({
+  endpoint: z.string().regex(NAME_PATTERN),
+  model: z.string().regex(NAME_PATTERN),
 });
 
 const askBodySchema = z.object({
@@ -309,6 +317,7 @@ export interface LibraryHandlers {
   dailyReview: Handler;
   reviewHighlight: Handler;
   chat: Handler;
+  summarize: Handler;
   ask: Handler;
   count: Handler;
   getInbox: Handler;
@@ -343,9 +352,11 @@ export type LibraryChatImporter = (params: {
 export function createLibraryHandlers({
   service: source,
   importConversation,
+  generateText,
 }: {
   service: LibraryServiceSource;
   importConversation?: LibraryChatImporter;
+  generateText?: LibraryTextGenerator;
 }): LibraryHandlers {
   // Resolved once per request by the handler's first use; a plain service is used as is.
   const serviceFor = (req: ServerRequest): LibraryService =>
@@ -809,6 +820,47 @@ export function createLibraryHandlers({
     }
   };
 
+  /**
+   * "Summarize": a short summary of a document, written by the model the person picked with their own
+   * credentials. It is returned, not saved: the person reads and edits it in the summary field first.
+   */
+  const summarize: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    if (!generateText) return fail(res, 404, 'not_found', 'Summaries are not available');
+    const service = serviceFor(req);
+    const body = summaryBodySchema.safeParse(req.body ?? {});
+    if (!body.success) return fail(res, 400, 'invalid_request', 'A model is required');
+    try {
+      const found = await service.chatSource(userId, param(req, 'id'));
+      if (!found) return fail(res, 404, 'not_found', 'Document not found');
+      if (found.text.trim() === '') {
+        return fail(res, 422, 'empty_document', 'There is no text here to summarize');
+      }
+      const raw = await generateText(req, {
+        endpoint: body.data.endpoint,
+        model: body.data.model,
+        prompt: buildSummaryPrompt({
+          title: found.document.title,
+          text: found.text,
+          truncated: found.truncated,
+        }),
+      });
+      const summary = cleanSummary(raw);
+      if (summary === '') return fail(res, 502, 'model_failed', 'The model returned no summary');
+      res.status(200).json({ summary });
+    } catch (error) {
+      if (error instanceof LibraryModelError) {
+        const status = { insufficient_balance: 402, model_unavailable: 422, empty_completion: 502 }[
+          error.code
+        ];
+        return fail(res, status, error.code, error.message);
+      }
+      logger.error('[library] Could not write a summary:', error);
+      fail(res, 502, 'model_failed', 'The model could not write a summary');
+    }
+  };
+
   /** "Ask your library": opens a new chat that starts from a few documents picked for what is asked. */
   const ask: Handler = async (req, res) => {
     const userId = gate(req, res);
@@ -939,6 +991,7 @@ export function createLibraryHandlers({
     dailyReview,
     reviewHighlight,
     chat,
+    summarize,
     getInbox,
     rotateInbox,
     deleteInbox,
