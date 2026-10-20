@@ -147,6 +147,9 @@ export function createFakeLibraryMethods() {
         )
         .slice(0, query.limit);
     },
+    async countLibraryDocuments(userId) {
+      return [...documents.values()].filter((d) => d.userId === userId).length;
+    },
     async searchLibraryDocuments(userId, query, limit) {
       return [...documents.values()]
         .filter((d) => d.userId === userId && d.text.includes(query))

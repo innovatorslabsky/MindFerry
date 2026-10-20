@@ -29,6 +29,8 @@ const MESSAGES: Record<string, TranslationKeys> = {
   view_limit: 'com_library_error_view_limit',
   stale_content: 'com_library_error_stale',
   anchor_mismatch: 'com_library_error_mismatch',
+  no_matches: 'com_library_ask_library_no_matches',
+  empty_library: 'com_library_ask_library_empty',
   empty_document: 'com_library_ask_empty',
 };
 

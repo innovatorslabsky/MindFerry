@@ -235,6 +235,10 @@ export const libraryInbox = () => `${BASE_URL}/api/library/inbox`;
 export const libraryDocumentChat = (id: string) =>
   `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/chat`;
 
+export const libraryAsk = () => `${BASE_URL}/api/library/ask`;
+
+export const libraryCount = () => `${BASE_URL}/api/library/count`;
+
 export const libraryReview = (offsetMinutes: number, extra: number) =>
   `${BASE_URL}/api/library/review?offset=${offsetMinutes}&extra=${extra}`;
 

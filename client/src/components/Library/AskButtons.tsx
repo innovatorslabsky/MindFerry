@@ -2,28 +2,13 @@ import { useRecoilValue } from 'recoil';
 import { useNavigate } from 'react-router-dom';
 import { MessageSquarePlus } from 'lucide-react';
 import { Button, Spinner, useToastContext } from '@librechat/client';
-import { isAgentsEndpoint, isAssistantsEndpoint } from 'librechat-data-provider';
 import type { TLibraryKind } from 'librechat-data-provider';
 import { useStartLibraryChatMutation } from '~/data-provider';
 import { NotificationSeverity } from '~/common';
 import { libraryErrorKey } from './errors';
+import { targetOf } from './chatTarget';
 import { useLocalize } from '~/hooks';
 import store from '~/store';
-
-/**
- * The endpoint and model of the chat the person has open, so the new one runs on them. Agent and
- * assistant chats are left out: they need an agent or assistant a plain conversation does not have.
- */
-function targetOf(
-  conversation: { endpoint?: string | null; model?: string | null } | null,
-): { endpoint: string; model: string } | undefined {
-  const endpoint = conversation?.endpoint;
-  const model = conversation?.model;
-  if (!endpoint || !model || isAgentsEndpoint(endpoint) || isAssistantsEndpoint(endpoint)) {
-    return undefined;
-  }
-  return { endpoint, model };
-}
 
 /** "Ask about this": a new chat that starts from the page, or from a book's current page or chapter. */
 export default function AskButtons({

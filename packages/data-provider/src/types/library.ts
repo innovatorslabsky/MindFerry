@@ -176,6 +176,19 @@ export type TLibraryChatRequest = { endpoint?: string; model?: string; unitIndex
 
 export type TLibraryChatResponse = { conversationId: string };
 
+/** What the person wants to do with the whole library. */
+export type TLibraryAskMode = 'find' | 'learn' | 'research' | 'catchup' | 'recommend';
+
+/** `topic` is required for find, learn and research. */
+export type TLibraryAskRequest = {
+  mode: TLibraryAskMode;
+  topic?: string;
+  endpoint?: string;
+  model?: string;
+};
+
+export type TLibraryCount = { count: number };
+
 /** When the person's newsletter address was made; `null` if they have none. */
 export type TLibraryInbox = { createdAt: string } | null;
 

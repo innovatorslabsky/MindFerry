@@ -13,6 +13,7 @@ import {
 } from './worker/errors';
 import { FetchError, TooLargeError, UnsafeUrlError } from './net/safeFetch';
 import { createHighlightSchema, KINDS, LOCATIONS, SORTS } from './types';
+import { ASK_MODES, convertLibraryAskToChat, needsTopic } from './ask';
 import { isConversationImportError } from '../conversations/import';
 import { isContentFilterError } from '../middleware/contentFilter';
 import { PdfEncryptedError, PdfError } from './pdf/parsePdf';
@@ -146,6 +147,13 @@ const chatBodySchema = z.object({
   model: z.string().regex(NAME_PATTERN).optional(),
   /** A chapter or page of a book; leave out for an article or for the book from its start. */
   unitIndex: z.number().int().nonnegative().optional(),
+});
+
+const askBodySchema = z.object({
+  mode: z.enum(ASK_MODES),
+  topic: z.string().trim().max(300).optional(),
+  endpoint: z.string().regex(NAME_PATTERN).optional(),
+  model: z.string().regex(NAME_PATTERN).optional(),
 });
 
 /** Largest upload accepted; also the ceiling the route's multer instance is configured with. */
@@ -301,6 +309,8 @@ export interface LibraryHandlers {
   dailyReview: Handler;
   reviewHighlight: Handler;
   chat: Handler;
+  ask: Handler;
+  count: Handler;
   getInbox: Handler;
   rotateInbox: Handler;
   deleteInbox: Handler;
@@ -799,6 +809,54 @@ export function createLibraryHandlers({
     }
   };
 
+  /** "Ask your library": opens a new chat that starts from a few documents picked for what is asked. */
+  const ask: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    if (!importConversation) return fail(res, 404, 'not_found', 'Chat is not available');
+    const service = serviceFor(req);
+    const body = askBodySchema.safeParse(req.body ?? {});
+    if (!body.success) return fail(res, 400, 'invalid_request', 'Invalid request');
+    if (needsTopic(body.data.mode) && !body.data.topic) {
+      return fail(res, 400, 'topic_required', 'This needs a subject to look for');
+    }
+    try {
+      const found = await service.askSource(userId, {
+        mode: body.data.mode,
+        topic: body.data.topic || undefined,
+      });
+      if ('status' in found) {
+        return found.status === 'empty'
+          ? fail(res, 422, 'empty_library', 'There is nothing saved to ask about yet')
+          : fail(res, 422, 'no_matches', 'Nothing saved matches that');
+      }
+      const payload = convertLibraryAskToChat(found, {
+        endpoint: body.data.endpoint,
+        model: body.data.model,
+      });
+      const { conversationId } = await importConversation({
+        userId,
+        userRole: req.user?.role,
+        payload,
+        req,
+      });
+      res.status(201).json({ conversationId });
+    } catch (error) {
+      if (isContentFilterError(error) || isConversationImportError(error)) {
+        res.status(error.statusCode).json(error.body);
+        return;
+      }
+      logger.error('[library] Could not open a chat about the library:', error);
+      fail(res, 500, 'internal_error', 'Could not open the chat');
+    }
+  };
+
+  const count: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    res.status(200).json({ count: await serviceFor(req).count(userId) });
+  };
+
   const getInbox: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
@@ -863,6 +921,8 @@ export function createLibraryHandlers({
     createFolder,
     renameFolder,
     deleteFolder,
+    ask,
+    count,
     listViews,
     createView,
     renameView,

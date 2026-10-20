@@ -1,3 +1,4 @@
+import AskLibraryView from './AskLibraryView';
 import LibraryGate from './LibraryGate';
 import LibraryView from './LibraryView';
 import ReviewView from './ReviewView';
@@ -23,6 +24,14 @@ export function LibraryReviewRoute() {
   return (
     <LibraryGate>
       <ReviewView />
+    </LibraryGate>
+  );
+}
+
+export function LibraryAskRoute() {
+  return (
+    <LibraryGate>
+      <AskLibraryView />
     </LibraryGate>
   );
 }

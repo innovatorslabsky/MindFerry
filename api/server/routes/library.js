@@ -181,6 +181,8 @@ router.get('/export', ...browse, handlers.exportHighlights);
 router.get('/review', ...browse, handlers.dailyReview);
 router.post('/review/:id', ...browse, handlers.reviewHighlight);
 router.post('/documents/:id/chat', ...browse, handlers.chat);
+router.post('/ask', ...browse, handlers.ask);
+router.get('/count', ...browse, handlers.count);
 router.get('/folders', ...browse, handlers.listFolders);
 router.post('/folders', ...browse, handlers.createFolder);
 router.patch('/folders/:id', ...browse, handlers.renameFolder);

@@ -163,6 +163,20 @@ export const useReviewLibraryHighlightMutation = (): UseMutationResult<
     dataService.reviewLibraryHighlight(id, action),
   );
 
+/** Opens a new chat that starts from a pick of the whole library. */
+export const useStartLibraryAskMutation = (
+  options?: t.MutationOptions<t.TLibraryChatResponse, t.TLibraryAskRequest>,
+): UseMutationResult<t.TLibraryChatResponse, unknown, t.TLibraryAskRequest, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation((request: t.TLibraryAskRequest) => dataService.startLibraryAsk(request), {
+    ...options,
+    onSuccess: (data, variables, context) => {
+      queryClient.invalidateQueries([QueryKeys.allConversations]);
+      options?.onSuccess?.(data, variables, context);
+    },
+  });
+};
+
 /** Opens a new chat that starts from a document; the document itself is untouched. */
 export const useStartLibraryChatMutation = (
   options?: t.MutationOptions<t.TLibraryChatResponse, { id: string } & t.TLibraryChatRequest>,
