@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { mockClient } from 'test/libraryMocks';
 
 const mockSummarize = jest.fn();
@@ -82,7 +82,7 @@ describe('SummaryField', () => {
   it('shows the draft unsaved, saves it only when kept, and can drop it', () => {
     const { rerender } = renderField('Mine.');
     fireEvent.click(screen.getByRole('button', { name: 'com_library_summary_rewrite' }));
-    React.act(() => summarizeOptions.onSuccess?.({ summary: 'Draft text.' }));
+    act(() => summarizeOptions.onSuccess?.({ summary: 'Draft text.' }));
 
     const draft = screen.getByTestId('library-summary-draft') as HTMLTextAreaElement;
     expect(draft.value).toBe('Draft text.');
@@ -92,7 +92,7 @@ describe('SummaryField', () => {
     fireEvent.click(screen.getByRole('button', { name: 'com_library_summary_keep' }));
     expect(mockUpdate).toHaveBeenCalledWith({ id: 'd1', patch: { summary: 'Edited draft' } });
 
-    React.act(() => updateOptions.onSuccess?.());
+    act(() => updateOptions.onSuccess?.());
     rerender(<SummaryField documentId="d1" value="Edited draft" maxLength={2000} />);
     expect(screen.queryByTestId('library-summary-draft')).not.toBeInTheDocument();
   });
@@ -100,7 +100,7 @@ describe('SummaryField', () => {
   it('keeps the old summary when the draft is discarded', () => {
     renderField('Mine.');
     fireEvent.click(screen.getByRole('button', { name: 'com_library_summary_rewrite' }));
-    React.act(() => summarizeOptions.onSuccess?.({ summary: 'Draft text.' }));
+    act(() => summarizeOptions.onSuccess?.({ summary: 'Draft text.' }));
     fireEvent.click(screen.getByRole('button', { name: 'com_library_summary_discard' }));
     expect(mockUpdate).not.toHaveBeenCalled();
     expect((screen.getByLabelText('com_library_summary') as HTMLTextAreaElement).value).toBe(
