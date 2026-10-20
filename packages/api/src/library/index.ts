@@ -9,6 +9,7 @@ export {
   getLibraryAutoTag,
   getLibraryReviewPerDay,
   getLibraryChatMaxChars,
+  getLibrarySummaryModel,
 } from './config';
 export { createLibraryService } from './service';
 export { createLibraryTextGenerator, LibraryModelError } from './llm';
@@ -34,6 +35,7 @@ export {
   libraryInboxLimiter,
   libraryBrowseLimiter,
   librarySaveLimiter,
+  librarySummaryLimiter,
   LIBRARY_MAX_HTML_CHARS,
   LIBRARY_MAX_UPLOAD_BYTES,
 } from './routes';

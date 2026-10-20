@@ -713,6 +713,19 @@ export const contextHubSchema = z
         reviewPerDay: z.number().int().min(1).max(100).default(5),
         /** The most characters of a page or book "Ask about this" puts in front of the model. */
         chatMaxChars: z.number().int().min(2_000).max(400_000).default(60_000),
+        /**
+         * A model the deployment pays for to write summaries, on one of its configured endpoints.
+         * Unset (the default), "Summarize with AI" runs on the model of the person's own chat and
+         * their own credentials. Set, it always runs on this one and costs the person nothing.
+         */
+        summary: z
+          .object({
+            endpoint: z.string().min(1),
+            model: z.string().min(1),
+            /** Summaries one person may ask for in a day on this model. */
+            perUserPerDay: z.number().int().min(1).max(1000).default(30),
+          })
+          .optional(),
       })
       .default({}),
   })

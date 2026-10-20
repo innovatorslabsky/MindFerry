@@ -69,6 +69,16 @@ describe('library text generator', () => {
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 
+  it('neither checks nor spends credits when the deployment pays', async () => {
+    findBalanceByUser.mockResolvedValue({ tokenCredits: 0 });
+    const generate = createLibraryTextGenerator({ db });
+    await expect(generate(req(true), { ...request, chargeUser: false })).resolves.toBe(
+      'A summary.',
+    );
+    expect(findBalanceByUser).not.toHaveBeenCalled();
+    expect(spendTokens).not.toHaveBeenCalled();
+  });
+
   it('does not check credits when balances are off', async () => {
     const generate = createLibraryTextGenerator({ db });
     await generate(req(false), request);

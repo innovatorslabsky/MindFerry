@@ -3722,5 +3722,6 @@
   "com_library_summary_no_model": "Open a chat with a model first, then try again.",
   "com_library_summary_error": "Could not write a summary. Try again.",
   "com_library_summary_error_model": "This model cannot write a summary. Pick another in a chat.",
-  "com_library_summary_error_balance": "You have no credits left to write a summary."
+  "com_library_summary_error_balance": "You have no credits left to write a summary.",
+  "com_library_summary_error_limit": "You have reached today’s limit of summaries. Try again tomorrow."
 }

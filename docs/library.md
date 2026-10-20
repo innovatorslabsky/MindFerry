@@ -135,24 +135,42 @@ the chat does not search the library again, so start a new one to look at someth
 ## Summaries written by a model
 
 **Summarize with AI** in the Info panel asks a model for a short summary of the document: 3 to 5
-sentences in the document's own language. The model is the endpoint and model of the chat you last had
-open, run with your own credentials (your own key, or the deployment's key for that endpoint), so
-there is nothing for an operator to configure. If you have no chat open, it asks you to open one first;
-agent and assistant chats cannot be used.
+sentences in the document's own language. The summary is a draft: it replaces nothing until you press
+**Keep summary**, and you can edit it first or discard it. A summary you keep is the same field you can
+type into, and it is listed with the document in "Ask about this" and "Ask your library".
 
-The summary is a draft: it replaces nothing until you press **Keep summary**, and you can edit it first
-or discard it. A summary you keep is the same field you can type into, and it is listed with the
-document in "Ask about this" and "Ask your library".
+Which model writes it, and who pays, depends on the deployment:
+
+- **Your own model (the default).** It runs on the endpoint and model of the chat you last had open
+  (or the last chat setup the app stored, if you opened the library directly), with your own
+  credentials. If there is none, it asks you to open a chat first; agent and assistant chats cannot be
+  used. The call is recorded as spending against your balance (context `library-summary`) when balances
+  are on, and a person with no credits left is turned away before the call. There is no reservation, so
+  one call can overdraw by the cost of one summary.
+- **The deployment's model.** An operator can name a model it pays for:
+
+  ```yaml
+  contextHub:
+    library:
+      summary:
+        endpoint: Company # an endpoint already configured in this file, or a built-in one
+        model: small-model # the model on it
+        perUserPerDay: 30 # default 30, from 1 to 1000
+  ```
+
+  Then every summary runs on that model, whatever chat anyone has open, and costs the person nothing:
+  it is not spent against their balance and does not need credits. Each person gets `perUserPerDay`
+  summaries a day; the count is kept in the API process, so it is per replica and starts over on a
+  restart, and a person on their own model is not counted. The endpoint's own credentials are used
+  (if it is `user_provided`, the person's key for it).
 
 - The text goes to the model the same way as in "Ask about this": behind the third-party notice, cut at
   `contextHub.library.chatMaxChars` (the prompt says so when it was cut), and a book is read from its
   start, so its summary reflects the first part.
-- The call is recorded as spending against your balance (context `library-summary`) when balances are
-  on. A person with no credits left is turned away before the call. There is no reservation, so one call
-  can overdraw by the cost of one summary.
 - The route (`POST /api/library/documents/:id/summary`) shares the stricter save rate limit, returns the
-  draft without saving it, and answers `402 insufficient_balance`, `422 model_unavailable` or
-  `502 model_failed` (a failure reported without the provider's message).
+  draft without saving it, and answers `400 model_required`, `402 insufficient_balance`,
+  `422 model_unavailable`, `429 summary_limit` or `502 model_failed` (a failure reported without the
+  provider's message).
 
 ## Highlighting on the page image
 

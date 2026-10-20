@@ -16,6 +16,7 @@ const {
   restoreTenantContextFromReq,
   libraryBrowseLimiter,
   librarySaveLimiter,
+  librarySummaryLimiter,
   LIBRARY_MAX_UPLOAD_BYTES,
 } = require('@librechat/api');
 const { configMiddleware, requireJwtAuth } = require('~/server/middleware');
@@ -183,7 +184,7 @@ router.get('/export', ...browse, handlers.exportHighlights);
 router.get('/review', ...browse, handlers.dailyReview);
 router.post('/review/:id', ...browse, handlers.reviewHighlight);
 router.post('/documents/:id/chat', ...browse, handlers.chat);
-router.post('/documents/:id/summary', ...save, handlers.summarize);
+router.post('/documents/:id/summary', ...save, librarySummaryLimiter, handlers.summarize);
 router.post('/ask', ...browse, handlers.ask);
 router.get('/count', ...browse, handlers.count);
 router.get('/folders', ...browse, handlers.listFolders);
