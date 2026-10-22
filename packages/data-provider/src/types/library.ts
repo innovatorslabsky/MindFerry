@@ -177,8 +177,11 @@ export type TLibraryChatRequest = { endpoint?: string; model?: string; unitIndex
 export type TLibraryChatResponse = { conversationId: string };
 
 /** What the person wants to do with the whole library. */
-/** The model to write a summary with; the person's own credentials are used. */
-export type TLibrarySummaryRequest = { endpoint: string; model: string };
+/**
+ * The model to write a summary with, run on the person's own credentials. Left out, the
+ * deployment's own summary model is used, if it has one.
+ */
+export type TLibrarySummaryRequest = { endpoint?: string; model?: string };
 
 /** A draft summary: it is not saved until the person keeps it. */
 export type TLibrarySummaryResponse = { summary: string };

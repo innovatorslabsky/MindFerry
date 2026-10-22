@@ -68,15 +68,11 @@ describe('SummaryField', () => {
     expect(mockSummarize).toHaveBeenCalledWith({ id: 'd1', endpoint: 'Mock', model: 'mock-model' });
   });
 
-  it('says so when there is no chat model to use, and asks nothing', () => {
+  it('asks without a model when there is no chat, leaving it to the deployment’s own', () => {
     mockConversation = null;
     renderField();
     fireEvent.click(screen.getByRole('button', { name: 'com_library_summary_write' }));
-    expect(mockSummarize).not.toHaveBeenCalled();
-    expect(mockToast).toHaveBeenCalledWith({
-      message: 'com_library_summary_no_model',
-      status: 'error',
-    });
+    expect(mockSummarize).toHaveBeenCalledWith({ id: 'd1' });
   });
 
   it('shows the draft unsaved, saves it only when kept, and can drop it', () => {
@@ -106,6 +102,20 @@ describe('SummaryField', () => {
     expect((screen.getByLabelText('com_library_summary') as HTMLTextAreaElement).value).toBe(
       'Mine.',
     );
+  });
+
+  it('tells a person with no model to open a chat, and one over the daily limit', () => {
+    renderField();
+    summarizeOptions.onError?.({ response: { data: { error: { code: 'model_required' } } } });
+    expect(mockToast).toHaveBeenLastCalledWith({
+      message: 'com_library_summary_no_model',
+      status: 'error',
+    });
+    summarizeOptions.onError?.({ response: { data: { error: { code: 'summary_limit' } } } });
+    expect(mockToast).toHaveBeenLastCalledWith({
+      message: 'com_library_summary_error_limit',
+      status: 'error',
+    });
   });
 
   it('explains a failure the person can act on', () => {

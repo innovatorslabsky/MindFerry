@@ -42,12 +42,8 @@ export default function SummaryField({
 
   const draft_ = draft !== null;
   const write = () => {
-    const target = chatTarget;
-    if (!target) {
-      fail('com_library_summary_no_model');
-      return;
-    }
-    summarize.mutate({ id: documentId, ...target });
+    /** With no chat model to offer, the deployment's own may still answer; if not, the server says so. */
+    summarize.mutate({ id: documentId, ...chatTarget });
   };
 
   return (

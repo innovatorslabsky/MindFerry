@@ -30,6 +30,11 @@ export interface LibraryTextRequest {
   model: string;
   prompt: string;
   signal?: AbortSignal;
+  /**
+   * Whether the call is spent against the person's balance, and refused when they have none left.
+   * On unless the deployment pays for the model.
+   */
+  chargeUser?: boolean;
 }
 
 /** Runs a one-shot prompt on the endpoint and model the person picked, with their own credentials. */
@@ -147,7 +152,8 @@ export function createLibraryTextGenerator({ db }: LibraryTextGeneratorDeps): Li
     const appConfig = req.config as AppConfig | undefined;
     const userId = req.user?.id;
     const balance = getBalanceConfig(appConfig);
-    if (userId && balance?.enabled) {
+    const charge = request.chargeUser !== false;
+    if (charge && userId && balance?.enabled) {
       const record = await db.findBalanceByUser(userId);
       if ((record?.tokenCredits ?? 0) <= 0) {
         throw new LibraryModelError('insufficient_balance', 'No credits left');
@@ -178,7 +184,7 @@ export function createLibraryTextGenerator({ db }: LibraryTextGeneratorDeps): Li
     };
 
     const usage = response.usage_metadata;
-    if (userId && usage) {
+    if (charge && userId && usage) {
       await db
         .spendTokens(
           {

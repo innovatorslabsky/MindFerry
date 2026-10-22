@@ -31,6 +31,27 @@ export function getLibraryChatMaxChars(config: AppConfig | undefined): number {
   return config?.contextHub?.library?.chatMaxChars ?? DEFAULT_CHAT_MAX_CHARS;
 }
 
+export interface LibrarySummaryModel {
+  endpoint: string;
+  model: string;
+  perUserPerDay: number;
+}
+
+/** The model the deployment writes summaries with (`contextHub.library.summary`), if it set one. */
+export function getLibrarySummaryModel(
+  config: AppConfig | undefined,
+): LibrarySummaryModel | undefined {
+  const summary = config?.contextHub?.library?.summary;
+  if (!summary?.endpoint || !summary.model) {
+    return undefined;
+  }
+  return {
+    endpoint: summary.endpoint,
+    model: summary.model,
+    perUserPerDay: summary.perUserPerDay ?? 30,
+  };
+}
+
 /**
  * Whether an uploaded PDF's original file is kept so its pages can be shown as the page itself.
  * Off by default: it multiplies what is stored per user, and keeps a copy of the file, not only text.

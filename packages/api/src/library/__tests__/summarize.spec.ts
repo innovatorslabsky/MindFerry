@@ -1,8 +1,10 @@
+import { contextHubSchema } from 'librechat-data-provider';
 import type { Response } from 'express';
 import type { ServerRequest } from '../../types/http';
 import type { LibraryTextGenerator } from '../llm';
 import { buildSummaryPrompt, cleanSummary, SUMMARY_MAX_CHARS } from '../summarize';
 import { createFakeLibraryMethods } from './helpers/fakeLibraryMethods';
+import { getLibrarySummaryModel } from '../config';
 import { createLibraryService } from '../service';
 import { createLibraryHandlers } from '../routes';
 import { LibraryModelError } from '../llm';
@@ -47,10 +49,12 @@ function reply() {
   return { response, out };
 }
 
-const req = (id: string, body: unknown) =>
+const SERVER_MODEL = { endpoint: 'Company', model: 'small-1', perUserPerDay: 3 };
+
+const req = (id: string, body: unknown, summary?: typeof SERVER_MODEL) =>
   ({
     user: { id: user },
-    config: { contextHub: { enabled: false, library: { enabled: true } } },
+    config: { contextHub: { enabled: false, library: { enabled: true, summary } } },
     body,
     query: {},
     params: { id },
@@ -100,6 +104,7 @@ describe('summarize handler', () => {
     const missing = reply();
     await handlers.summarize(req(id, {}), missing.response);
     expect(missing.out.status).toBe(400);
+    expect((missing.out.body as { error: { code: string } }).error.code).toBe('model_required');
     expect(generateText).not.toHaveBeenCalled();
 
     const off = await setup(undefined);
@@ -142,6 +147,118 @@ describe('summarize handler', () => {
       const body = out.out.body as { error: { code: string; message: string } };
       expect(body.error.code).toBe(code);
       expect(JSON.stringify(body)).not.toContain('secret');
+    }
+  });
+});
+
+describe('the deployment’s own summary model', () => {
+  it('is read from the config, with a daily allowance', () => {
+    expect(getLibrarySummaryModel(undefined)).toBeUndefined();
+    expect(getLibrarySummaryModel({ contextHub: { library: {} } } as never)).toBeUndefined();
+    expect(
+      getLibrarySummaryModel({
+        contextHub: { library: { summary: { endpoint: 'Company', model: 'small-1' } } },
+      } as never),
+    ).toEqual({ endpoint: 'Company', model: 'small-1', perUserPerDay: 30 });
+  });
+
+  it('is validated in the config file', () => {
+    const parse = (summary: unknown) =>
+      contextHubSchema.safeParse({ enabled: true, library: { enabled: true, summary } });
+    expect(parse(undefined).success).toBe(true);
+    const ok = parse({ endpoint: 'Company', model: 'small-1' });
+    expect(ok.success && ok.data?.library.summary?.perUserPerDay).toBe(30);
+    expect(parse({ endpoint: '', model: 'small-1' }).success).toBe(false);
+    expect(parse({ endpoint: 'Company', model: 'small-1', perUserPerDay: 0 }).success).toBe(false);
+  });
+
+  it('wins over the person’s model, at the deployment’s cost', async () => {
+    const generateText = jest.fn<
+      ReturnType<LibraryTextGenerator>,
+      Parameters<LibraryTextGenerator>
+    >(async () => 'A summary.');
+    const { handlers, id } = await setup(generateText);
+    const out = reply();
+    await handlers.summarize(req(id, target, SERVER_MODEL), out.response);
+    expect(out.out.status).toBe(200);
+    const [, request] = generateText.mock.calls[0];
+    expect(request).toMatchObject({ endpoint: 'Company', model: 'small-1', chargeUser: false });
+  });
+
+  it('needs nothing from the person, who may have no chat open', async () => {
+    const generateText = jest.fn(async () => 'A summary.');
+    const { handlers, id } = await setup(generateText);
+    const out = reply();
+    await handlers.summarize(req(id, {}, SERVER_MODEL), out.response);
+    expect(out.out.status).toBe(200);
+  });
+
+  it('charges the person only when it is their own model', async () => {
+    const generateText = jest.fn<
+      ReturnType<LibraryTextGenerator>,
+      Parameters<LibraryTextGenerator>
+    >(async () => 'A summary.');
+    const { handlers, id } = await setup(generateText);
+    await handlers.summarize(req(id, target), reply().response);
+    expect(generateText.mock.calls[0][1].chargeUser).toBe(true);
+  });
+});
+
+describe('the daily allowance on the deployment’s model', () => {
+  const call = (summary?: typeof SERVER_MODEL) => {
+    const out = { status: 0, body: undefined as unknown, next: false };
+    const response = {
+      status(code: number) {
+        out.status = code;
+        return response;
+      },
+      json(body: unknown) {
+        out.body = body;
+        return response;
+      },
+      setHeader: () => response,
+      set: () => response,
+      getHeader: () => undefined,
+      append: () => response,
+    } as unknown as Response;
+    const request = {
+      ...req('x', {}, summary),
+      ip: '203.0.113.9',
+      app: { get: () => false },
+      headers: {},
+    } as unknown as ServerRequest;
+    return { out, response, request };
+  };
+
+  it('stops a person after their allowance, and says why', async () => {
+    const { librarySummaryLimiter } = await import('../routes');
+    for (let i = 0; i < 3; i += 1) {
+      const { request, response, out } = call(SERVER_MODEL);
+      await new Promise<void>((resolve) =>
+        librarySummaryLimiter(request as never, response, () => {
+          out.next = true;
+          resolve();
+        }),
+      );
+      expect(out.next).toBe(true);
+    }
+    const { request, response, out } = call(SERVER_MODEL);
+    await librarySummaryLimiter(request as never, response, () => {
+      out.next = true;
+    });
+    expect(out.next).toBe(false);
+    expect(out.status).toBe(429);
+    expect((out.body as { error: { code: string } }).error.code).toBe('summary_limit');
+  });
+
+  it('does not count a person on their own model', async () => {
+    const { librarySummaryLimiter } = await import('../routes');
+    for (let i = 0; i < 10; i += 1) {
+      const { request, response, out } = call(undefined);
+      await librarySummaryLimiter(request as never, response, () => {
+        out.next = true;
+      });
+      expect(out.next).toBe(true);
     }
   });
 });

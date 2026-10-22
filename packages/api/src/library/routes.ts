@@ -16,6 +16,7 @@ import { FetchError, TooLargeError, UnsafeUrlError } from './net/safeFetch';
 import { createHighlightSchema, KINDS, LOCATIONS, SORTS } from './types';
 import { ASK_MODES, convertLibraryAskToChat, needsTopic } from './ask';
 import { isConversationImportError } from '../conversations/import';
+import { getLibrarySummaryModel, isLibraryEnabled } from './config';
 import { isContentFilterError } from '../middleware/contentFilter';
 import { buildSummaryPrompt, cleanSummary } from './summarize';
 import { PdfEncryptedError, PdfError } from './pdf/parsePdf';
@@ -27,7 +28,6 @@ import { convertLibraryDocumentToChat } from './chat';
 import { NotReadableError } from './ingest/extract';
 import { FeedParseError } from './feed/parseFeed';
 import { MAX_OCR_PAGE_CHARS } from './service';
-import { isLibraryEnabled } from './config';
 import { LibraryModelError } from './llm';
 
 /**
@@ -55,6 +55,31 @@ export const librarySaveLimiter: RequestHandler = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => contextHubRateLimitKey(req as ServerRequest),
+});
+
+const DAY_MS = 24 * 60 * 60_000;
+
+/**
+ * When the deployment pays for the summary model, each person gets a daily allowance. The count is
+ * kept in this process, so it is per replica and starts over on a restart. A person on their own
+ * model is not counted.
+ */
+export const librarySummaryLimiter: RequestHandler = rateLimit({
+  windowMs: DAY_MS,
+  limit: (req) => getLibrarySummaryModel((req as ServerRequest).config)?.perUserPerDay ?? 0,
+  skip: (req) => getLibrarySummaryModel((req as ServerRequest).config) === undefined,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => contextHubRateLimitKey(req as ServerRequest),
+  handler: (_req, res) => {
+    res.status(429).json({
+      error: {
+        message: 'Daily limit of summaries reached',
+        type: 'rate_limit',
+        code: 'summary_limit',
+      },
+    });
+  },
 });
 
 /**
@@ -153,8 +178,8 @@ const chatBodySchema = z.object({
 });
 
 const summaryBodySchema = z.object({
-  endpoint: z.string().regex(NAME_PATTERN),
-  model: z.string().regex(NAME_PATTERN),
+  endpoint: z.string().regex(NAME_PATTERN).optional(),
+  model: z.string().regex(NAME_PATTERN).optional(),
 });
 
 const askBodySchema = z.object({
@@ -830,7 +855,13 @@ export function createLibraryHandlers({
     if (!generateText) return fail(res, 404, 'not_found', 'Summaries are not available');
     const service = serviceFor(req);
     const body = summaryBodySchema.safeParse(req.body ?? {});
-    if (!body.success) return fail(res, 400, 'invalid_request', 'A model is required');
+    if (!body.success) return fail(res, 400, 'invalid_request', 'Invalid request');
+    /** The deployment's own model wins when it set one; otherwise the person's. */
+    const server = getLibrarySummaryModel(req.config);
+    const target = server ?? body.data;
+    if (!target.endpoint || !target.model) {
+      return fail(res, 400, 'model_required', 'A model is required');
+    }
     try {
       const found = await service.chatSource(userId, param(req, 'id'));
       if (!found) return fail(res, 404, 'not_found', 'Document not found');
@@ -838,8 +869,9 @@ export function createLibraryHandlers({
         return fail(res, 422, 'empty_document', 'There is no text here to summarize');
       }
       const raw = await generateText(req, {
-        endpoint: body.data.endpoint,
-        model: body.data.model,
+        endpoint: target.endpoint,
+        model: target.model,
+        chargeUser: server === undefined,
         prompt: buildSummaryPrompt({
           title: found.document.title,
           text: found.text,
