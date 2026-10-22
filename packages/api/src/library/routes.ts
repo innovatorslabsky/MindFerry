@@ -118,10 +118,18 @@ const patchDocumentSchema = z
     /** Empty removes the note, or the summary. */
     note: z.string().max(5000).optional(),
     summary: z.string().max(2000).optional(),
+    /** Puts back the title and author the page itself gave. */
+    restoreMeta: z.literal(true).optional(),
   })
   .refine((patch) => Object.values(patch).some((value) => value !== undefined), {
     message: 'Nothing to update',
-  });
+  })
+  .refine(
+    (patch) => !patch.restoreMeta || (patch.title === undefined && patch.byline === undefined),
+    {
+      message: 'Restore cannot be combined with an edit of the same fields',
+    },
+  );
 
 const patchHighlightSchema = z
   .object({

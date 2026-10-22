@@ -1231,6 +1231,59 @@ describe('editing a document', () => {
     expect((await methods.getLibraryDocument(userA, saved.document.id))?.byline).toBeUndefined();
   });
 
+  it('puts back the page’s own title and author, after more than one edit', async () => {
+    const saved = await methods.saveLibraryDocument(userA, doc({ byline: 'Original Author' }));
+    const id = saved.document.id;
+    const first = await methods.updateLibraryDocument(userA, id, { title: 'Mine', byline: 'Me' });
+    expect(first?.metaEdited).toBe(true);
+    // A second edit must not replace what the page itself said with the first edit.
+    await methods.updateLibraryDocument(userA, id, { title: 'Mine again' });
+
+    const restored = await methods.updateLibraryDocument(userA, id, { restoreMeta: true });
+    expect(restored?.title).toBe(doc().title);
+    expect(restored?.byline).toBe('Original Author');
+    expect(restored?.metaEdited).toBeUndefined();
+
+    // After a restore the document follows the page again.
+    await methods.saveLibraryDocument(userA, doc({ title: 'Page renamed' }));
+    expect((await methods.getLibraryDocument(userA, id))?.title).toBe('Page renamed');
+  });
+
+  it('puts back the page’s newer title when the page changed after the edit', async () => {
+    const saved = await methods.saveLibraryDocument(userA, doc({ byline: 'Original Author' }));
+    const id = saved.document.id;
+    await methods.updateLibraryDocument(userA, id, { title: 'Mine', byline: null });
+    await methods.saveLibraryDocument(
+      userA,
+      doc({ title: 'Page renamed', byline: 'New Author', text: 'Memory decays on a curve.' }),
+    );
+    expect((await methods.getLibraryDocument(userA, id))?.title).toBe('Mine');
+
+    const restored = await methods.updateLibraryDocument(userA, id, { restoreMeta: true });
+    expect(restored?.title).toBe('Page renamed');
+    expect(restored?.byline).toBe('New Author');
+  });
+
+  it('takes the author off again when the page had none', async () => {
+    const saved = await methods.saveLibraryDocument(userA, doc());
+    const id = saved.document.id;
+    await methods.updateLibraryDocument(userA, id, { byline: 'Me' });
+    const restored = await methods.updateLibraryDocument(userA, id, { restoreMeta: true });
+    expect(restored?.byline).toBeUndefined();
+  });
+
+  it('has nothing to put back for a title that was never edited, and not for another person', async () => {
+    const saved = await methods.saveLibraryDocument(userA, doc());
+    const same = await methods.updateLibraryDocument(userA, saved.document.id, {
+      restoreMeta: true,
+    });
+    expect(same?.title).toBe(doc().title);
+    expect(same?.metaEdited).toBeUndefined();
+    expect(
+      await methods.updateLibraryDocument(userB, saved.document.id, { restoreMeta: true }),
+    ).toBeNull();
+  });
+
   it('lets a page that was never edited follow the page', async () => {
     const saved = await methods.saveLibraryDocument(userA, doc({ title: 'First' }));
     await methods.saveLibraryDocument(userA, doc({ title: 'Second' }));

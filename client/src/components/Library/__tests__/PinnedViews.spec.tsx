@@ -1,11 +1,13 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { mockClient } from 'test/libraryMocks';
 
 const mockCreate = jest.fn();
 const mockRemove = jest.fn();
+const mockRename = jest.fn();
 const mockToast = jest.fn();
 let mockViews: unknown[] = [];
+let mockRenameOptions: { onSuccess?: () => void; onError?: (e: unknown) => void } | undefined;
 let mockCreateOptions: { onSuccess?: () => void; onError?: (e: unknown) => void } | undefined;
 
 jest.mock('~/hooks', () => ({
@@ -20,6 +22,10 @@ jest.mock('~/data-provider', () => ({
     return { mutate: mockCreate, isLoading: false };
   },
   useDeleteLibraryViewMutation: () => ({ mutate: mockRemove, isLoading: false }),
+  useRenameLibraryViewMutation: (options: typeof mockRenameOptions) => {
+    mockRenameOptions = options;
+    return { mutate: mockRename, isLoading: false };
+  },
 }));
 jest.mock('@librechat/client', () => ({
   ...mockClient,
@@ -122,6 +128,56 @@ describe('PinnedViews', () => {
     render(<PinnedViews current={current} canPin onOpen={jest.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'com_library_view_pin' }));
     mockCreateOptions?.onError?.({ response: { data: { error: { code: 'view_exists' } } } });
+    expect(mockToast).toHaveBeenCalledWith({
+      message: 'com_library_error_view_exists',
+      status: 'error',
+    });
+  });
+
+  it('renames a view in place, keeping what it filters', () => {
+    mockViews = [view('v1', 'Papers', { kind: 'pdf' })];
+    render(<PinnedViews current={current} canPin onOpen={jest.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_view_rename:Papers' }));
+    const field = screen.getByLabelText('com_library_view_rename_field:Papers');
+    expect((field as HTMLInputElement).value).toBe('Papers');
+    fireEvent.change(field, { target: { value: '  Reading list ' } });
+    fireEvent.submit(field);
+
+    expect(mockRename).toHaveBeenCalledWith({ id: 'v1', name: 'Reading list' });
+    act(() => mockRenameOptions?.onSuccess?.());
+    expect(screen.queryByLabelText('com_library_view_rename_field:Papers')).not.toBeInTheDocument();
+  });
+
+  it('asks nothing when the name is unchanged or blank, and Escape cancels', () => {
+    mockViews = [view('v1', 'Papers')];
+    render(<PinnedViews current={current} canPin onOpen={jest.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_view_rename:Papers' }));
+    fireEvent.submit(screen.getByLabelText('com_library_view_rename_field:Papers'));
+    expect(mockRename).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('com_library_view_rename_field:Papers')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_view_rename:Papers' }));
+    fireEvent.change(screen.getByLabelText('com_library_view_rename_field:Papers'), {
+      target: { value: '   ' },
+    });
+    fireEvent.submit(screen.getByLabelText('com_library_view_rename_field:Papers'));
+    expect(mockRename).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_view_rename:Papers' }));
+    fireEvent.keyDown(screen.getByLabelText('com_library_view_rename_field:Papers'), {
+      key: 'Escape',
+    });
+    expect(screen.queryByLabelText('com_library_view_rename_field:Papers')).not.toBeInTheDocument();
+  });
+
+  it('says why when the name is taken', () => {
+    mockViews = [view('v1', 'Papers')];
+    render(<PinnedViews current={current} canPin onOpen={jest.fn()} />);
+    act(() =>
+      mockRenameOptions?.onError?.({ response: { data: { error: { code: 'view_exists' } } } }),
+    );
     expect(mockToast).toHaveBeenCalledWith({
       message: 'com_library_error_view_exists',
       status: 'error',

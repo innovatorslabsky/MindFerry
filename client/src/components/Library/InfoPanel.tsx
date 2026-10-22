@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pencil } from 'lucide-react';
+import { Pencil, Undo2 } from 'lucide-react';
 import { Button, Input, useToastContext } from '@librechat/client';
 import type { TLibraryDocumentSummary } from 'librechat-data-provider';
 import { useUpdateLibraryDocumentMutation } from '~/data-provider';
@@ -110,6 +110,32 @@ function MetadataForm({
   );
 }
 
+/** Puts back the title and author the page itself gave, for a document whose person changed them. */
+function RestoreMetadata({ documentId }: { documentId: string }) {
+  const localize = useLocalize();
+  const { showToast } = useToastContext();
+  const update = useUpdateLibraryDocumentMutation({
+    onError: () =>
+      showToast({
+        message: localize('com_library_edit_error'),
+        status: NotificationSeverity.ERROR,
+      }),
+  });
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="self-start"
+      disabled={update.isLoading}
+      onClick={() => update.mutate({ id: documentId, patch: { restoreMeta: true } })}
+    >
+      <Undo2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+      {localize('com_library_restore_metadata')}
+    </Button>
+  );
+}
+
 /** What is known about a document: the summary the person keeps, where it came from, how long it is. */
 export default function InfoPanel({ document }: { document: TLibraryDocumentSummary }) {
   const localize = useLocalize();
@@ -189,6 +215,7 @@ export default function InfoPanel({ document }: { document: TLibraryDocumentSumm
             )}
           </dl>
         )}
+        {!editing && document.metaEdited && <RestoreMetadata documentId={document.id} />}
       </section>
     </div>
   );

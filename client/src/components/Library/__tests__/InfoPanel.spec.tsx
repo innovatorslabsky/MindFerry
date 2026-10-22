@@ -143,6 +143,27 @@ describe('InfoPanel: editing the metadata', () => {
   });
 });
 
+describe('InfoPanel: undoing an edit of the title and author', () => {
+  it('offers it only for a document the person edited, and asks for a restore', () => {
+    const { rerender } = render(<InfoPanel document={doc()} />);
+    expect(
+      screen.queryByRole('button', { name: 'com_library_restore_metadata' }),
+    ).not.toBeInTheDocument();
+
+    rerender(<InfoPanel document={doc({ metaEdited: true })} />);
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_restore_metadata' }));
+    expect(mockUpdate).toHaveBeenCalledWith({ id: 'd1', patch: { restoreMeta: true } });
+  });
+
+  it('is not offered while the form is open', () => {
+    render(<InfoPanel document={doc({ metaEdited: true })} />);
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_edit_metadata' }));
+    expect(
+      screen.queryByRole('button', { name: 'com_library_restore_metadata' }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe('InfoPanel: the summary', () => {
   it('is saved when the field loses focus and only if it changed', () => {
     render(<InfoPanel document={doc({ summary: 'Old.' })} />);
