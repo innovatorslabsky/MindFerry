@@ -38,6 +38,30 @@ jest.mock('../ReaderBody', () => ({
     return <div data-testid="reader-body" />;
   },
 }));
+jest.mock('../ReaderMenu', () => ({
+  __esModule: true,
+  default: ({
+    location,
+    originalUrl,
+    onMove,
+    onShowShortcuts,
+  }: {
+    location: string;
+    originalUrl?: string;
+    onMove: (location: string) => void;
+    onShowShortcuts: () => void;
+  }) => (
+    <div data-testid="reader-menu" data-location={location} data-original={originalUrl ?? ''}>
+      <button onClick={() => onMove('archive')}>menu-archive</button>
+      <button onClick={onShowShortcuts}>menu-shortcuts</button>
+    </div>
+  ),
+}));
+jest.mock('../ReaderShortcuts', () => ({
+  __esModule: true,
+  default: ({ open, isBook }: { open: boolean; isBook: boolean }) =>
+    open ? <div data-testid="reader-shortcuts-dialog" data-book={String(isBook)} /> : null,
+}));
 jest.mock('../AskButtons', () => ({
   __esModule: true,
   default: ({ kind, unitIndex }: { kind: string; unitIndex: number }) => (
@@ -563,6 +587,34 @@ describe('ReaderView: keyboard', () => {
 
     fireEvent.keyDown(window, { key: 'l' });
     expect(mockUpdateDocument).toHaveBeenLastCalledWith({ id: 'd1', patch: { location: 'later' } });
+  });
+
+  it('moves back to the inbox with i', () => {
+    renderAt('/library/d1');
+
+    fireEvent.keyDown(window, { key: 'i' });
+
+    expect(mockUpdateDocument).toHaveBeenLastCalledWith({ id: 'd1', patch: { location: 'inbox' } });
+  });
+
+  it('gives the menu the document’s place, and moves when the menu says so', () => {
+    renderAt('/library/d1');
+
+    const menu = screen.getByTestId('reader-menu');
+    expect(menu).toHaveAttribute('data-location', 'inbox');
+    fireEvent.click(screen.getByText('menu-archive'));
+    expect(mockUpdateDocument).toHaveBeenLastCalledWith({
+      id: 'd1',
+      patch: { location: 'archive' },
+    });
+  });
+
+  it('shows the shortcuts with ? or from the menu', () => {
+    renderAt('/library/d1');
+    expect(screen.queryByTestId('reader-shortcuts-dialog')).not.toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '?' });
+    expect(screen.getByTestId('reader-shortcuts-dialog')).toBeInTheDocument();
   });
 
   it('goes back to the list with u', () => {

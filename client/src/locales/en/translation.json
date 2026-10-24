@@ -3731,5 +3731,11 @@
   "com_library_shelf_quick": "Quick reads",
   "com_library_shelf_quick_hint": "{{0}} minutes or less",
   "com_library_shelf_long": "Long reads",
-  "com_library_shelf_long_hint": "{{0}} minutes or more"
+  "com_library_shelf_long_hint": "{{0}} minutes or more",
+  "com_library_more_actions": "More actions",
+  "com_library_copy_original_link": "Copy link to the original",
+  "com_library_shortcut_highlight": "Highlight the selected text",
+  "com_library_shortcut_next_previous": "Next / previous chapter or page",
+  "com_library_shortcut_back": "Back to the library",
+  "com_library_shortcut_help": "Show these shortcuts"
 }
