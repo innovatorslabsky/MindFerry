@@ -52,8 +52,8 @@ jest.mock('../ReaderMenu', () => ({
     onShowShortcuts: () => void;
   }) => (
     <div data-testid="reader-menu" data-location={location} data-original={originalUrl ?? ''}>
-      <button onClick={() => onMove('archive')}>menu-archive</button>
-      <button onClick={onShowShortcuts}>menu-shortcuts</button>
+      <button data-testid="menu-archive" onClick={() => onMove('archive')} />
+      <button data-testid="menu-shortcuts" onClick={onShowShortcuts} />
     </div>
   ),
 }));
@@ -602,7 +602,7 @@ describe('ReaderView: keyboard', () => {
 
     const menu = screen.getByTestId('reader-menu');
     expect(menu).toHaveAttribute('data-location', 'inbox');
-    fireEvent.click(screen.getByText('menu-archive'));
+    fireEvent.click(screen.getByTestId('menu-archive'));
     expect(mockUpdateDocument).toHaveBeenLastCalledWith({
       id: 'd1',
       patch: { location: 'archive' },
