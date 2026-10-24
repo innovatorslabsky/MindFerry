@@ -60,6 +60,10 @@ jest.mock('../FolderBar', () => ({
     <button data-testid="folder-bar" data-value={value} onClick={() => onChange('f1')} />
   ),
 }));
+jest.mock('../Shelves', () => ({
+  __esModule: true,
+  default: () => <div data-testid="shelves" />,
+}));
 jest.mock('../PinnedViews', () => ({
   __esModule: true,
   default: ({
@@ -168,6 +172,27 @@ describe('LibraryView: the list', () => {
     mockList = { data: { documents: [] }, isLoading: false, isError: false };
     rerender(<LibraryView />);
     expect(screen.getByText('com_library_empty')).toBeInTheDocument();
+  });
+});
+
+describe('LibraryView: the shelves', () => {
+  it('shows them on the plain inbox, and not once the list is narrowed or searched', () => {
+    render(<LibraryView />, { wrapper: MemoryRouter });
+    expect(screen.getByTestId('shelves')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_kind_pdf' }));
+    expect(screen.queryByTestId('shelves')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_kind_all' }));
+    expect(screen.getByTestId('shelves')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'memory' } });
+    expect(screen.queryByTestId('shelves')).not.toBeInTheDocument();
+  });
+
+  it('leaves them off the other tabs', () => {
+    render(<LibraryView />, { wrapper: MemoryRouter });
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_tab_later' }));
+    expect(screen.queryByTestId('shelves')).not.toBeInTheDocument();
   });
 });
 
