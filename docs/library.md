@@ -89,8 +89,13 @@ In the list, with no field focused:
 | `?`       | show this list; `Esc` clears the selection |
 
 In the reader: `h` highlights the selected text (yellow), `e` archives and goes back, `l` sets the
-document aside, `u` goes back, and `n` / `p` go to the next / previous chapter or page. Shortcuts
-never act while you type in a field and never with Ctrl, Cmd or Alt held.
+document aside, `i` puts it back in the Inbox, `u` goes back, `n` / `p` go to the next / previous
+chapter or page, and `?` shows these keys. Shortcuts never act while you type in a field and never with
+Ctrl, Cmd or Alt held.
+
+The **⋯** button in the reader's header holds the same moves (each with its key beside it, and without
+the place the document is already in), **Copy link to the original** for a document saved from a web
+page, a download of this document's highlights as Markdown or CSV, and the list of shortcuts.
 
 The checkboxes (or **Select all**) turn the list into a batch: move the selected documents to
 Inbox, Later or Archive, file them into a folder, or delete them (asks first, saying how many). A

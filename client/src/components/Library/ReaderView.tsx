@@ -5,6 +5,7 @@ import { Button, Spinner, OGDialog, OGDialogTemplate, useToastContext } from '@l
 import type {
   TLibraryDocumentSummary,
   TLibraryHighlight,
+  TLibraryLocation,
   TLibraryProgress,
   TLibraryUnitSummary,
 } from 'librechat-data-provider';
@@ -19,9 +20,11 @@ import ReaderSidePanel, { type ReaderPanelTab } from './ReaderSidePanel';
 import { outlineOf, type OutlineEntry } from '~/utils/libraryOutline';
 import ReaderBody, { type ReaderBodyHandle } from './ReaderBody';
 import { NotificationSeverity } from '~/common';
+import ReaderShortcuts from './ReaderShortcuts';
 import { useShortcuts } from './useShortcuts';
 import PdfPageView from './PdfPageView';
 import AskButtons from './AskButtons';
+import ReaderMenu from './ReaderMenu';
 import { useLocalize } from '~/hooks';
 import TagEditor from './TagEditor';
 import OcrPanel from './OcrPanel';
@@ -193,10 +196,15 @@ export default function ReaderView() {
     return isBook ? (unitQuery.data?.highlights ?? EMPTY) : data.highlights;
   }, [data, isBook, unitQuery.data]);
 
+  const move = (location: TLibraryLocation) => id && update.mutate({ id, patch: { location } });
+  const [showShortcuts, setShowShortcuts] = useState(false);
+
   useShortcuts({
     h: () => handle.current?.highlightSelection(),
-    e: () => id && update.mutate({ id, patch: { location: 'archive' } }),
-    l: () => id && update.mutate({ id, patch: { location: 'later' } }),
+    e: () => move('archive'),
+    l: () => move('later'),
+    i: () => move('inbox'),
+    '?': () => setShowShortcuts(true),
     u: () => navigate('/library'),
     n: () => isBook && unitIndex < lastUnit && selectUnit(unitIndex + 1),
     p: () => isBook && unitIndex > 0 && selectUnit(unitIndex - 1),
@@ -348,6 +356,13 @@ export default function ReaderView() {
             </a>
           </Button>
         )}
+        <ReaderMenu
+          documentId={document.id}
+          location={document.location}
+          originalUrl={isOriginalLink ? document.normalizedUrl : undefined}
+          onMove={move}
+          onShowShortcuts={() => setShowShortcuts(true)}
+        />
       </header>
       <TagEditor documentId={document.id} tags={document.tags} />
       <div className="flex min-h-0 flex-1">
@@ -454,6 +469,7 @@ export default function ReaderView() {
           />
         </aside>
       </div>
+      <ReaderShortcuts open={showShortcuts} onOpenChange={setShowShortcuts} isBook={isBook} />
       <OGDialog open={confirmRemove} onOpenChange={setConfirmRemove}>
         <OGDialogTemplate
           showCloseButton={false}
