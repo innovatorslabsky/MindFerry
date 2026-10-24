@@ -96,6 +96,22 @@ describe('editing a document over HTTP', () => {
     }
   });
 
+  it('accepts a restore of the page’s own title on its own, not with an edit of the same fields', async () => {
+    const { handlers, id } = await saved();
+    const alone = reply();
+    await handlers.patch(req({ params: { id }, body: { restoreMeta: true } }), alone.response);
+    expect(alone.out.status).toBe(200);
+    for (const body of [
+      { restoreMeta: true, title: 'x' },
+      { restoreMeta: true, byline: 'x' },
+      { restoreMeta: false },
+    ]) {
+      const out = reply();
+      await handlers.patch(req({ params: { id }, body }), out.response);
+      expect(out.out.status).toBe(400);
+    }
+  });
+
   it('does not edit another person’s document', async () => {
     const { handlers, id } = await saved();
     const out = reply();

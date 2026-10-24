@@ -24,6 +24,8 @@ export type TLibraryDocumentSummary = {
   lang?: string;
   publishedTime?: string;
   contentHash: string;
+  /** The person changed the title or author; the page's own can be put back. */
+  metaEdited?: boolean;
   /** The opening of the text, for a line under the title in a list. Absent on older documents. */
   excerpt?: string;
   /** The person's own note on the document. */
@@ -60,6 +62,8 @@ export type TLibraryDocumentPatch = {
   title?: string;
   /** Null or empty takes the author off. */
   byline?: string | null;
+  /** Puts back the title and author the page itself gave. */
+  restoreMeta?: true;
   /** Empty removes the note, or the summary. */
   note?: string;
   summary?: string;

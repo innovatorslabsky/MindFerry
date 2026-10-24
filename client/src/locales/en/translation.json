@@ -3723,5 +3723,13 @@
   "com_library_summary_error": "Could not write a summary. Try again.",
   "com_library_summary_error_model": "This model cannot write a summary. Pick another in a chat.",
   "com_library_summary_error_balance": "You have no credits left to write a summary.",
-  "com_library_summary_error_limit": "You have reached today’s limit of summaries. Try again tomorrow."
+  "com_library_summary_error_limit": "You have reached today’s limit of summaries. Try again tomorrow.",
+  "com_library_view_rename": "Rename {{0}}",
+  "com_library_view_rename_field": "New name for {{0}}",
+  "com_library_view_rename_save": "Save name",
+  "com_library_restore_metadata": "Use the page’s own title and author",
+  "com_library_shelf_quick": "Quick reads",
+  "com_library_shelf_quick_hint": "{{0}} minutes or less",
+  "com_library_shelf_long": "Long reads",
+  "com_library_shelf_long_hint": "{{0}} minutes or more"
 }

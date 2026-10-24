@@ -67,6 +67,8 @@ export interface LibraryDocumentSummary {
   excerpt?: string;
   /** The person's own note on the document. */
   note?: string;
+  /** The person changed the title or author; the page's own can be put back. */
+  metaEdited?: boolean;
   /** A short summary the person keeps with the document. */
   summary?: string;
   wordCount: number;
@@ -151,6 +153,8 @@ export interface LibraryDocumentPatch {
   title?: string;
   /** `null` or an empty string takes the author off. */
   byline?: string | null;
+  /** Puts back the title and author the page itself gave, undoing the person's edits to them. */
+  restoreMeta?: boolean;
   /** An empty string removes the note. */
   note?: string;
   /** An empty string removes the summary. */

@@ -38,6 +38,7 @@ import InboxPanel from './InboxPanel';
 import { useLocalize } from '~/hooks';
 import Thumbnail from './Thumbnail';
 import FolderBar from './FolderBar';
+import Shelves from './Shelves';
 import { cn } from '~/utils';
 
 const LOCATIONS: readonly TLibraryLocation[] = ['inbox', 'later', 'archive', 'feed'] as const;
@@ -640,6 +641,8 @@ export default function LibraryView() {
               <InboxPanel />
             </>
           )}
+
+          {!query && location === 'inbox' && !tag && !folder && !kind && <Shelves />}
 
           {rows.length > 0 && (
             <div

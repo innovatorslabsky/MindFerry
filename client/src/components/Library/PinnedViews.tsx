@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pin, X } from 'lucide-react';
+import { Check, Pencil, Pin, X } from 'lucide-react';
 import { Button, Input, useToastContext } from '@librechat/client';
 import type { TLibraryView, TLibraryViewFilter } from 'librechat-data-provider';
 import {
   useCreateLibraryViewMutation,
   useDeleteLibraryViewMutation,
   useLibraryViewsQuery,
+  useRenameLibraryViewMutation,
 } from '~/data-provider';
 import { NotificationSeverity } from '~/common';
 import { libraryErrorKey } from './errors';
@@ -53,6 +54,16 @@ export default function PinnedViews({
       nameInput.current?.focus();
     }
   }, [naming]);
+  /** The view being renamed, and what its name is being changed to. */
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renameTo, setRenameTo] = useState('');
+  const renameInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (renaming) {
+      renameInput.current?.focus();
+      renameInput.current?.select();
+    }
+  }, [renaming]);
 
   const fail = (error: unknown) =>
     showToast({
@@ -67,6 +78,19 @@ export default function PinnedViews({
     onError: fail,
   });
   const remove = useDeleteLibraryViewMutation({ onError: fail });
+  const rename = useRenameLibraryViewMutation({
+    onSuccess: () => setRenaming(null),
+    onError: fail,
+  });
+  const submitRename = (event: React.FormEvent, view: TLibraryView) => {
+    event.preventDefault();
+    const clean = renameTo.trim();
+    if (clean === '' || clean === view.name) {
+      setRenaming(null);
+      return;
+    }
+    rename.mutate({ id: view.id, name: clean });
+  };
 
   const alreadyPinned = views.some((view) => matchesView(current, view));
   const submit = (event: React.FormEvent) => {
@@ -90,6 +114,39 @@ export default function PinnedViews({
         >
           {views.map((view) => {
             const active = matchesView(current, view);
+            if (renaming === view.id) {
+              return (
+                <form
+                  key={view.id}
+                  className="flex min-w-0 items-center gap-1"
+                  onSubmit={(event) => submitRename(event, view)}
+                >
+                  <Input
+                    ref={renameInput}
+                    value={renameTo}
+                    onChange={(event) => setRenameTo(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') {
+                        setRenaming(null);
+                      }
+                    }}
+                    aria-label={localize('com_library_view_rename_field', { 0: view.name })}
+                    maxLength={64}
+                    className="h-8 min-w-0 flex-1"
+                  />
+                  <Button
+                    type="submit"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0"
+                    aria-label={localize('com_library_view_rename_save')}
+                    disabled={rename.isLoading || renameTo.trim() === ''}
+                  >
+                    <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                  </Button>
+                </form>
+              );
+            }
             return (
               <div key={view.id} className="flex min-w-0 items-center gap-1">
                 <Button
@@ -102,6 +159,19 @@ export default function PinnedViews({
                 >
                   <Pin className="mr-1.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                   <span className="truncate">{view.name}</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0"
+                  aria-label={localize('com_library_view_rename', { 0: view.name })}
+                  onClick={() => {
+                    setRenaming(view.id);
+                    setRenameTo(view.name);
+                  }}
+                >
+                  <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                 </Button>
                 <Button
                   type="button"

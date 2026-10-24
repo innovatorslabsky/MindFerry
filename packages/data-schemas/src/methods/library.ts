@@ -283,6 +283,7 @@ function toSummary(doc: ILibraryDocument): LibraryDocumentSummary {
     ...(doc.note ? { note: doc.note } : {}),
     ...(doc.summary ? { summary: doc.summary } : {}),
     ...(doc.thumbnailPath ? { thumbnailPath: doc.thumbnailPath } : {}),
+    ...(doc.metaEdited ? { metaEdited: true } : {}),
     wordCount: doc.wordCount,
     readingMinutes: doc.readingMinutes,
     unitCount: doc.unitCount ?? 0,
@@ -397,13 +398,18 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
         { contentHash: 1, metaEdited: 1 },
       ).lean()) as unknown as Pick<ILibraryDocument, 'contentHash' | 'metaEdited'> | null;
       // A title or author the person changed stays, whatever the page says when it is saved again.
-      const { title: _title, byline: _byline, ...rest } = content;
-      const fresh = before?.metaEdited ? rest : content;
+      // The page's own title and author are kept beside the person's, so the edit can be undone.
+      const edited = before?.metaEdited === true;
+      const { title, byline, ...rest } = content;
+      const fresh = edited
+        ? { ...rest, pageTitle: title, ...(byline ? { pageByline: byline } : {}) }
+        : content;
       const saved = (await LibraryDocument.findOneAndUpdate(
         { userId: owner, urlKey: input.urlKey },
         {
           $set: { ...fresh, excerpt: makeExcerpt(content.text), userId: owner },
           $setOnInsert: { location: location ?? 'inbox', tags: tags ?? [] },
+          ...(edited && !byline ? { $unset: { pageByline: '' } } : {}),
         },
         { upsert: true, new: true },
       ).lean()) as unknown as ILibraryDocument;
@@ -1030,16 +1036,49 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       set.tags = patch.tags;
     }
     const unset: Record<string, ''> = {};
-    if (patch.title !== undefined) {
-      set.title = patch.title;
-      set.metaEdited = true;
-    }
-    if (patch.byline !== undefined) {
-      set.metaEdited = true;
-      if (patch.byline) {
-        set.byline = patch.byline;
+    if (patch.restoreMeta || patch.title !== undefined || patch.byline !== undefined) {
+      const existing = (await mongoose.models.LibraryDocument.findOne(
+        { _id: toObjectId(id), userId: toObjectId(userId) },
+        { title: 1, byline: 1, metaEdited: 1, pageTitle: 1, pageByline: 1 },
+      ).lean()) as unknown as Pick<
+        ILibraryDocument,
+        'title' | 'byline' | 'metaEdited' | 'pageTitle' | 'pageByline'
+      > | null;
+      if (!existing) {
+        return null;
+      }
+      if (patch.restoreMeta) {
+        // Back to what the page said; a title or author that was never edited has nothing to undo.
+        if (existing.metaEdited) {
+          set.title = existing.pageTitle ?? existing.title;
+          if (existing.pageByline) {
+            set.byline = existing.pageByline;
+          } else {
+            unset.byline = '';
+          }
+          unset.metaEdited = '';
+          unset.pageTitle = '';
+          unset.pageByline = '';
+        }
       } else {
-        unset.byline = '';
+        // The first edit remembers the page's own values.
+        if (!existing.metaEdited) {
+          set.pageTitle = existing.title;
+          if (existing.byline) {
+            set.pageByline = existing.byline;
+          }
+        }
+        set.metaEdited = true;
+        if (patch.title !== undefined) {
+          set.title = patch.title;
+        }
+        if (patch.byline !== undefined) {
+          if (patch.byline) {
+            set.byline = patch.byline;
+          } else {
+            unset.byline = '';
+          }
+        }
       }
     }
     for (const field of ['note', 'summary'] as const) {

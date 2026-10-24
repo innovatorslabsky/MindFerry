@@ -40,6 +40,9 @@ export interface ILibraryDocument extends Document {
   summary?: string;
   /** The person changed the title or author, so saving the page again must not put the page's back. */
   metaEdited?: boolean;
+  /** What the page itself called it and who it credited before the person's edit, kept so the edit can be undone. */
+  pageTitle?: string;
+  pageByline?: string;
   wordCount: number;
   readingMinutes: number;
   /** Chapters (EPUB) or pages (PDF); 0 for an article. */
@@ -82,6 +85,8 @@ const libraryDocumentSchema: Schema<ILibraryDocument> = new Schema(
     note: { type: String },
     summary: { type: String },
     metaEdited: { type: Boolean },
+    pageTitle: { type: String },
+    pageByline: { type: String },
     wordCount: { type: Number, required: true, default: 0 },
     readingMinutes: { type: Number, required: true, default: 0 },
     unitCount: { type: Number, required: true, default: 0 },

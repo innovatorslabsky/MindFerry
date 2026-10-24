@@ -96,6 +96,15 @@ The checkboxes (or **Select all**) turn the list into a batch: move the selected
 Inbox, Later or Archive, file them into a folder, or delete them (asks first, saying how many). A
 document that cannot be changed is counted; the others still go through.
 
+## Quick reads and long reads
+
+Above the inbox list, two rows pick out what suits the time you have: **Quick reads** (articles of 5
+minutes or less, shortest first) and **Long reads** (articles of 15 minutes or more, longest first). They
+are taken from the inbox only, show each article's picture, title and length, and open it with one click.
+A row with nothing to show is left out, and both are hidden as soon as you search, open another tab, or
+narrow the list by kind, tag or folder. Books are not on the shelves; they are measured in chapters and
+pages, not minutes.
+
 ## Daily review
 
 **Daily review** (button above the list, `/library/review`) shows a few old highlights, one card at a
