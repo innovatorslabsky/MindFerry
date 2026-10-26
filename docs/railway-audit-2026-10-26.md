@@ -199,3 +199,46 @@ FREELLMAPI_KEY and the freellmapi upstream provider key: need the FreeLLMAPI das
 JWT test plan (Vincent, in MindFerry): all old web sessions are logged out by design. (1) Open MindFerry and log in again with the normal credentials (a single 401 on /api/auth/refresh from the old cookie right before the login is expected and is not a failure). (2) Open the conversation list and open an existing conversation; it must load. (3) Send one short message on a Claude model; it must answer. Lyra then checks the log for "[Login successful]" for Vincent's account, 200 on POST /api/auth/login, 200 on /api/convos and /api/messages, and no auth/JWT errors.
 Status: JWT step COMPLETE on the infrastructure side, PENDING Vincent's re-login test. Other connectors that use the hub API key (not JWT) are expected to keep working; confirm via a 200 on /api/hub/mcp.
 Still HELD: Mongo password, CREDS_KEY/CREDS_IV, FREELLMAPI_KEY and upstream key (see runbooks above). No other variable changed in this session.
+
+## JWT step — COMPLETE (2026-10-26)
+- Both JWT_SECRET and JWT_REFRESH_SECRET were rotated together by Kem through a Railway browser task (one staged change, one redeploy, no value in this session). Deployment 68c85436 ACTIVE/SUCCESS.
+- Vincent re-login: PASS (reported by Kem via Vincent). Log evidence on 68c85436: 03:02:39Z "[refreshController] Invalid refresh token: invalid signature" (the expected rejection of the old cookie), 03:02:46Z "[Login successful]" for Vincent's account, POST /api/auth/login 200, then GET /api/convos 200 (x3) from the same browser. No other auth/JWT errors.
+- The "[credentials] fingerprints for JWT_SECRET, JWT_REFRESH_SECRET do not match the database credential record" startup warning is expected until the marker is refreshed after all rotations; do not edit the marker now.
+
+## Corrections and refinements to runbooks A and B (supersede where they differ)
+Facts found in code/config:
+- The backend takes the database name from the path segment of MONGO_URI (api/db/connect.js passes MONGO_URI to mongoose.connect with no dbName option). MONGO_URI is a reference to the MongoDB service's MONGO_URL. If MONGO_URL has no database path, the data is in the default database "test", NOT "LibreChat" as runbook B assumed. So first find the database that holds the users collection.
+- Which Mongo user the URL uses (root vs app user) cannot be read from this session (values are hidden from the Railway MCP). The variable names (MONGOHOST, MONGOPORT, MONGOUSER, MONGOPASSWORD, MONGO_INITDB_ROOT_USERNAME, MONGO_INITDB_ROOT_PASSWORD, MONGO_URL) match Railway's standard Mongo template, where MONGOUSER and MONGOPASSWORD are references to the MONGO_INITDB_ROOT_* variables and MONGO_URL is built from them as mongodb://${{MONGOUSER}}:${{MONGOPASSWORD}}@<private host>:27017 (root user). That is an assumption until Kem confirms it in the Variables tab.
+
+### Kem checklist before touching anything (Mongo service > Variables tab; do not copy any value anywhere)
+1. MONGOUSER: shown as ${{MONGO_INITDB_ROOT_USERNAME}} (reference) or a literal name? Write down only "reference" or "literal" and the user NAME (a username is not a secret).
+2. MONGOPASSWORD: reference to ${{MONGO_INITDB_ROOT_PASSWORD}} or literal?
+3. MONGO_URL: built from ${{MONGOUSER}}/${{MONGOPASSWORD}} (references) or a pasted string containing the password? Does it end with a database name (…:27017/<db>) or not?
+4. Backend (@mindferry-backend) MONGO_URI: still the reference to the MongoDB service's MONGO_URL (it was on 2026-10-26)?
+5. In the Mongo shell: list the users and roles without credentials: `db.getSiblingDB('admin').getUsers()` (no showCredentials option, so no hashes), and `db.adminCommand({ listDatabases: 1, nameOnly: true })` to see the database names.
+
+### Mongo password change (exact pattern; placeholders only)
+1. Backup: Railway dashboard > project mindferry > MongoDB service > volume mongodb-volume > Backups > Create backup, name pre-rotation-2026-10-26; wait until it is listed as complete. If Backups is unavailable on this plan, stop and report.
+2. Shell on the MongoDB service (Railway CLI `railway ssh`), authenticate without typing the password: `mongosh -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin`.
+3. Change the live password, typing the new one at the hidden prompt: `db.getSiblingDB('admin').changeUserPassword('<USER_FROM_CHECKLIST>', passwordPrompt())`. If the user lives in another database: `db.getSiblingDB('<AUTH_DB>').changeUserPassword('<APP_USER>', passwordPrompt())`. The new password must be URL-safe (hex/alphanumeric).
+4. Right away, update consistently on the MongoDB service: MONGO_INITDB_ROOT_PASSWORD (the source of truth); MONGOPASSWORD and MONGO_URL ONLY if they are literals (if they are references, leave them). The backend MONGO_URI is a reference and needs no edit. Apply once; Railway redeploys MongoDB and the backend. If the backend does not restart, redeploy it once.
+5. Verify: shell login with the new password works and the old one is rejected; backend log "Connected to MongoDB" with no auth error; Vincent can log in (if that fails, existing sessions would still work until the backend reconnects, so test with a fresh login) and the conversation list loads. Lyra reads the logs.
+6. Rollback: run changeUserPassword again back to the previous password using the new one to authenticate; volume restore only as a last resort.
+
+### CREDS count-only query (replaces runbook B's script; prints counts and type labels only)
+```
+const dbs = db.adminCommand({ listDatabases: 1, nameOnly: true }).databases.map(x => x.name)
+  .filter(n => !['admin','local','config'].includes(n));
+dbs.forEach(n => {
+  const d = db.getSiblingDB(n);
+  const names = d.getCollectionNames();
+  if (!names.includes('users')) { print(n, '(no users collection)'); return; }
+  print('== database', n, '| users', d.users.countDocuments({}), '| users with 2FA', d.users.countDocuments({ twoFactorEnabled: true }));
+  ['keys','pluginauths','actions','mcpservers','skillsynccredentials','openidrefreshflights','refreshtokenbridges','huboauthclients','configs']
+    .forEach(c => print(' ', c, names.includes(c) ? d.getCollection(c).countDocuments({}) : 'absent'));
+  printjson(d.tokens.aggregate([{ $group: { _id: '$type', n: { $sum: 1 } } }]).toArray());
+});
+```
+No document contents or values are printed. Interpretation is unchanged: all zero/absent (tokens only non-OAuth types) means CREDS_KEY/CREDS_IV can be rotated with no migration (64 hex and 32 hex); any non-zero means do NOT rotate until a decrypt-with-old / re-encrypt-with-new migration exists. Kem sends Lyra only the counts.
+
+Still HELD: Mongo password, CREDS_KEY/CREDS_IV, FREELLMAPI_KEY and upstream key. No other variable changed in this session; skyloom untouched.
