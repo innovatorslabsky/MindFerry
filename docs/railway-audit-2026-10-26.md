@@ -108,3 +108,21 @@ Real chat test (Kem or Vincent, logged in to MindFerry; Lyra reads the logs afte
 - PASS: a normal reply appears in the UI and the deploy logs for that minute show no 401, no authentication_error, no "invalid x-api-key".
 - FAIL: an error bubble in the UI, or any of those strings in the logs. Then keep the old key and report to Kem.
 - Old Anthropic key stays until the test passes. No other key is rotated.
+
+### Step 1 — chat test verdict (2026-10-26)
+Test reported by Kem: Vincent sent a real chat at 7:05 PM PDT 2026-10-25 (= 02:05Z), assumed new chat, Anthropic endpoint, message "Reply with exactly: KEY-TEST-OK". Checked on deployment 2decd1e0 (read-only).
+
+Evidence (02:04–02:10Z):
+- 02:04:53 Vincent's account logged in (deploy log "[Login successful]", POST /api/auth/login 200).
+- 02:05:19.505 POST /api/agents/chat/anthropic 200 — the request went to the Anthropic endpoint (not FreeLLMAPI).
+- 02:05:21.963 GET /api/agents/chat/stream/<conversation> 200, 2356 ms (the generation stream ran about 2.4 s); 02:05:21.447 GET /api/convos/gen_title/<conversation> 200, 1776 ms; messages and convo reads 200.
+- Deploy log search from 01:59Z for "401", "authentication_error", "invalid x-api-key", "anthropic": no matches. No error-level line in the window (the only deploy line is the login info line).
+- No 4xx/5xx on any user request in the window.
+
+Verdict: PASS on the log side — the new key was accepted, with no 401/authentication_error/invalid x-api-key. Limits: HTTP logs do not show reply text, and the exact message/model Vincent used was not observable (only the endpoint path). Final confirmation = Vincent states what reply he saw in the UI (expected KEY-TEST-OK).
+
+Other notes:
+- The 02:00Z POSTs to /api/hub/mcp (Python-urllib) were Kem's post-redeploy MindFerry connector search (confirmed by Kem). Treated as his; the earlier 2026-10-25 17:42Z and 2026-10-26 01:28Z bursts match the same pattern and remain "consistent, not provable".
+- A recurring probe from 20.55.61.179 (Azure; GET /.well-known/resource-that-should-not-exist-... at 02:04:32Z, also seen 2026-10-24) returns the SPA 200; low risk, no action.
+
+Old Anthropic key: NOT deleted. May be deleted once Vincent confirms the UI reply. Before deleting, Vincent can check the old key's "last used" in Anthropic Console: if it predates the 18:54 PDT redeploy, nothing else is using it. No other key rotated; skyloom untouched.
