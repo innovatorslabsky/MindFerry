@@ -85,3 +85,10 @@ Runbook:
 5. Only after a pass: Vincent deletes the OLD key in Anthropic Console. On a fail: leave the old key alive, keep the old value available to restore, report to Kem.
 
 Status: READY, waiting for Vincent's "pasted" signal. Lyra has no Anthropic Console access and has not redeployed or changed anything.
+
+### Step 1 plan change (Kem, supersedes "Vincent pastes it himself")
+- Execution method: Vincent gave the new Anthropic key directly to Kem. Kem updates ANTHROPIC_API_KEY on @mindferry-backend through a separate Railway browser task and redeploys the service. The secret value is not sent to this Claude session and must not be requested here.
+- Lyra's role: sets no Railway variable, does not redeploy, does not ask Vincent to paste anything. Stands by for Kem's confirmation that the variable was updated and the backend redeployed.
+- On Kem's confirmation: Lyra checks the latest deployment (newer than 42ae9584, SUCCESS) and the startup logs, then verifies with a real chat on a Claude model through MindFerry (run by Kem or Vincent, logged in) while reading the deploy logs. Pass = reply received, no 401, no authentication_error, no "invalid x-api-key".
+- The old Anthropic key is deleted only after that test passes. Mongo, CREDS, JWT, FREELLMAPI and skyloom are untouched.
+- Status: standing by for Kem's redeploy confirmation.
