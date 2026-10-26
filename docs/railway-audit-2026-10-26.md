@@ -69,3 +69,19 @@ Vincent's reply to the open questions: "Skyloom seems to touch the Anthropic key
 
 ## Blocker check for rotation step 1 (ANTHROPIC_API_KEY)
 Nothing found blocks it. Prerequisite: Vincent (or Kem with Anthropic Console access) creates the new key; Lyra has no console access. Skyloom is not a dependency (Vincent's correction).
+
+## Step 1 — ANTHROPIC_API_KEY rotation (approved by Vincent: "Làm nha em"; relayed by Kem)
+Scope: @mindferry-backend only (project mindferry fcb2ca74-0852-4a9b-81d1-7d80a6a908d1, service 6eb1d232-fb03-4b42-9cf1-5844afd04f44, env production 377ee5e9-047e-4e21-91bb-06692deb8567). No other key, no skyloom, no PR. The secret value must never pass through the chat session.
+
+Before-state (checked after approval, before any change):
+- Latest deployment 42ae9584-92ae-4175-9eaa-0de4428ec387, SUCCESS since 2026-10-24 07:22Z, commit 4d89926 on main; service live, 1 replica (sfo); no staged changes; variable names unchanged (ANTHROPIC_API_KEY present).
+- No error-level deploy log lines after 2026-10-26 01:30Z; HTTP traffic normal through 01:43Z.
+
+Runbook:
+1. Vincent: Anthropic Console > API keys > create a NEW key (do not delete the old one yet).
+2. Vincent: Railway > project mindferry > service @mindferry-backend > Variables > edit ANTHROPIC_API_KEY, paste the new value himself, and apply/deploy the staged change. Then tell Lyra "pasted".
+3. Lyra on "pasted": check get-staged-changes and the latest deployment. If the apply already created a newer deployment than 42ae9584, do not redeploy again; otherwise redeploy @mindferry-backend once. Wait for SUCCESS and a clean startup log.
+4. Test (Vincent or Kem, logged in to MindFerry): send a real chat message on a Claude model (Anthropic endpoint) and get a normal reply. Lyra then reads the deploy logs for that time window: pass = no 401, no authentication_error, no "invalid x-api-key"; fail = any of those.
+5. Only after a pass: Vincent deletes the OLD key in Anthropic Console. On a fail: leave the old key alive, keep the old value available to restore, report to Kem.
+
+Status: READY, waiting for Vincent's "pasted" signal. Lyra has no Anthropic Console access and has not redeployed or changed anything.
