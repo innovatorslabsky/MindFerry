@@ -92,3 +92,19 @@ Status: READY, waiting for Vincent's "pasted" signal. Lyra has no Anthropic Cons
 - On Kem's confirmation: Lyra checks the latest deployment (newer than 42ae9584, SUCCESS) and the startup logs, then verifies with a real chat on a Claude model through MindFerry (run by Kem or Vincent, logged in) while reading the deploy logs. Pass = reply received, no 401, no authentication_error, no "invalid x-api-key".
 - The old Anthropic key is deleted only after that test passes. Mongo, CREDS, JWT, FREELLMAPI and skyloom are untouched.
 - Status: standing by for Kem's redeploy confirmation.
+
+### Step 1 — Kem's confirmation and deployment check (2026-10-26)
+Kem reported (via a separate Railway browser task, not Vincent pasting, no secret in this session): exactly 1 variable changed on @mindferry-backend (ANTHROPIC_API_KEY); skyloom, MongoDB, freellmapi untouched; nothing deleted in Anthropic Console; Railway auto-redeployed starting 2026-10-25 6:54 PM PDT; Online, 1 replica, no pending changes.
+
+Verified by Lyra (read-only):
+- New deployment 2decd1e0-b5e9-4101-ac31-cd9cf3cce6d0 created 2026-10-26 01:54:43Z (= 18:54 PDT, matches Kem), status SUCCESS, commit 4d89926 (same code as before). Previous deployment 42ae9584 now REMOVED. No staged changes; variable names unchanged.
+- Startup log: "Server listening ... port 8080", "Server readiness checks passing", schedules and agent-trigger engines started. Only error-level line is the pre-existing "Social logins are disabled" notice. Warnings (pre-existing, unrelated): outdated config version 1.3.16, searxngInstanceUrl holds a literal value, RAG API not reachable. No 401/403, authentication_error or Mongo/JWT error.
+- Limit: startup does not call Anthropic, so a clean start does NOT prove the new key works. Only the real chat test does.
+- Traffic on the new deployment so far: Python-urllib POSTs to /api/hub/mcp at 02:00:17Z (200/202/200) and a Claude-User handshake; likely Kem's checks, not confirmed.
+
+Real chat test (Kem or Vincent, logged in to MindFerry; Lyra reads the logs afterwards):
+- Open a NEW chat, pick the Anthropic / Claude endpoint and any Claude model (NOT the FreeLLMAPI endpoint, which uses a different key).
+- Send exactly: "Reply with exactly: KEY-TEST-OK" and say the local time (PDT) it was sent.
+- PASS: a normal reply appears in the UI and the deploy logs for that minute show no 401, no authentication_error, no "invalid x-api-key".
+- FAIL: an error bubble in the UI, or any of those strings in the logs. Then keep the old key and report to Kem.
+- Old Anthropic key stays until the test passes. No other key is rotated.
