@@ -37,9 +37,35 @@ Not set: METRICS_SECRET (harmless, /metrics returns 401).
 4. JWT_SECRET / JWT_REFRESH_SECRET — rotate together; logs out all sessions, no data loss.
 5. FREELLMAPI_KEY — unified key from the FreeLLMAPI dashboard; update on backend, redeploy. Also in scope but not on the list: the upstream provider key(s) held by freellmapi (FREEAPI_CONFIG_JSON / volume) should be rotated at their providers; rotating freellmapi ENCRYPTION_KEY would orphan its stored keys.
 
-## Open questions for Vincent
-- Is skyloom in scope (SKYLOOM_SECRET, SKYLOOM_PASSWORD_HASH)?
-- Do users store personal API keys in MindFerry (CREDS_KEY impact)?
-- Were the 2026-10-25/26 Python-urllib calls his own checks?
-- Is the backend MONGO_URI a reference variable or a pasted value?
-- Value of ALLOW_REGISTRATION (should be false if no public signup is wanted).
+## Follow-up (2026-10-26, still read-only; no rotation, env change or redeploy; no secret values read)
+Vincent's reply to the open questions: "Skyloom seems to touch the Anthropic key; I don't know the others because Lyra built most of MindFerry." His Skyloom statement is an unverified impression, so each point below was checked from repo, Railway config and logs. Where that was not possible it says so.
+
+1. Skyloom and the Anthropic key — NOT VERIFIED either way, no evidence of a dependency.
+   - The skyloom code is not accessible: the session's GitHub scope is innovatorslabsky/MindFerry only and the local checkout has no skyloom code. innovatorslabsky/skyloom was not attached.
+   - Railway config for skyloom-web: variable names are only DATA_DIR, NODE_ENV, PORT, SKYLOOM_PASSWORD_HASH, SKYLOOM_SECRET, SKYLOOM_USER. No ANTHROPIC_API_KEY, no MindFerry/FreeLLMAPI URL or key name.
+   - skyloom is a separate Railway project, so it cannot reference mindferry project variables; it has no path to the backend's ANTHROPIC_API_KEY except a value pasted by hand.
+   - skyloom-web has no deploy, DNS or network-flow log lines since 2026-10-18 (empty, which proves nothing about outbound calls).
+   - Working conclusion: rotating @mindferry-backend's ANTHROPIC_API_KEY should not break skyloom, but this is an inference. Skyloom's own env/code could hold its own Anthropic key, in which case it needs its own rotation. To close it: attach innovatorslabsky/skyloom and grep for anthropic/ANTHROPIC, or have Vincent check the skyloom variable list in the dashboard. Treat skyloom as out of scope for step 1, with that caveat.
+2. MONGO_URI construction — NOT DETERMINABLE without reading the value.
+   - The repo only carries credential-less defaults (.env.example, docker-compose: mongodb://mongodb:27017/LibreChat); the Railway value lives only in the dashboard.
+   - The MongoDB service exposes MONGO_URL, MONGOUSER, MONGOPASSWORD, MONGO_INITDB_ROOT_PASSWORD; the backend variable is named MONGO_URI (different name), so it was created by hand: either a reference like ${{MongoDB.MONGO_URL}} or a pasted string.
+   - Check without exposing anything: in the dashboard Variables tab, a reference displays as ${{ ... }}. Do this before rotation step 2.
+3. User-stored keys (CREDS_KEY/CREDS_IV) — code path confirmed, row counts NOT obtainable (no database access).
+   - CREDS_KEY/CREDS_IV protect: 2FA/TOTP secrets (encryptV3), MCP/action OAuth tokens, plugin/action auth values, agent auth values, admin-panel stored secrets, OpenID flight tokens.
+   - librechat.yaml defines no user_provided endpoint (the FreeLLMAPI endpoint uses ${FREELLMAPI_KEY}), so per-user API keys are not the likely case; whether any of the other rows exist is unknown.
+   - To answer yes/no: someone with Mongo access runs count-only queries on the collections holding those records (users with twoFactorEnabled, tokens, pluginauths, keys). Counts only, never read documents.
+   - Also read packages/api/src/credentials.ts first: it keeps credential fingerprints in the librechatCredentialMetadata collection, so a changed CREDS_* is detected at startup (behaviour not yet tested).
+4. ALLOW_REGISTRATION — value NOT READ.
+   - The only tool that returns variable values (list-variables) returns every variable in plaintext, including secrets; not used. The live /api/config could not be reached from this sandbox (proxy 403, DNS failure).
+   - Code: registration is open when ALLOW_REGISTRATION is truthy (api/server/middleware/validateRegistration.js, config.js registrationEnabled); .env.example defaults to true. Invite links bypass it.
+   - Log evidence: no request to /api/auth/register since 2026-10-21 (neither accepted nor 403), so no sign-up attempts.
+   - Recommendation: once Vincent's account exists, set false. This is a billed-LLM deployment and open signup is free access to ANTHROPIC_API_KEY spend. Decision for Kem/Vincent; not changed here.
+5. Python-urllib POSTs at 2026-10-25 17:42Z and 2026-10-26 01:28Z — CONSISTENT with Kem's checks, not provable from logs.
+   - Timezone arithmetic is right: 17:42Z = 10:42 PDT Sun 25/10; 01:28Z = 18:28 PDT Sun 25/10.
+   - Both bursts are 6 requests to /api/hub/mcp with the same shape (200, 202, 200, 200, 202, 200), no 4xx. That is two MCP initialize/initialized/call sequences. The route requires a valid API key (packages/api/src/hub/mcp/route.ts returns 401 without one), so the caller held a valid credential.
+   - Source IPs differ per request inside a burst (104.29.x for the first, 87.81.x for the second), i.e. egress pools, so IP cannot identify the caller.
+   - Verdict: not suspicious, matches Kem's schedule; only Kem can confirm by matching the number of calls he made. If he did not make 2 sequences each, rotate the hub API key too.
+   - Unchanged unknowns: Chrome/114 GET / from Azure IP 2026-10-24 04:47Z and curl GET / 2026-10-24 06:45Z, both landing-page only, 200.
+
+## Blocker check for rotation step 1 (ANTHROPIC_API_KEY)
+Nothing found blocks it. Prerequisites: Vincent (or Kem with Anthropic Console access) creates the new key; Lyra has no console access. Caveat: skyloom may have its own Anthropic key (unverified, see point 1).
