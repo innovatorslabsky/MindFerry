@@ -320,3 +320,17 @@ Reading the result:
 Function deletion: NOT done. delete-service timed out after 60 s, the same way accept-deploy did: Railway asked the user a confirmation that Lyra cannot see or answer. Verified afterwards with describe-environment: mf-oneoff is still "live" (deployment e9867c60 SUCCESS, finished, restart NEVER, no domain); all other services unchanged, no staged changes. Pending: a human must delete the service mf-oneoff in the Railway dashboard (service > Settings > Delete service), then Lyra re-checks the environment. It holds only the MONGO_URL reference variable and is idle, so the exposure until deleted is small, but it should not stay.
 
 Status: Stage 0 count COMPLETE; Function deletion PENDING (dashboard). Stage 1 not started. Mongo password, CREDS rotation, FREELLMAPI_KEY and upstream key still need their own go-ahead. skyloom untouched.
+
+## Stage 0 — COMPLETE (2026-10-26)
+Environment re-verified by Lyra with describe-environment / describe-service (production, project mindferry), after Kem deleted mf-oneoff in the dashboard:
+- mf-oneoff: GONE (not in the service list; no volume or variable left behind).
+- Present and unchanged: MongoDB (latest deployment 06496d1a, SUCCESS), freellmapi (1f77213b, SUCCESS), @mindferry-backend (68c85436, SUCCESS, 14 variable names identical to before). Volumes mongodb-volume and freellmapi-data unchanged. No pending/staged changes.
+- Nothing was changed during Stage 0: no Mongo password, no variable, no CREDS key, no backend variable, no skyloom item.
+
+Stage 0 record: temporary read-only function mf-oneoff (service 8e887662-0f6d-4b0a-b7e2-2c9bce1f9923), deployment e9867c60-08d4-4d55-bc34-0b04b85a661c, ran once on 2026-10-26 04:41Z and exited SUCCESS, then deleted by Kem in the Railway dashboard (Settings > Delete Service, Destructive Changes dialog confirmed). It took two failed accept-deploy attempts and one failed delete-service attempt from this session because Railway required a human confirmation that Lyra cannot see.
+
+CREDS counts obtained (numbers only): database "test" (only database with a users collection); users 1; users with 2FA 0; keys 0; pluginauths 0; actions 0; mcpservers 0; skillsynccredentials 0; openidrefreshflights 0; refreshtokenbridges 0; configs 0; huboauthclients 2 (NOT CREDS data: public PKCE clients with no secret); tokens: none (empty). Hub API keys are hashes, not CREDS-encrypted.
+
+Conclusion: CREDS_KEY / CREDS_IV can be rotated WITHOUT a migration, with two caveats: (1) 2FA: users with 2FA enabled is 0, but a half-finished 2FA enrolment could hold a pendingTotpSecret encrypted with CREDS; with a single user the worst case is one re-enrolment; (2) no new CREDS-encrypted data may be created until the rotation is done (no 2FA, MCP/OAuth connections, plugin keys or personal API keys). New values must be exactly 64 hex (CREDS_KEY) and 32 hex (CREDS_IV).
+
+Next, to be sequenced with explicit approval (Stage 1 not started): CREDS_KEY/CREDS_IV via Kem's browser task (no value in this session); Mongo password change (design in the section above; the backup gate was waived by Vincent, the console route failed, a temporary private Function would again need dashboard confirmations); FREELLMAPI_KEY and the freellmapi upstream provider key (need the FreeLLMAPI dashboard); then refresh the credential-fingerprint marker once all rotations are finished. Done so far: ANTHROPIC_API_KEY (old key deleted by Vincent), JWT_SECRET/JWT_REFRESH_SECRET, ALLOW_REGISTRATION=false.
