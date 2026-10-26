@@ -290,3 +290,33 @@ Approved by Kem (Stage 0 only), retried on Vincent's explicit approval after the
 - Per instruction, no third attempt and nothing else changed. Stage 1 not started.
 - CREDS decision: still HELD (no counts obtained).
 - Open item: the staged patch remains pending in the dashboard. It only creates the read-only function; it can be applied by a human from the Railway dashboard ("Apply changes" for mf-oneoff, which may be the confirmation Railway was asking for), after which Lyra reads the counts with get-logs and deletes the function. If it is not going to be used, discard the pending change or delete the staged service so it does not linger.
+
+## Stage 0 RESULT — CREDS count (2026-10-26 04:41Z; read-only)
+Kem applied the pending mf-oneoff change in the dashboard (6 changes, mf-oneoff only, MONGO_URL reference, restart NEVER, no public domain). Deployment e9867c60-08d4-4d55-bc34-0b04b85a661c: SUCCESS (the script ran once and exited). Counts below were read from its logs with get-logs; counts only, no contents, no values, no connection string. Nothing in Mongo, the backend, freellmapi or skyloom was changed.
+
+Database found: only "test" (MONGO_URL has no database path, so the app's data lives in the default database "test", not "LibreChat"). No other non-system database has a users collection.
+
+| item | count |
+|---|---|
+| users (total) | 1 |
+| users with 2FA enabled | 0 |
+| keys | 0 |
+| pluginauths | 0 |
+| actions | 0 |
+| mcpservers | 0 |
+| skillsynccredentials | 0 |
+| openidrefreshflights | 0 |
+| refreshtokenbridges | 0 |
+| huboauthclients | 2 |
+| configs | 0 |
+| tokens grouped by type | none (empty) |
+
+Reading the result:
+- Every collection that holds data encrypted with CREDS_KEY/CREDS_IV is zero or empty: no user API keys, no plugin/action/MCP/skill-sync credentials, no OAuth/MCP tokens, no admin-panel secrets, no enabled 2FA, no OpenID flights or refresh bridges.
+- huboauthclients = 2 is NOT a CREDS concern: the schema defines public clients with no secret (PKCE), nothing encrypted. The hub API keys are stored as hashes (agentapikeys keyHash), not CREDS-encrypted.
+- Residual, not counted: a pending (unfinished) 2FA enrolment would store a pendingTotpSecret encrypted with CREDS even with 2FA disabled; with a single user this is at most one re-enrolment and is judged negligible. Conversation content is not CREDS-encrypted.
+- Conclusion: CREDS_KEY / CREDS_IV can be rotated WITHOUT a migration, provided nothing new is stored between this count and the rotation (do not add 2FA, MCP OAuth connections, plugin keys or personal API keys until the rotation is done). New values must be exactly 64 hex (CREDS_KEY) and 32 hex (CREDS_IV) or the backend refuses to start. Rotating them makes the credential-fingerprint warning cover all four credentials until the marker is refreshed in a controlled step at the end.
+
+Function deletion: NOT done. delete-service timed out after 60 s, the same way accept-deploy did: Railway asked the user a confirmation that Lyra cannot see or answer. Verified afterwards with describe-environment: mf-oneoff is still "live" (deployment e9867c60 SUCCESS, finished, restart NEVER, no domain); all other services unchanged, no staged changes. Pending: a human must delete the service mf-oneoff in the Railway dashboard (service > Settings > Delete service), then Lyra re-checks the environment. It holds only the MONGO_URL reference variable and is idle, so the exposure until deleted is small, but it should not stay.
+
+Status: Stage 0 count COMPLETE; Function deletion PENDING (dashboard). Stage 1 not started. Mongo password, CREDS rotation, FREELLMAPI_KEY and upstream key still need their own go-ahead. skyloom untouched.
