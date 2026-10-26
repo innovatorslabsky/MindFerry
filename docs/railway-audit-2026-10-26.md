@@ -153,3 +153,39 @@ ALLOW_REGISTRATION — value not readable here. Since Vincent's account is confi
 - Startup log: "Connected to MongoDB", "Server listening ... port 8080", "Server readiness checks passing"; no 401/403/authentication/Mongo/JWT errors (only the pre-existing METRICS_SECRET, searxngInstanceUrl and RAG API warnings).
 - Still to confirm by a human: Vincent still logged in / can log in, and the register page is closed. Not testable from this session.
 - All four rotations (Mongo password, CREDS, JWT, FREELLMAPI) remain HELD as recorded above; no other variable was changed in this session.
+
+## Decision: JWT rotation (Kem, Vincent approved: "Duyệt, em làm qua trình duyệt như bước 1")
+- JWT_SECRET / JWT_REFRESH_SECRET are rotated by Kem through a separate Railway browser task, exactly like step 1. Lyra does NOT generate or set these values and no secret appears in this session.
+- Kem sets both new values (two independent random values, one change), lets Railway redeploy @mindferry-backend once, and reports back.
+- Lyra then verifies the new deployment (newer than b1c9edeb, SUCCESS, clean startup) and helps test login. Expected: every existing session is logged out once; old browser cookies get a 401 on /api/auth/refresh, which is NOT a failure. PASS = Vincent logs in, conversations load, log shows "[Login successful]", no startup credential error. A startup error naming a retired default JWT value means the new value was not applied.
+- No other variable is rotated in this session. skyloom untouched.
+Status: STANDING BY for Kem's JWT result.
+
+## Runbooks owed to Kem (no values; commands only)
+
+### A. MongoDB password (HELD until Kem/Vincent run it; Lyra cannot back up or open a shell)
+Facts: MONGO_URI on the backend is a reference to the MongoDB service's MONGO_URL. MongoDB has no public TCP proxy (private network only). MONGO_INITDB_ROOT_PASSWORD only applies to an empty volume, so the LIVE password must be changed inside Mongo.
+0. Choose a new password that is hex/alphanumeric only (e.g. generated locally with `openssl rand -hex 24`), so it needs no URL-encoding inside the mongodb:// connection string. Never paste it in chat.
+1. Backup first. Railway dashboard > project mindferry > MongoDB service > volume mongodb-volume > Backups > Create backup (name it pre-rotation-2026-10-26). Confirm it appears in the list. If the Backups option is unavailable on this plan, STOP and report; do not continue without a backup.
+2. Check the variable structure on the MongoDB service (Variables tab): note whether MONGOPASSWORD and MONGO_URL are references to MONGO_INITDB_ROOT_PASSWORD (shown as ${{ ... }}) or literals; literals must be edited too. Check the backend's MONGO_URI is still a ${{<MongoDB service>.MONGO_URL}} reference (it was on 2026-10-26).
+3. Open a shell on the MongoDB service (Railway CLI `railway ssh` on the MongoDB service; mongosh is in the mongo:8.0 image; whether the browser task offers a shell is unverified). Authenticate without typing the password in the command: `mongosh -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin`.
+4. Change the live password: `db.getSiblingDB('admin').changeUserPassword(process.env.MONGO_INITDB_ROOT_USERNAME, passwordPrompt())` and type the new password at the prompt (it is not echoed or stored in history). If MONGOUSER differs from the root user, repeat for that user.
+5. Immediately (to keep the window short, because a backend reconnect with the old password now fails): in the Variables tab set MONGO_INITDB_ROOT_PASSWORD to the new value; set MONGOPASSWORD and MONGO_URL consistently if they are literals (nothing to do if they are references). Railway redeploys MongoDB and the services that reference it; if the backend does not restart, redeploy it once.
+6. Verify: in the shell, auth with the new password works and the old one is rejected; backend deploy log shows "Connected to MongoDB" with no auth error; Vincent can log in and the conversation list loads. Lyra can read the logs and confirm.
+7. Rollback if the backend cannot connect: in the shell (authenticated with the NEW password) run changeUserPassword back to the previous password; restore the volume backup only as a last resort.
+
+### B. CREDS_KEY / CREDS_IV — count-only check (decides whether rotation is safe)
+Run in the same Mongo shell (authenticated as above). It prints counts and token type labels only, never contents. The database name is the last path segment of MONGO_URI (default LibreChat); check names with `db.getSiblingDB('LibreChat').getCollectionNames()` first (collection names below are Mongoose defaults; match them case-insensitively if they differ).
+```
+const d = db.getSiblingDB('LibreChat');
+const names = d.getCollectionNames();
+['keys','pluginauths','actions','mcpservers','skillsynccredentials','openidrefreshflights','refreshtokenbridges','huboauthclients','configs']
+  .forEach(n => print(n, names.includes(n) ? d.getCollection(n).countDocuments({}) : 'absent'));
+print('users total', d.users.countDocuments({}));
+print('users with 2FA enabled', d.users.countDocuments({ twoFactorEnabled: true }));
+printjson(d.tokens.aggregate([{ $group: { _id: '$type', n: { $sum: 1 } } }]).toArray());
+```
+Reading the result: data encrypted with CREDS_KEY/CREDS_IV is possible in keys (user-provided API keys), pluginauths, 2FA secrets (users with 2FA), tokens whose type is an OAuth/MCP token type, actions/mcpservers with stored auth, skillsynccredentials, and admin-panel secrets in configs. openidrefreshflights and refreshtokenbridges are short-lived. Rule: if all of those are 0/absent (and the tokens list holds only non-OAuth types such as password reset), CREDS_KEY/CREDS_IV can be rotated without migration (two new values: 64 hex chars for CREDS_KEY, 32 hex chars for CREDS_IV, startup refuses anything else). If any is non-zero, DO NOT rotate: a decrypt-with-old/re-encrypt-with-new migration must be written first (none exists in the repo); Lyra can draft it on request. Send Lyra only the counts.
+
+### C. Still pending after A and B
+FREELLMAPI_KEY and the freellmapi upstream provider key: need the FreeLLMAPI dashboard (Vincent/Kem); same "value never passes through this session" rule.
