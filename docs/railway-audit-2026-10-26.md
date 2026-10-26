@@ -126,3 +126,10 @@ Other notes:
 - A recurring probe from 20.55.61.179 (Azure; GET /.well-known/resource-that-should-not-exist-... at 02:04:32Z, also seen 2026-10-24) returns the SPA 200; low risk, no action.
 
 Old Anthropic key: NOT deleted. May be deleted once Vincent confirms the UI reply. Before deleting, Vincent can check the old key's "last used" in Anthropic Console: if it predates the 18:54 PDT redeploy, nothing else is using it. No other key rotated; skyloom untouched.
+
+### Step 1 — FINAL VERDICT: PASS (2026-10-26)
+- UI evidence: Vincent confirmed (relayed by Kem) that the 19:05 PDT (02:05Z) test showed exactly KEY-TEST-OK, no error in the UI.
+- Log evidence (deployment 2decd1e0, 02:04–02:10Z): request went to POST /api/agents/chat/anthropic 200; stream 200 (~2.4 s); no match for "401", "authentication_error", "invalid x-api-key" or "anthropic"; no error-level lines; no 4xx/5xx on user requests.
+- Overall: PASS. ANTHROPIC_API_KEY rotation on @mindferry-backend is complete and working.
+- Old Anthropic key: Vincent may now delete it himself in Anthropic Console (Lyra does not delete it). Suggested first look at its "last used" time: if it predates the 2026-10-25 18:54 PDT redeploy, nothing else uses it. Record the deletion here once done.
+- Not done / still pending: MongoDB password, CREDS_KEY/CREDS_IV, JWT_SECRET/JWT_REFRESH_SECRET, FREELLMAPI_KEY (and freellmapi's upstream provider keys) — later steps, each needs its own go-ahead. skyloom untouched (out of scope). ALLOW_REGISTRATION and MONGO_URI construction still unverified (need dashboard look).
