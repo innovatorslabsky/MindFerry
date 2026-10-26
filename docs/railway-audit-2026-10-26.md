@@ -242,3 +242,10 @@ dbs.forEach(n => {
 No document contents or values are printed. Interpretation is unchanged: all zero/absent (tokens only non-OAuth types) means CREDS_KEY/CREDS_IV can be rotated with no migration (64 hex and 32 hex); any non-zero means do NOT rotate until a decrypt-with-old / re-encrypt-with-new migration exists. Kem sends Lyra only the counts.
 
 Still HELD: Mongo password, CREDS_KEY/CREDS_IV, FREELLMAPI_KEY and upstream key. No other variable changed in this session; skyloom untouched.
+
+## New facts recorded (relayed by Kem; Vincent's decisions) — 2026-10-25 evening PDT
+- Backup gate WAIVED by Vincent (~20:20 PDT 2026-10-25): "proceed with Mongo password change without backup", at his explicit risk. No backup exists: the plan is Hobby ("Upgrade to Pro to create new backups").
+- Mongo shell retry (~20:26 PDT) FAILED again: embedded console stuck on "Connecting...", the popout waited 60 s still "Connecting...", the Database interface reported "unable to connect via SSH / WebSocket error", and a fresh tab also failed. The MongoDB service itself is still Online. Conclusion: the dashboard WebSocket console route is exhausted from the VM browser.
+- Consequence: NO changeUserPassword was run, NO new Mongo password was generated or used, NO variable was updated (Mongo variables re-checked unchanged). Backend MONGO_URI, skyloom and freellmapi untouched. CREDS counts still NOT obtained, so CREDS_KEY/CREDS_IV rotation stays HELD.
+- Vincent's instruction: do everything for him; do NOT ask him to take over the browser to try the console. Constraints unchanged: branch claude/quirky-tesla-fqerbg only, no PR/merge/sync, no secret value in this session, memo holds names/IDs/conclusions only.
+- This entry is for investigation and design only; nothing was executed.
