@@ -76,7 +76,25 @@ function UnifiedSidebar({
 
   const links = useUnifiedSidebarLinks();
   const isInsightsRoute = location.pathname.startsWith('/insights');
-  const panelExpanded = expanded && !isInsightsRoute;
+  const isLibraryRoute = location.pathname.startsWith('/library');
+  /**
+   * The library is a full workspace of its own (a list, a reader, side panels), so the chat panel
+   * starts folded to its icon strip whenever the person comes into it, and the room goes to the
+   * library. Opening the panel again by its own controls unfolds it until they leave and return.
+   * The saved preference is untouched, so the chats come back as they were once outside the library.
+   */
+  const [libraryFolded, setLibraryFolded] = useState(isLibraryRoute);
+  const lastExpanded = useRef(expanded);
+  useEffect(() => {
+    setLibraryFolded(isLibraryRoute);
+  }, [isLibraryRoute]);
+  useEffect(() => {
+    if (lastExpanded.current !== expanded) {
+      lastExpanded.current = expanded;
+      setLibraryFolded(false);
+    }
+  }, [expanded]);
+  const panelExpanded = expanded && !isInsightsRoute && !(isLibraryRoute && libraryFolded);
 
   /** The aside's max width is a viewport percentage, so the announced range has to track
    *  the viewport rather than a render-time snapshot of it. */
@@ -112,6 +130,7 @@ function UnifiedSidebar({
     if (isInsightsRoute) {
       handleLeaveInsights();
     }
+    setLibraryFolded(false);
     handleExpand();
   }, [handleExpand, handleLeaveInsights, isInsightsRoute]);
 

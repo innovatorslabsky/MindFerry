@@ -74,6 +74,14 @@ If the text the browser shows ever differs from
 the text the server anchored highlights in, highlighting is switched off for that text with a notice,
 rather than saving highlights in the wrong place.
 
+## Room for the library
+
+On the library pages the chat panel on the left starts folded to its icon strip, so the list and the
+reader have the width. Opening the panel again (its top button, or the keyboard shortcut for the
+sidebar) keeps it open while you stay in the library, and it folds again the next time you come in.
+Your saved choice for the panel is not changed, so the chats are as you left them everywhere else. On
+a phone the panel is a drawer that is closed by default, so nothing changes there.
+
 ## Keyboard and selecting several documents
 
 In the list, with no field focused:
