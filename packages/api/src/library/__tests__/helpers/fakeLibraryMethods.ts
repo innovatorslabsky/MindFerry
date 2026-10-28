@@ -24,6 +24,10 @@ export function createFakeLibraryMethods() {
   const sources = new Map<string, Uint8Array>();
   const reviews = new Map<string, { reviewedAt: Date; muted: boolean }>();
   const inboxes = new Map<string, { tokenHash: string; createdAt: Date }>();
+  const shares = new Map<
+    string,
+    { documentId: string; token: string; includeHighlights: boolean; createdAt: Date }
+  >();
   const folders = new Map<string, LibraryFolderRecord & { userId: string }>();
   const views = new Map<string, LibraryViewRecord & { userId: string }>();
   const feeds = new Map<string, LibraryFeedState & { userId: string }>();
@@ -237,6 +241,48 @@ export function createFakeLibraryMethods() {
       }
       return null;
     },
+    async getLibraryShare(userId, documentId) {
+      const share = shares.get(`${userId}:${documentId}`);
+      return share
+        ? {
+            token: share.token,
+            includeHighlights: share.includeHighlights,
+            createdAt: share.createdAt,
+          }
+        : null;
+    },
+    async upsertLibraryShare(userId, documentId, options) {
+      if (documents.get(documentId)?.userId !== userId) return null;
+      const key = `${userId}:${documentId}`;
+      const share = shares.get(key) ?? {
+        documentId,
+        token: `tok${shares.size}`.padEnd(22, 'x'),
+        includeHighlights: false,
+        createdAt: new Date(),
+      };
+      share.includeHighlights = options.includeHighlights;
+      shares.set(key, share);
+      return {
+        token: share.token,
+        includeHighlights: share.includeHighlights,
+        createdAt: share.createdAt,
+      };
+    },
+    async deleteLibraryShare(userId, documentId) {
+      return shares.delete(`${userId}:${documentId}`);
+    },
+    async findLibraryShareByToken(token) {
+      for (const [key, share] of shares) {
+        if (share.token === token) {
+          return {
+            userId: key.slice(0, key.indexOf(':')),
+            documentId: share.documentId,
+            includeHighlights: share.includeHighlights,
+          };
+        }
+      }
+      return null;
+    },
     async listLibraryReviewHighlights(userId, since, limit) {
       const seen = (h: LibraryHighlightRecord & { userId: string }) =>
         (reviews.get(h.id)?.reviewedAt ?? new Date(0)).getTime();
@@ -442,6 +488,7 @@ export function createFakeLibraryMethods() {
         folders: 0,
         feeds: 0,
         inboxes: 0,
+        shares: 0,
         views: 0,
       };
     },

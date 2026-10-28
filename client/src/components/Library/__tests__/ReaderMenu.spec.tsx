@@ -5,6 +5,7 @@ import { mockClient } from 'test/libraryMocks';
 const mockExport = jest.fn();
 const mockToast = jest.fn();
 const mockSave = jest.fn();
+let mockSharingEnabled = false;
 let exportOptions: {
   onSuccess?: (data: { blob: Blob; filename: string }) => void;
   onError?: () => void;
@@ -15,7 +16,12 @@ jest.mock('~/hooks', () => ({
 }));
 jest.mock('~/common', () => ({ NotificationSeverity: { ERROR: 'error', SUCCESS: 'success' } }));
 jest.mock('~/utils/saveBlob', () => ({ saveBlob: (...args: unknown[]) => mockSave(...args) }));
+jest.mock('../ShareDialog', () => ({
+  __esModule: true,
+  default: ({ open }: { open: boolean }) => (open ? <div data-testid="share-dialog" /> : null),
+}));
 jest.mock('~/data-provider', () => ({
+  useLibraryShareQuery: () => ({ data: { enabled: mockSharingEnabled, share: null } }),
   useExportLibraryHighlightsMutation: (options: typeof exportOptions) => {
     exportOptions = options;
     return { mutate: mockExport, isLoading: false };
@@ -62,7 +68,10 @@ const renderMenu = (overrides: Partial<React.ComponentProps<typeof ReaderMenu>> 
   return { onMove, onShowShortcuts };
 };
 
-afterEach(() => jest.clearAllMocks());
+afterEach(() => {
+  jest.clearAllMocks();
+  mockSharingEnabled = false;
+});
 
 describe('ReaderMenu', () => {
   it('offers the other places to move the document to, each with its key', () => {
@@ -131,5 +140,23 @@ describe('ReaderMenu', () => {
     const { onShowShortcuts } = renderMenu();
     fireEvent.click(screen.getByRole('menuitem', { name: /com_library_shortcuts/ }));
     expect(onShowShortcuts).toHaveBeenCalled();
+  });
+
+  it('offers sharing only where the deployment has turned it on', () => {
+    mockSharingEnabled = false;
+    renderMenu();
+    expect(screen.queryByText('com_library_share')).toBeNull();
+
+    mockSharingEnabled = true;
+    renderMenu();
+    expect(screen.getByText('com_library_share')).toBeInTheDocument();
+  });
+
+  it('opens the share dialog from the menu', () => {
+    mockSharingEnabled = true;
+    renderMenu();
+    expect(screen.queryByTestId('share-dialog')).toBeNull();
+    fireEvent.click(screen.getByText('com_library_share'));
+    expect(screen.getByTestId('share-dialog')).toBeInTheDocument();
   });
 });

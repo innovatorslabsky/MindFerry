@@ -230,6 +230,19 @@ export const libraryFeedPreview = () => `${BASE_URL}/api/library/feeds/preview`;
 export const libraryExport = (format: 'markdown' | 'csv', documentId?: string) =>
   `${BASE_URL}/api/library/export?format=${format}${documentId ? `&documentId=${encodeURIComponent(documentId)}` : ''}`;
 
+export const libraryDocumentShare = (id: string) =>
+  `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/share`;
+
+export const librarySharedDocument = (token: string) =>
+  `${BASE_URL}/api/library/shared/${encodeURIComponent(token)}`;
+
+export const librarySharedUnit = (token: string, index: number) =>
+  `${BASE_URL}/api/library/shared/${encodeURIComponent(token)}/units/${index}`;
+
+/** An image of a shared book. Public, so it can be an `<img src>` as it is. */
+export const librarySharedResource = (token: string, path: string) =>
+  `${BASE_URL}/api/library/shared/${encodeURIComponent(token)}/resources?path=${encodeURIComponent(path)}`;
+
 export const libraryInbox = () => `${BASE_URL}/api/library/inbox`;
 
 export const libraryDocumentChat = (id: string) =>

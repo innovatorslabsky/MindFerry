@@ -1105,6 +1105,32 @@ export async function exportLibraryHighlights(
   };
 }
 
+export function getLibraryShare(id: string): Promise<t.TLibraryShareResponse> {
+  return request.get(endpoints.libraryDocumentShare(id));
+}
+
+export function setLibraryShare(
+  id: string,
+  options: { includeHighlights: boolean },
+): Promise<{ share: t.TLibraryShare }> {
+  return request.put(endpoints.libraryDocumentShare(id), options);
+}
+
+export function deleteLibraryShare(id: string): Promise<void> {
+  return request.delete(endpoints.libraryDocumentShare(id));
+}
+
+export function getLibrarySharedDocument(token: string): Promise<t.TLibrarySharedResponse> {
+  return request.get(endpoints.librarySharedDocument(token));
+}
+
+export function getLibrarySharedUnit(
+  token: string,
+  index: number,
+): Promise<t.TLibrarySharedUnitResponse> {
+  return request.get(endpoints.librarySharedUnit(token, index));
+}
+
 export function getLibraryInbox(): Promise<{ inbox: t.TLibraryInbox }> {
   return request.get(endpoints.libraryInbox());
 }

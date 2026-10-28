@@ -726,6 +726,19 @@ export const contextHubSchema = z
             perUserPerDay: z.number().int().min(1).max(1000).default(30),
           })
           .optional(),
+        /**
+         * Public links to a document: anyone with the link can read it, without an account. Off by
+         * default, because it republishes what people saved, in full, from this deployment's address.
+         */
+        sharing: z
+          .object({
+            enabled: z.boolean().default(false),
+            /** Shown at the top of every shared page, e.g. a disclaimer about the content. */
+            notice: z.string().max(1000).optional(),
+            /** Where a visitor can report a shared page; shown as a link on it. */
+            reportEmail: z.string().email().optional(),
+          })
+          .optional(),
       })
       .default({}),
   })
@@ -2712,10 +2725,7 @@ export const traceViewerDefaults = {
 } as const;
 
 type TraceViewerLimitField =
-  | 'maxRecords'
-  | 'maxContentLength'
-  | 'requestsPerMinute'
-  | 'requestTimeoutMs';
+  'maxRecords' | 'maxContentLength' | 'requestsPerMinute' | 'requestTimeoutMs';
 
 /** Inclusive bounds for the numeric `interface.traceViewer` fields. */
 export const traceViewerLimits: Readonly<
@@ -5714,7 +5724,7 @@ export type TSpecialVarLabel = `com_ui_special_var_${keyof typeof specialVariabl
  * Does not infer or default any endpoint type when absent.
  */
 export function getEndpointField<
-  K extends TConfig[keyof TConfig] extends never ? never : keyof TConfig,
+  K extends (TConfig[keyof TConfig] extends never ? never : keyof TConfig),
 >(
   endpointsConfig: TEndpointsConfig | undefined | null,
   endpoint: EModelEndpoint | string | null | undefined,

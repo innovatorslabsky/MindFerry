@@ -3737,5 +3737,16 @@
   "com_library_shortcut_highlight": "Highlight the selected text",
   "com_library_shortcut_next_previous": "Next / previous chapter or page",
   "com_library_shortcut_back": "Back to the library",
-  "com_library_shortcut_help": "Show these shortcuts"
+  "com_library_shortcut_help": "Show these shortcuts",
+  "com_library_share": "Share",
+  "com_library_share_hint": "Anyone with the link can read this document in full, without an account. You can withdraw the link at any time.",
+  "com_library_share_create": "Create public link",
+  "com_library_share_link": "Public link",
+  "com_library_share_highlights": "Include my highlights (not my notes)",
+  "com_library_share_stop": "Stop sharing",
+  "com_library_share_error": "Couldn't update the public link. Try again.",
+  "com_library_share_missing": "This link doesn't work. It may have been withdrawn.",
+  "com_library_share_original": "Open the original",
+  "com_library_share_section": "Chapter or page",
+  "com_library_share_report": "Report this page"
 }

@@ -21,6 +21,9 @@ describe('library routes wiring', () => {
     ['/review', 'get'],
     ['/review/:id', 'post'],
     ['/documents/:id/chat', 'post'],
+    ['/documents/:id/share', 'get'],
+    ['/documents/:id/share', 'put'],
+    ['/documents/:id/share', 'delete'],
     ['/ask', 'post'],
     ['/count', 'get'],
     ['/folders', 'get'],
@@ -70,6 +73,20 @@ describe('library routes wiring', () => {
   });
 
   it.each([
+    ['/shared/:token', 'get'],
+    ['/shared/:token/units/:index', 'get'],
+    ['/shared/:token/resources', 'get'],
+  ])(
+    'registers the public link %s behind its own limit, its secret and the owner’s config',
+    (path, method) => {
+      const route = find(path, method);
+      expect(route).toBeDefined();
+      // ip limiter, secret check, config, tenant context, handler
+      expect(route.stack.length).toBe(5);
+    },
+  );
+
+  it.each([
     ['/inbox', 'get'],
     ['/inbox', 'post'],
     ['/inbox', 'delete'],
@@ -88,6 +105,10 @@ describe('library routes wiring', () => {
     const db = require('~/models');
     for (const name of [
       'saveLibraryDocument',
+      'getLibraryShare',
+      'upsertLibraryShare',
+      'deleteLibraryShare',
+      'findLibraryShareByToken',
       'saveLibraryBook',
       'listLibraryUnits',
       'getLibraryUnit',

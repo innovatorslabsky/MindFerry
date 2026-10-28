@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { rateLimit } from 'express-rate-limit';
 import { logger, runAsSystem } from '@librechat/data-schemas';
+import type {
+  LibraryDocumentRecord,
+  LibraryHighlightRecord,
+  LibraryShareRecord,
+  LibraryShareTarget,
+} from '@librechat/data-schemas';
 import type { NextFunction, RequestHandler, Response } from 'express';
 import type { ServerRequest } from '../types/http';
 import type { LibraryTextGenerator } from './llm';
@@ -12,11 +18,11 @@ import {
   WorkerResultTooLargeError,
   WorkerUnavailableError,
 } from './worker/errors';
+import { getLibrarySharing, getLibrarySummaryModel, isLibraryEnabled } from './config';
 import { FetchError, TooLargeError, UnsafeUrlError } from './net/safeFetch';
 import { createHighlightSchema, KINDS, LOCATIONS, SORTS } from './types';
 import { ASK_MODES, convertLibraryAskToChat, needsTopic } from './ask';
 import { isConversationImportError } from '../conversations/import';
-import { getLibrarySummaryModel, isLibraryEnabled } from './config';
 import { isContentFilterError } from '../middleware/contentFilter';
 import { buildSummaryPrompt, cleanSummary } from './summarize';
 import { PdfEncryptedError, PdfError } from './pdf/parsePdf';
@@ -92,6 +98,22 @@ export const libraryInboxLimiter: RequestHandler = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+/**
+ * A public link is a secret in a URL that anyone can try, and what it opens can be read by anyone, so
+ * what comes from one address is limited, by that address.
+ */
+export const librarySharedLimiter: RequestHandler = rateLimit({
+  windowMs: LIBRARY_RATE_WINDOW_MS,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/** What a public link's token looks like (22 characters from 16 random bytes). */
+export function isShareToken(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{22}$/.test(value);
+}
 
 /** Largest page a client may hand over directly; the server-side fetch has its own 5 MiB cap. */
 export const LIBRARY_MAX_HTML_CHARS = 2_000_000;
@@ -353,6 +375,12 @@ export interface LibraryHandlers {
   summarize: Handler;
   ask: Handler;
   count: Handler;
+  getShare: Handler;
+  setShare: Handler;
+  deleteShare: Handler;
+  getShared: Handler;
+  getSharedUnit: Handler;
+  getSharedResource: Handler;
   getInbox: Handler;
   rotateInbox: Handler;
   deleteInbox: Handler;
@@ -366,6 +394,62 @@ export interface LibraryHandlers {
   patchHighlight: Handler;
   removeHighlight: Handler;
   setProgress: Handler;
+}
+
+const shareBodySchema = z.object({ includeHighlights: z.boolean() });
+
+function toShareBody(share: LibraryShareRecord): {
+  token: string;
+  includeHighlights: boolean;
+  createdAt: Date;
+} {
+  return {
+    token: share.token,
+    includeHighlights: share.includeHighlights,
+    createdAt: share.createdAt,
+  };
+}
+
+/**
+ * A document as a visitor sees it: the text and where it came from, and nothing the owner keeps for
+ * themselves (note, tags, folder, shelf, stored original, when it was saved).
+ */
+function toPublicDocument(
+  document: LibraryDocumentRecord,
+  withText: boolean,
+): Record<string, unknown> {
+  const { text, contentHtml } = document;
+  const fromWeb = /^https?:\/\//i.test(document.normalizedUrl);
+  return {
+    id: document.id,
+    kind: document.kind,
+    title: document.title,
+    ...(document.byline ? { byline: document.byline } : {}),
+    ...(document.siteName ? { siteName: document.siteName } : {}),
+    ...(document.lang ? { lang: document.lang } : {}),
+    ...(document.publishedTime ? { publishedTime: document.publishedTime } : {}),
+    ...(fromWeb ? { sourceUrl: document.normalizedUrl } : {}),
+    ...(document.summary ? { summary: document.summary } : {}),
+    ...(document.thumbnailPath ? { thumbnailPath: document.thumbnailPath } : {}),
+    wordCount: document.wordCount,
+    readingMinutes: document.readingMinutes,
+    unitCount: document.unitCount,
+    toc: document.toc,
+    hasSource: false,
+    ...(withText ? { text, contentHtml } : {}),
+  };
+}
+
+/** A highlight without the owner's note and tags: a visitor sees what was marked, not what was thought. */
+function toPublicHighlight(highlight: LibraryHighlightRecord): Record<string, unknown> {
+  return {
+    id: highlight.id,
+    anchor: highlight.anchor,
+    color: highlight.color,
+    ...(highlight.unit ? { unit: highlight.unit } : {}),
+    contentHash: highlight.contentHash,
+    orphaned: highlight.orphaned,
+  };
 }
 
 /** A service, or a function that picks one per request (so isolation settings can follow the config). */
@@ -949,6 +1033,110 @@ export function createLibraryHandlers({
     res.status(200).json({ count: await serviceFor(req).count(userId) });
   };
 
+  const getShare: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const sharing = getLibrarySharing(req.config);
+    if (!sharing.enabled) return void res.status(200).json({ enabled: false });
+    const share = await serviceFor(req).getShare(userId, param(req, 'id'));
+    res.status(200).json({
+      enabled: true,
+      ...(sharing.notice ? { notice: sharing.notice } : {}),
+      share: share ? toShareBody(share) : null,
+    });
+  };
+
+  const setShare: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    if (!getLibrarySharing(req.config).enabled) {
+      return fail(res, 403, 'sharing_disabled', 'Public links are turned off');
+    }
+    const body = shareBodySchema.safeParse(req.body);
+    if (!body.success)
+      return fail(res, 400, 'invalid_request', 'includeHighlights must be true or false');
+    const service = serviceFor(req);
+    const id = param(req, 'id');
+    const existed = (await service.getShare(userId, id)) !== null;
+    const share = await service.setShare(userId, id, body.data);
+    if (!share) return fail(res, 404, 'not_found', 'Document not found');
+    res.status(existed ? 200 : 201).json({ share: toShareBody(share) });
+  };
+
+  /** Always allowed: withdrawing a link must work even after the operator turns sharing off. */
+  const deleteShare: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    await serviceFor(req).deleteShare(userId, param(req, 'id'));
+    res.status(204).end();
+  };
+
+  /** Everything a public handler needs, or the 404 that is the answer to anything not in order. */
+  const sharedTarget = (req: ServerRequest, res: Response): LibraryShareTarget | undefined => {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    const target = (req as unknown as { libraryShare?: LibraryShareTarget }).libraryShare;
+    if (!target || !isLibraryEnabled(req.config) || !getLibrarySharing(req.config).enabled) {
+      fail(res, 404, 'not_found', 'Not found');
+      return undefined;
+    }
+    return target;
+  };
+
+  const getShared: Handler = async (req, res) => {
+    const target = sharedTarget(req, res);
+    if (!target) return;
+    const service = serviceFor(req);
+    const { userId, documentId } = target;
+    const document = await service.get(userId, documentId);
+    if (!document) return fail(res, 404, 'not_found', 'Not found');
+    const sharing = getLibrarySharing(req.config);
+    const highlights = target.includeHighlights
+      ? (await service.listHighlights(userId, documentId)).map(toPublicHighlight)
+      : [];
+    const units =
+      document.kind === 'article' ? undefined : await service.listUnits(userId, documentId);
+    const pub = toPublicDocument(document, document.kind === 'article');
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(200).json({
+      document: pub,
+      ...(units ? { units } : {}),
+      highlights,
+      ...(sharing.notice ? { notice: sharing.notice } : {}),
+      ...(sharing.reportEmail ? { reportEmail: sharing.reportEmail } : {}),
+    });
+  };
+
+  const getSharedUnit: Handler = async (req, res) => {
+    const target = sharedTarget(req, res);
+    if (!target) return;
+    const service = serviceFor(req);
+    const index = Number(param(req, 'index'));
+    const unit = await service.getUnit(target.userId, target.documentId, index);
+    if (!unit) return fail(res, 404, 'not_found', 'Not found');
+    const highlights = target.includeHighlights
+      ? (await service.listHighlights(target.userId, target.documentId))
+          .filter((highlight) => highlight.unit?.index === index)
+          .map(toPublicHighlight)
+      : [];
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(200).json({ unit, highlights });
+  };
+
+  const getSharedResource: Handler = async (req, res) => {
+    const target = sharedTarget(req, res);
+    if (!target) return;
+    const path = typeof req.query.path === 'string' ? req.query.path : '';
+    const resource = await serviceFor(req).getResource(target.userId, target.documentId, path);
+    if (!resource) return fail(res, 404, 'not_found', 'Not found');
+    res.setHeader('Content-Type', resource.mediaType);
+    res.setHeader('Content-Length', String(resource.bytes.length));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.status(200).end(resource.bytes);
+  };
+
   const getInbox: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
@@ -1032,6 +1220,12 @@ export function createLibraryHandlers({
     reviewHighlight,
     chat,
     summarize,
+    getShare,
+    setShare,
+    deleteShare,
+    getShared,
+    getSharedUnit,
+    getSharedResource,
     getInbox,
     rotateInbox,
     deleteInbox,
@@ -1075,6 +1269,43 @@ export function createLibraryInboxAuth({
     } catch (error) {
       logger.error('[library] Could not look up a newsletter address:', error);
       fail(res, 500, 'internal_error', 'Could not receive the message');
+    }
+  };
+}
+
+export interface LibraryShareAuthDeps {
+  /** What a public token points at; from the service, which reads across tenants for this one lookup. */
+  findShare: (token: string) => Promise<LibraryShareTarget | null>;
+  findUser: (query: { _id: string }) => Promise<Record<string, unknown> | null>;
+}
+
+/**
+ * Lets a visitor read the one document a public link names: the request is made to act as the owner,
+ * so config, tenant and every read after it work as for the owner, and the handler asks for only
+ * what the link points at. A token that is malformed, unknown, or whose owner is gone gets a 404.
+ */
+export function createLibraryShareAuth({
+  findShare,
+  findUser,
+}: LibraryShareAuthDeps): (req: ServerRequest, res: Response, next: NextFunction) => Promise<void> {
+  return async (req, res, next) => {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    const token = (req.params as Record<string, unknown> | undefined)?.token;
+    if (!isShareToken(token)) return fail(res, 404, 'not_found', 'Not found');
+    try {
+      const target = await findShare(token);
+      const user = target ? await runAsSystem(async () => findUser({ _id: target.userId })) : null;
+      if (!target || !user) return fail(res, 404, 'not_found', 'Not found');
+      (req as unknown as { user: unknown }).user = {
+        ...user,
+        id: target.userId,
+        ...(target.tenantId ? { tenantId: target.tenantId } : {}),
+      };
+      (req as unknown as { libraryShare: LibraryShareTarget }).libraryShare = target;
+      next();
+    } catch (error) {
+      logger.error('[library] Could not look up a public link:', error);
+      fail(res, 500, 'internal_error', 'Could not open the link');
     }
   };
 }

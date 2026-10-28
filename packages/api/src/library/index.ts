@@ -6,6 +6,7 @@ export {
   isLibraryEnabled,
   getLibraryIsolation,
   getLibraryKeepPdfOriginals,
+  getLibrarySharing,
   getLibraryAutoTag,
   getLibraryReviewPerDay,
   getLibraryChatMaxChars,
@@ -32,6 +33,8 @@ export type { LibraryIsolationConfig, LibraryIngest, ProcessRunner } from './wor
 export {
   createLibraryHandlers,
   createLibraryInboxAuth,
+  createLibraryShareAuth,
+  librarySharedLimiter,
   libraryInboxLimiter,
   libraryBrowseLimiter,
   librarySaveLimiter,

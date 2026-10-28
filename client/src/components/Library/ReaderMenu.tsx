@@ -1,4 +1,14 @@
-import { Archive, Clock, Download, Inbox, Keyboard, Link2, MoreHorizontal } from 'lucide-react';
+import { useState } from 'react';
+import {
+  Archive,
+  Clock,
+  Download,
+  Inbox,
+  Keyboard,
+  Link2,
+  MoreHorizontal,
+  Share2,
+} from 'lucide-react';
 import {
   Button,
   DropdownMenu,
@@ -10,9 +20,10 @@ import {
 import type { TLibraryLocation } from 'librechat-data-provider';
 import type { LucideIcon } from 'lucide-react';
 import type { TranslationKeys } from '~/hooks';
-import { useExportLibraryHighlightsMutation } from '~/data-provider';
+import { useExportLibraryHighlightsMutation, useLibraryShareQuery } from '~/data-provider';
 import { NotificationSeverity } from '~/common';
 import { saveBlob } from '~/utils/saveBlob';
+import ShareDialog from './ShareDialog';
 import { useLocalize } from '~/hooks';
 
 /** Where a document can be moved to, with the key that does it and what the entry says. */
@@ -56,6 +67,8 @@ export default function ReaderMenu({
 }) {
   const localize = useLocalize();
   const { showToast } = useToastContext();
+  const [shareOpen, setShareOpen] = useState(false);
+  const { data: sharing } = useLibraryShareQuery(documentId);
   const exportFile = useExportLibraryHighlightsMutation({
     onSuccess: ({ blob, filename }) => saveBlob(blob, filename),
     onError: () =>
@@ -78,50 +91,61 @@ export default function ReaderMenu({
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 shrink-0"
-          aria-label={localize('com_library_more_actions')}
-          data-testid="reader-menu"
-        >
-          <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[220px]">
-        {MOVES.filter((move) => move.location !== location).map(
-          ({ location: to, key, label, Icon }) => (
-            <DropdownMenuItem key={to} onSelect={() => onMove(to)}>
-              <Icon className="mr-2 h-4 w-4" aria-hidden="true" />
-              {localize(label)}
-              <Hint>{key}</Hint>
-            </DropdownMenuItem>
-          ),
-        )}
-        {originalUrl && (
-          <DropdownMenuItem onSelect={() => void copyLink()}>
-            <Link2 className="mr-2 h-4 w-4" aria-hidden="true" />
-            {localize('com_library_copy_original_link')}
-          </DropdownMenuItem>
-        )}
-        {EXPORTS.map(({ format, label }) => (
-          <DropdownMenuItem
-            key={format}
-            disabled={exportFile.isLoading}
-            onSelect={() => exportFile.mutate({ format, documentId })}
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0"
+            aria-label={localize('com_library_more_actions')}
+            data-testid="reader-menu"
           >
-            <Download className="mr-2 h-4 w-4" aria-hidden="true" />
-            {`${localize('com_library_export')}: ${localize(label)}`}
+            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-[220px]">
+          {MOVES.filter((move) => move.location !== location).map(
+            ({ location: to, key, label, Icon }) => (
+              <DropdownMenuItem key={to} onSelect={() => onMove(to)}>
+                <Icon className="mr-2 h-4 w-4" aria-hidden="true" />
+                {localize(label)}
+                <Hint>{key}</Hint>
+              </DropdownMenuItem>
+            ),
+          )}
+          {originalUrl && (
+            <DropdownMenuItem onSelect={() => void copyLink()}>
+              <Link2 className="mr-2 h-4 w-4" aria-hidden="true" />
+              {localize('com_library_copy_original_link')}
+            </DropdownMenuItem>
+          )}
+          {sharing?.enabled === true && (
+            <DropdownMenuItem onSelect={() => setShareOpen(true)} data-testid="reader-menu-share">
+              <Share2 className="mr-2 h-4 w-4" aria-hidden="true" />
+              {localize('com_library_share')}
+            </DropdownMenuItem>
+          )}
+          {EXPORTS.map(({ format, label }) => (
+            <DropdownMenuItem
+              key={format}
+              disabled={exportFile.isLoading}
+              onSelect={() => exportFile.mutate({ format, documentId })}
+            >
+              <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+              {`${localize('com_library_export')}: ${localize(label)}`}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuItem onSelect={onShowShortcuts}>
+            <Keyboard className="mr-2 h-4 w-4" aria-hidden="true" />
+            {localize('com_library_shortcuts')}
+            <Hint>?</Hint>
           </DropdownMenuItem>
-        ))}
-        <DropdownMenuItem onSelect={onShowShortcuts}>
-          <Keyboard className="mr-2 h-4 w-4" aria-hidden="true" />
-          {localize('com_library_shortcuts')}
-          <Hint>?</Hint>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {sharing?.enabled === true && (
+        <ShareDialog documentId={documentId} open={shareOpen} onOpenChange={setShareOpen} />
+      )}
+    </>
   );
 }

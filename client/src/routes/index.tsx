@@ -14,6 +14,7 @@ import MindFerryConnect from '~/components/MindFerry/Connect';
 import { AuthContextProvider } from '~/hooks/AuthContext';
 import { importWithRecovery } from '~/lib/assets/lazy';
 import RouteErrorBoundary from './RouteErrorBoundary';
+import SharedLibraryRoute from './SharedLibraryRoute';
 import StartupLayout from './Layouts/Startup';
 import MarketplaceRoute from './Marketplace';
 import LoginLayout from './Layouts/Login';
@@ -83,6 +84,11 @@ const baseHref = baseEl?.getAttribute('href') || '/';
 
 export const router = createBrowserRouter(
   [
+    {
+      path: 'share/library/:token',
+      element: <SharedLibraryRoute />,
+      errorElement: <RouteErrorBoundary />,
+    },
     {
       path: 'share/:shareId',
       element: <ShareRoute />,
