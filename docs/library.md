@@ -373,7 +373,40 @@ and privacy implications before switching it on for a shared deployment.
 - The page is drawn in the browser by pdf.js (the legacy build, for older browsers). Nothing from the
   file is run: only pixels. Reading position is saved from the text view, not the page view.
 - The "copy-restricted PDF" flag is still not honoured: a stored original can be viewed and removed
-  by its owner, and no export or share feature exists that would need to withhold it.
+  by its owner. A public link shows the text of a document to whoever has the link (see Public links).
+
+## Public links
+
+Off by default. When an operator turns it on (`contextHub.library.sharing.enabled`), **Share** appears in
+the reader's ⋯ menu. **Create public link** makes an address of the form `/share/library/<token>`;
+anyone who has it can read the document **in full**, without an account. The page shows the title, the
+author, the site it came from with a link to the original, and the whole text (a book a chapter or page
+at a time, with its pictures). Nothing else of the owner's is shown: not their name, note, tags,
+folders, shelf, reading position or the stored PDF original.
+
+- **Highlights** are included only if the owner ticks _Include my highlights_, and then without the
+  notes and tags written on them.
+- The address is 128 random bits, so it cannot be found by trying. It is the whole credential: whoever
+  is given it can pass it on. A document has one link; changing what it shows keeps the address, and
+  **Stop sharing** withdraws it for good (a new link is a new address). Deleting the document, or all
+  of the person's library data, withdraws it too.
+- If the operator later turns sharing off, every link stops working at once and the Share entry
+  disappears; a person can still withdraw a link they made. Turning it back on revives the links.
+- Public pages are limited per address (120 requests a minute), are sent with `X-Robots-Tag: noindex`
+  and a `noindex` meta tag, and answer a withdrawn, unknown or malformed link with the same 404.
+- Operators can add a `notice` (shown at the top of every shared page, and in the Share dialog) and a
+  `reportEmail` (shown as a **Report this page** link). Because the text of what people saved is
+  republished from the deployment's address, the operator is responsible for what is shared and should
+  say so in the notice.
+
+```yaml
+contextHub:
+  library:
+    sharing:
+      enabled: true
+      notice: 'Shared by a reader of this site. Rights in the text belong to its authors.'
+      reportEmail: abuse@example.com
+```
 
 ## Settings
 
@@ -385,6 +418,10 @@ contextHub:
     autoTag: true
     reviewPerDay: 5 # highlights in one day's review (1 to 100)
     chatMaxChars: 60000 # most text "Ask about this" gives the model (2,000 to 400,000)
+    sharing: # public links to documents, off unless enabled
+      enabled: true
+      notice: '...' # optional, shown on every shared page
+      reportEmail: abuse@example.com # optional, a "Report this page" link
 ```
 
 ## Known limits

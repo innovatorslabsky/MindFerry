@@ -9,6 +9,7 @@ import libraryProgressSchema from '~/schema/libraryProgress';
 import libraryResourceSchema from '~/schema/libraryResource';
 import libraryFolderSchema from '~/schema/libraryFolder';
 import libraryInboxSchema from '~/schema/libraryInbox';
+import libraryShareSchema from '~/schema/libraryShare';
 import libraryViewSchema from '~/schema/libraryView';
 import libraryUnitSchema from '~/schema/libraryUnit';
 import libraryFeedSchema from '~/schema/libraryFeed';
@@ -63,6 +64,9 @@ beforeAll(async () => {
   }
   if (!mongoose.models.LibraryView) {
     mongoose.model('LibraryView', libraryViewSchema);
+  }
+  if (!mongoose.models.LibraryShare) {
+    mongoose.model('LibraryShare', libraryShareSchema);
   }
   if (!mongoose.models.LibrarySource) {
     mongoose.model('LibrarySource', librarySourceSchema);
@@ -280,6 +284,7 @@ describe('deletion', () => {
       feeds: 0,
       inboxes: 0,
       views: 0,
+      shares: 0,
     });
     expect(await methods.listLibraryDocuments(userB, { limit: 10 })).toHaveLength(1);
     expect(await methods.listLibraryHighlights(userB)).toHaveLength(1);
@@ -1304,5 +1309,92 @@ describe('counting documents', () => {
     expect(await methods.countLibraryDocuments(userA)).toBe(2);
     expect(await methods.countLibraryDocuments(userB)).toBe(1);
     expect(await methods.countLibraryDocuments(new mongoose.Types.ObjectId().toString())).toBe(0);
+  });
+});
+
+describe('public links', () => {
+  it('makes one link per document and keeps its token when what it shows changes', async () => {
+    const saved = await methods.saveLibraryDocument(userA, doc());
+    const id = saved.document.id;
+    expect(await methods.getLibraryShare(userA, id)).toBeNull();
+
+    const first = await methods.upsertLibraryShare(userA, id, { includeHighlights: false });
+    expect(first?.includeHighlights).toBe(false);
+    expect(first?.token).toMatch(/^[A-Za-z0-9_-]{22}$/);
+
+    const changed = await methods.upsertLibraryShare(userA, id, { includeHighlights: true });
+    expect(changed?.token).toBe(first?.token);
+    expect(changed?.includeHighlights).toBe(true);
+    expect((await methods.getLibraryShare(userA, id))?.token).toBe(first?.token);
+    expect(await mongoose.models.LibraryShare.countDocuments({})).toBe(1);
+  });
+
+  it('gives each document its own token', async () => {
+    const a = await methods.saveLibraryDocument(userA, doc({ urlKey: 'a' }));
+    const b = await methods.saveLibraryDocument(userA, doc({ urlKey: 'b' }));
+    const one = await methods.upsertLibraryShare(userA, a.document.id, {
+      includeHighlights: false,
+    });
+    const two = await methods.upsertLibraryShare(userA, b.document.id, {
+      includeHighlights: false,
+    });
+    expect(one?.token).not.toBe(two?.token);
+  });
+
+  it('finds what a token points at, and nothing for a token that is wrong or too short', async () => {
+    const saved = await methods.saveLibraryDocument(userA, doc());
+    const share = await methods.upsertLibraryShare(userA, saved.document.id, {
+      includeHighlights: true,
+    });
+    expect(await methods.findLibraryShareByToken(share?.token ?? '')).toEqual({
+      userId: userA,
+      documentId: saved.document.id,
+      includeHighlights: true,
+    });
+    expect(await methods.findLibraryShareByToken('x'.repeat(22))).toBeNull();
+    expect(await methods.findLibraryShareByToken('short')).toBeNull();
+    expect(await methods.findLibraryShareByToken('')).toBeNull();
+    expect(await methods.findLibraryShareByToken({ $ne: '' } as unknown as string)).toBeNull();
+  });
+
+  it('withdraws a link, which then points at nothing', async () => {
+    const saved = await methods.saveLibraryDocument(userA, doc());
+    const share = await methods.upsertLibraryShare(userA, saved.document.id, {
+      includeHighlights: false,
+    });
+    expect(await methods.deleteLibraryShare(userA, saved.document.id)).toBe(true);
+    expect(await methods.deleteLibraryShare(userA, saved.document.id)).toBe(false);
+    expect(await methods.findLibraryShareByToken(share?.token ?? '')).toBeNull();
+  });
+
+  it('is the owner’s alone to make, read or withdraw', async () => {
+    const saved = await methods.saveLibraryDocument(userA, doc());
+    const id = saved.document.id;
+    expect(await methods.upsertLibraryShare(userB, id, { includeHighlights: false })).toBeNull();
+    const share = await methods.upsertLibraryShare(userA, id, { includeHighlights: false });
+    expect(await methods.getLibraryShare(userB, id)).toBeNull();
+    expect(await methods.deleteLibraryShare(userB, id)).toBe(false);
+    expect(await methods.findLibraryShareByToken(share?.token ?? '')).not.toBeNull();
+    expect(
+      await methods.upsertLibraryShare(userA, 'nope', { includeHighlights: false }),
+    ).toBeNull();
+  });
+
+  it('goes away with the document, and with everything a person has', async () => {
+    const a = await methods.saveLibraryDocument(userA, doc({ urlKey: 'a' }));
+    const b = await methods.saveLibraryDocument(userA, doc({ urlKey: 'b' }));
+    const gone = await methods.upsertLibraryShare(userA, a.document.id, {
+      includeHighlights: false,
+    });
+    const kept = await methods.upsertLibraryShare(userA, b.document.id, {
+      includeHighlights: false,
+    });
+
+    await methods.deleteLibraryDocument(userA, a.document.id);
+    expect(await methods.findLibraryShareByToken(gone?.token ?? '')).toBeNull();
+    expect(await methods.findLibraryShareByToken(kept?.token ?? '')).not.toBeNull();
+
+    expect(await methods.deleteAllLibraryData(userA)).toMatchObject({ shares: 1 });
+    expect(await methods.findLibraryShareByToken(kept?.token ?? '')).toBeNull();
   });
 });

@@ -20,6 +20,7 @@ import { createAgentCategoryModel } from './agentCategory';
 import { createLibrarySourceModel } from './librarySource';
 import { createLibraryFolderModel } from './libraryFolder';
 import { createLibraryInboxModel } from './libraryInbox';
+import { createLibraryShareModel } from './libraryShare';
 import { createLibraryViewModel } from './libraryView';
 import { createChatProjectModel } from './chatProject';
 import { createAgentApiKeyModel } from './agentApiKey';
@@ -90,6 +91,7 @@ export function createModels(mongoose: typeof import('mongoose')): {
   LibrarySource: ReturnType<typeof createLibrarySourceModel>;
   LibraryFolder: ReturnType<typeof createLibraryFolderModel>;
   LibraryView: ReturnType<typeof createLibraryViewModel>;
+  LibraryShare: ReturnType<typeof createLibraryShareModel>;
   AgentCategory: ReturnType<typeof createAgentCategoryModel>;
   MCPServer: ReturnType<typeof createMCPServerModel>;
   Role: ReturnType<typeof createRoleModel>;
@@ -154,6 +156,7 @@ export function createModels(mongoose: typeof import('mongoose')): {
     LibrarySource: createLibrarySourceModel(mongoose),
     LibraryFolder: createLibraryFolderModel(mongoose),
     LibraryView: createLibraryViewModel(mongoose),
+    LibraryShare: createLibraryShareModel(mongoose),
     AgentCategory: createAgentCategoryModel(mongoose),
     MCPServer: createMCPServerModel(mongoose),
     Role: createRoleModel(mongoose),

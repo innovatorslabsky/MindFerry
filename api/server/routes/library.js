@@ -11,6 +11,8 @@ const {
   createLibraryHandlers,
   createLibraryTextGenerator,
   createLibraryInboxAuth,
+  createLibraryShareAuth,
+  librarySharedLimiter,
   libraryInboxLimiter,
   createRequireApiKeyAuth,
   restoreTenantContextFromReq,
@@ -158,6 +160,19 @@ function readEmailParts(req, res, next) {
   });
 }
 
+/**
+ * A public link needs no account: the secret in it is the credential, and it opens one document,
+ * read-only. The request acts as the owner so config and tenant resolve as for them.
+ */
+const shareAuth = createLibraryShareAuth({
+  findShare: (token) => inboxLookup.findShare(token),
+  findUser: db.findUser,
+});
+const shared = [librarySharedLimiter, shareAuth, configMiddleware, restoreTenantContextFromReq];
+router.get('/shared/:token', ...shared, handlers.getShared);
+router.get('/shared/:token/units/:index', ...shared, handlers.getSharedUnit);
+router.get('/shared/:token/resources', ...shared, handlers.getSharedResource);
+
 router.post(
   '/inbox/:token',
   libraryInboxLimiter,
@@ -183,6 +198,9 @@ router.post('/feeds/preview', ...save, handlers.previewFeed);
 router.get('/export', ...browse, handlers.exportHighlights);
 router.get('/review', ...browse, handlers.dailyReview);
 router.post('/review/:id', ...browse, handlers.reviewHighlight);
+router.get('/documents/:id/share', ...browse, handlers.getShare);
+router.put('/documents/:id/share', ...browse, handlers.setShare);
+router.delete('/documents/:id/share', ...browse, handlers.deleteShare);
 router.post('/documents/:id/chat', ...browse, handlers.chat);
 router.post('/documents/:id/summary', ...save, librarySummaryLimiter, handlers.summarize);
 router.post('/ask', ...browse, handlers.ask);

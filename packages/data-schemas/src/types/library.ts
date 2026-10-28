@@ -235,6 +235,22 @@ export interface LibraryDataDeleteResult {
   views: number;
   feeds: number;
   inboxes: number;
+  shares: number;
+}
+
+/** A public link to a document, as its owner sees it. */
+export interface LibraryShareRecord {
+  token: string;
+  includeHighlights: boolean;
+  createdAt: Date;
+}
+
+/** What a public token points at: whose document, which one, and what of the owner's is shown with it. */
+export interface LibraryShareTarget {
+  userId: string;
+  documentId: string;
+  includeHighlights: boolean;
+  tenantId?: string;
 }
 
 /** A person's newsletter address, as far as anyone but its holder may know: when it was made. */

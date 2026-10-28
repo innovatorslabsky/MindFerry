@@ -80,6 +80,7 @@ export {
   sharedFileDownload,
   buildLoginRedirectUrl,
   contextHubMcpEndpoint,
+  librarySharedResource,
 } from './api-endpoints';
 export { default as request } from './request';
 export { dataService };

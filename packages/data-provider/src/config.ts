@@ -726,6 +726,19 @@ export const contextHubSchema = z
             perUserPerDay: z.number().int().min(1).max(1000).default(30),
           })
           .optional(),
+        /**
+         * Public links to a document: anyone with the link can read it, without an account. Off by
+         * default, because it republishes what people saved, in full, from this deployment's address.
+         */
+        sharing: z
+          .object({
+            enabled: z.boolean().default(false),
+            /** Shown at the top of every shared page, e.g. a disclaimer about the content. */
+            notice: z.string().max(1000).optional(),
+            /** Where a visitor can report a shared page; shown as a link on it. */
+            reportEmail: z.string().email().optional(),
+          })
+          .optional(),
       })
       .default({}),
   })

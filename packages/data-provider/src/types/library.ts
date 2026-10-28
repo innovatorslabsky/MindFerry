@@ -291,3 +291,63 @@ export type TLibraryFolder = {
   documentCount: number;
   createdAt: string;
 };
+
+/** A public link to a document, as its owner sees it. */
+export type TLibraryShare = {
+  token: string;
+  includeHighlights: boolean;
+  createdAt: string;
+};
+
+/** `enabled` is whether this deployment offers public links at all; `notice` is the operator's text, if any. */
+export type TLibraryShareResponse = {
+  enabled: boolean;
+  notice?: string;
+  share?: TLibraryShare | null;
+};
+
+/** A document as a visitor with a public link sees it: the text and where it came from, nothing of the owner's. */
+export type TLibrarySharedDocument = Pick<
+  TLibraryDocumentSummary,
+  | 'id'
+  | 'kind'
+  | 'title'
+  | 'byline'
+  | 'siteName'
+  | 'lang'
+  | 'publishedTime'
+  | 'summary'
+  | 'thumbnailPath'
+  | 'wordCount'
+  | 'readingMinutes'
+  | 'unitCount'
+  | 'toc'
+  | 'hasSource'
+> & {
+  /** The page it was saved from, when that was a web page. */
+  sourceUrl?: string;
+  /** Present for an article; a book's text comes a chapter or page at a time. */
+  text?: string;
+  contentHtml?: string;
+};
+
+/** A highlight without the owner's note and tags. */
+export type TLibrarySharedHighlight = Pick<
+  TLibraryHighlight,
+  'id' | 'anchor' | 'color' | 'unit' | 'contentHash' | 'orphaned'
+>;
+
+export type TLibrarySharedResponse = {
+  document: TLibrarySharedDocument;
+  units?: TLibraryUnitSummary[];
+  highlights: TLibrarySharedHighlight[];
+  /** The operator's text to show above the page, such as a disclaimer. */
+  notice?: string;
+  /** Where to report the page. */
+  reportEmail?: string;
+};
+
+export type TLibrarySharedUnitResponse = {
+  unit: TLibraryUnit;
+  highlights: TLibrarySharedHighlight[];
+};

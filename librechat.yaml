@@ -21,6 +21,9 @@ contextHub:
   library:
     enabled: true
     keepPdfOriginals: true
+    # Public links to documents: anyone with the link can read the text. See docs/library.md.
+    sharing:
+      enabled: true
 
 # MCP directory: a searchable view of the awesome-mcp-servers listing in the
 # "Browse curated servers" dialog. Off unless enabled; fetched at most once per

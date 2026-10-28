@@ -242,6 +242,45 @@ export const useDeleteLibraryInboxMutation = (
   });
 };
 
+/** Makes the public link to a document, or changes what it shows; the address stays the same. */
+export const useSetLibraryShareMutation = (
+  options?: t.MutationOptions<
+    { share: t.TLibraryShare },
+    { id: string; includeHighlights: boolean }
+  >,
+): UseMutationResult<
+  { share: t.TLibraryShare },
+  unknown,
+  { id: string; includeHighlights: boolean },
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation(
+    ({ id, includeHighlights }: { id: string; includeHighlights: boolean }) =>
+      dataService.setLibraryShare(id, { includeHighlights }),
+    {
+      ...options,
+      onSuccess: (data, variables, context) => {
+        queryClient.invalidateQueries([QueryKeys.libraryShare, variables.id]);
+        options?.onSuccess?.(data, variables, context);
+      },
+    },
+  );
+};
+
+export const useDeleteLibraryShareMutation = (
+  options?: t.MutationOptions<void, string>,
+): UseMutationResult<void, unknown, string, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation((id: string) => dataService.deleteLibraryShare(id), {
+    ...options,
+    onSuccess: (data, id, context) => {
+      queryClient.invalidateQueries([QueryKeys.libraryShare, id]);
+      options?.onSuccess?.(data, id, context);
+    },
+  });
+};
+
 export const usePreviewLibraryFeedMutation = (
   options?: t.MutationOptions<{ feed: t.TLibraryFeedPreview }, string>,
 ): UseMutationResult<{ feed: t.TLibraryFeedPreview }, unknown, string, unknown> =>

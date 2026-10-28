@@ -52,6 +52,22 @@ export function getLibrarySummaryModel(
   };
 }
 
+export interface LibrarySharing {
+  enabled: boolean;
+  notice?: string;
+  reportEmail?: string;
+}
+
+/** Public links to documents (`contextHub.library.sharing`): off unless the operator turns them on. */
+export function getLibrarySharing(config: AppConfig | undefined): LibrarySharing {
+  const sharing = config?.contextHub?.library?.sharing;
+  return {
+    enabled: sharing?.enabled === true,
+    ...(sharing?.notice ? { notice: sharing.notice } : {}),
+    ...(sharing?.reportEmail ? { reportEmail: sharing.reportEmail } : {}),
+  };
+}
+
 /**
  * Whether an uploaded PDF's original file is kept so its pages can be shown as the page itself.
  * Off by default: it multiplies what is stored per user, and keeps a copy of the file, not only text.

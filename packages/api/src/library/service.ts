@@ -22,6 +22,8 @@ import type {
   LibraryResourceRecord,
   LibraryUnitRecord,
   LibraryUnitSummary,
+  LibraryShareRecord,
+  LibraryShareTarget,
 } from '@librechat/data-schemas';
 import type { DocumentDraft } from './ingest/saveDocument';
 import type { DailyReview, ReviewAction } from './review';
@@ -89,6 +91,10 @@ type Methods = Pick<
   | 'getLibraryInbox'
   | 'deleteLibraryInbox'
   | 'findLibraryInboxOwner'
+  | 'getLibraryShare'
+  | 'upsertLibraryShare'
+  | 'deleteLibraryShare'
+  | 'findLibraryShareByToken'
   | 'listLibraryReviewHighlights'
   | 'countLibraryReviewedSince'
   | 'markLibraryHighlightReviewed'
@@ -304,6 +310,18 @@ export interface LibraryService {
   deleteInbox: (userId: string) => Promise<boolean>;
   /** Whose address a secret in a request is; `null` if it is no one's. */
   findInboxOwner: (token: string) => Promise<{ userId: string; tenantId?: string } | null>;
+  /** The public link to a document, or `null` when it has none. */
+  getShare: (userId: string, documentId: string) => Promise<LibraryShareRecord | null>;
+  /** Makes the public link, or changes what it shows (the link itself stays). `null` if the document is not theirs. */
+  setShare: (
+    userId: string,
+    documentId: string,
+    options: { includeHighlights: boolean },
+  ) => Promise<LibraryShareRecord | null>;
+  /** Withdraws the link; `false` when there was none. */
+  deleteShare: (userId: string, documentId: string) => Promise<boolean>;
+  /** What a public token points at, from any tenant; `null` if no link has it. */
+  findShare: (token: string) => Promise<LibraryShareTarget | null>;
   /** Saves a newsletter to the person's Feed tab. The same message again updates the same document. */
   receiveEmail: (userId: string, email: InboundEmail) => Promise<SaveResult>;
   /** `false` when the highlight is not the person's. */
@@ -773,6 +791,22 @@ export function createLibraryService({
 
     deleteInbox(userId: string) {
       return methods.deleteLibraryInbox(userId);
+    },
+
+    getShare(userId: string, documentId: string) {
+      return methods.getLibraryShare(userId, documentId);
+    },
+
+    setShare(userId: string, documentId: string, options: { includeHighlights: boolean }) {
+      return methods.upsertLibraryShare(userId, documentId, options);
+    },
+
+    deleteShare(userId: string, documentId: string) {
+      return methods.deleteLibraryShare(userId, documentId);
+    },
+
+    findShare(token: string) {
+      return methods.findLibraryShareByToken(token);
     },
 
     findInboxOwner(token: string) {

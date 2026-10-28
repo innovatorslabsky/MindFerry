@@ -205,3 +205,40 @@ export const useLibraryInboxQuery = (
     },
   );
 };
+
+/** Whether this deployment offers public links, and the one a document has, if any. */
+export const useLibraryShareQuery = (
+  id: string,
+  config?: UseQueryOptions<t.TLibraryShareResponse>,
+): QueryObserverResult<t.TLibraryShareResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+  return useQuery<t.TLibraryShareResponse>(
+    [QueryKeys.libraryShare, id],
+    () => dataService.getLibraryShare(id),
+    {
+      refetchOnWindowFocus: false,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
+/** What a visitor with a public link reads. It needs no account, so it does not wait for sign-in. */
+export const useLibrarySharedQuery = (
+  token: string,
+): QueryObserverResult<t.TLibrarySharedResponse> =>
+  useQuery<t.TLibrarySharedResponse>(
+    [QueryKeys.librarySharedDocument, token],
+    () => dataService.getLibrarySharedDocument(token),
+    { refetchOnWindowFocus: false, retry: false },
+  );
+
+export const useLibrarySharedUnitQuery = (
+  token: string,
+  index: number | undefined,
+): QueryObserverResult<t.TLibrarySharedUnitResponse> =>
+  useQuery<t.TLibrarySharedUnitResponse>(
+    [QueryKeys.librarySharedUnit, token, index],
+    () => dataService.getLibrarySharedUnit(token, index ?? 0),
+    { refetchOnWindowFocus: false, retry: false, enabled: index != null },
+  );

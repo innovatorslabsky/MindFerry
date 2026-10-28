@@ -1,4 +1,5 @@
 import { Types } from 'mongoose';
+import { randomBytes } from 'crypto';
 import type {
   LibraryAnchorRecord,
   LibraryBookInput,
@@ -11,6 +12,8 @@ import type {
   LibraryFolderCreateResult,
   LibraryFolderRecord,
   LibraryFolderRenameResult,
+  LibraryShareRecord,
+  LibraryShareTarget,
   LibraryViewCreateResult,
   LibraryViewFilter,
   LibraryViewRecord,
@@ -43,6 +46,7 @@ import type { ILibraryProgress } from '~/schema/libraryProgress';
 import type { ILibraryResource } from '~/schema/libraryResource';
 import type { ILibrarySource } from '~/schema/librarySource';
 import type { ILibraryFolder } from '~/schema/libraryFolder';
+import type { ILibraryShare } from '~/schema/libraryShare';
 import type { ILibraryInbox } from '~/schema/libraryInbox';
 import type { ILibraryView } from '~/schema/libraryView';
 import type { ILibraryUnit } from '~/schema/libraryUnit';
@@ -225,6 +229,22 @@ export interface LibraryMethods {
   ) => Promise<boolean>;
   deleteLibraryFeed: (userId: string, id: string) => Promise<boolean>;
   deleteAllLibraryData: (userId: string) => Promise<LibraryDataDeleteResult>;
+  /** The public link to a document, or `null` when it has none or is not the person's. */
+  getLibraryShare: (userId: string, documentId: string) => Promise<LibraryShareRecord | null>;
+  /**
+   * Makes the public link to a document, or changes what it shows when it already has one. The token is
+   * kept when the link is changed, so a link already handed out keeps working. `null` when the
+   * document is not the person's.
+   */
+  upsertLibraryShare: (
+    userId: string,
+    documentId: string,
+    options: { includeHighlights: boolean },
+  ) => Promise<LibraryShareRecord | null>;
+  /** Withdraws the public link to a document; `false` when there was none. */
+  deleteLibraryShare: (userId: string, documentId: string) => Promise<boolean>;
+  /** What a public token points at, or `null` when no link has that token (any more). */
+  findLibraryShareByToken: (token: string) => Promise<LibraryShareTarget | null>;
 }
 
 const UNIT_INSERT_BATCH = 100;
@@ -239,6 +259,9 @@ const RESOURCE_INSERT_BATCH = 4;
 
 /** Where an article's picture is kept among its resources. No book chapter can refer to it. */
 const THUMBNAIL_PATH = '__thumbnail__';
+
+/** 128 bits: enough that a link cannot be found by trying. */
+const SHARE_TOKEN_BYTES = 16;
 
 const EXCERPT_CHARS = 200;
 
@@ -1137,6 +1160,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       mongoose.models.LibraryUnit.deleteMany({ userId: owner, documentId }),
       mongoose.models.LibraryResource.deleteMany({ userId: owner, documentId }),
       mongoose.models.LibrarySource.deleteMany({ userId: owner, documentId }),
+      mongoose.models.LibraryShare.deleteMany({ userId: owner, documentId }),
     ]);
     return true;
   }
@@ -1500,6 +1524,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       feeds,
       inboxes,
       views,
+      shares,
     ] = await Promise.all([
       mongoose.models.LibraryDocument.deleteMany({ userId: owner }),
       mongoose.models.LibraryHighlight.deleteMany({ userId: owner }),
@@ -1511,6 +1536,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       mongoose.models.LibraryFeed.deleteMany({ userId: owner }),
       mongoose.models.LibraryInbox.deleteMany({ userId: owner }),
       mongoose.models.LibraryView.deleteMany({ userId: owner }),
+      mongoose.models.LibraryShare.deleteMany({ userId: owner }),
     ]);
     return {
       documents: documents.deletedCount,
@@ -1523,6 +1549,84 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       feeds: feeds.deletedCount,
       inboxes: inboxes.deletedCount,
       views: views.deletedCount,
+      shares: shares.deletedCount,
+    };
+  }
+
+  function toShareRecord(share: ILibraryShare): LibraryShareRecord {
+    return {
+      token: share.token,
+      includeHighlights: share.includeHighlights,
+      createdAt: share.createdAt,
+    };
+  }
+
+  async function getLibraryShare(
+    userId: string,
+    documentId: string,
+  ): Promise<LibraryShareRecord | null> {
+    if (!Types.ObjectId.isValid(documentId)) {
+      return null;
+    }
+    const share = (await mongoose.models.LibraryShare.findOne({
+      userId: toObjectId(userId),
+      documentId: toObjectId(documentId),
+    }).lean()) as unknown as ILibraryShare | null;
+    return share ? toShareRecord(share) : null;
+  }
+
+  async function upsertLibraryShare(
+    userId: string,
+    documentId: string,
+    options: { includeHighlights: boolean },
+  ): Promise<LibraryShareRecord | null> {
+    if (!Types.ObjectId.isValid(documentId)) {
+      return null;
+    }
+    const owner = toObjectId(userId);
+    const doc = toObjectId(documentId);
+    // Only a document the person owns can be shared.
+    if (!(await mongoose.models.LibraryDocument.exists({ _id: doc, userId: owner }))) {
+      return null;
+    }
+    const share = (await mongoose.models.LibraryShare.findOneAndUpdate(
+      { userId: owner, documentId: doc },
+      {
+        $set: { includeHighlights: options.includeHighlights },
+        $setOnInsert: { token: randomBytes(SHARE_TOKEN_BYTES).toString('base64url') },
+      },
+      { upsert: true, new: true },
+    ).lean()) as unknown as ILibraryShare;
+    return toShareRecord(share);
+  }
+
+  async function deleteLibraryShare(userId: string, documentId: string): Promise<boolean> {
+    if (!Types.ObjectId.isValid(documentId)) {
+      return false;
+    }
+    const result = await mongoose.models.LibraryShare.deleteOne({
+      userId: toObjectId(userId),
+      documentId: toObjectId(documentId),
+    });
+    return result.deletedCount > 0;
+  }
+
+  async function findLibraryShareByToken(token: string): Promise<LibraryShareTarget | null> {
+    if (typeof token !== 'string' || token.length < 16 || token.length > 64) {
+      return null;
+    }
+    // The visitor has no tenant, so this one lookup reads across them, as the newsletter address does.
+    const share = (await runAsSystem(async () =>
+      mongoose.models.LibraryShare.findOne({ token }).lean(),
+    )) as unknown as ILibraryShare | null;
+    if (!share) {
+      return null;
+    }
+    return {
+      userId: share.userId.toString(),
+      documentId: share.documentId.toString(),
+      includeHighlights: share.includeHighlights,
+      ...(share.tenantId ? { tenantId: share.tenantId } : {}),
     };
   }
 
@@ -1572,5 +1676,9 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     recordLibraryFeedRefresh,
     deleteLibraryFeed,
     deleteAllLibraryData,
+    getLibraryShare,
+    upsertLibraryShare,
+    deleteLibraryShare,
+    findLibraryShareByToken,
   };
 }
