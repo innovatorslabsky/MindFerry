@@ -349,3 +349,170 @@ Fingerprint warning (expected, non-blocking): "[credentials] Active fingerprints
 Verdict: CREDS rotation PASS on the deployment/log side. Limit: startup does NOT exercise decryption or login. No /api/auth request has hit this deployment yet, so login and any CREDS-dependent feature are unverified until Vincent logs in and opens a conversation (a JWT change earlier already forced one re-login; CREDS does not invalidate sessions). Because nothing encrypted exists, the functional risk is low; a fresh login plus an open conversation plus one Claude reply is the proper confirmation.
 
 Status of the rotation list: ANTHROPIC_API_KEY done; JWT_SECRET/JWT_REFRESH_SECRET done; ALLOW_REGISTRATION=false done; CREDS_KEY/CREDS_IV done (pending the login smoke test); still open: Mongo password (optional, design recorded), FREELLMAPI_KEY and the upstream provider key, final refresh of the credential marker. Nothing else was started in this task; skyloom untouched.
+
+## Stage 1 — Mongo password rotation: Function created in STAGED form only (2026-10-29)
+Context (Kem/Vincent): backup gate waived by Vincent 2026-10-25; Vincent said to continue 2026-10-28. MongoDB is private-network only (no TCP proxy). Variable pattern confirmed by Kem: MONGOUSER references MONGO_INITDB_ROOT_USERNAME; MONGOPASSWORD references MONGO_INITDB_ROOT_PASSWORD; MONGO_URL is built from those references plus the private domain, with no database name (data is in the default "test" database); the backend MONGO_URI references MONGO_URL. So the ONLY variable to change later is MONGO_INITDB_ROOT_PASSWORD; the reference variables stay as they are.
+
+Done in this task (nothing deployed; no variable, password or other service changed):
+- Created Function mf-mongo-rotate (service 8365f763-36c7-4b22-a7b5-a030671ae26f), project mindferry, production, as a STAGED service. It is distinct from the deleted mf-oneoff. Patch 81908a15-89d8-4d93-8ce2-c1d74aa0e762, 6 changes, all for this Function only: service creation, image (ghcr.io/railwayapp/function-bun:1.4.4), region sfo (1 replica), restart policy NEVER, source code (single TypeScript file, not committed to the repo; text kept below), variable MONGO_URL as a reference to the MongoDB service's MONGO_URL (value redacted). No domain. latestDeployment null (describe-environment: state "staged-create"). accept-deploy was NOT called; MongoDB, freellmapi, @mindferry-backend and skyloom show no staged changes and unchanged deployments (06496d1a, 1f77213b, ac978e83, ac938e9d).
+- Code checked locally for syntax (TypeScript transpile, 0 diagnostics) and URL handling using fake placeholder values only. It was NOT run against Mongo.
+
+What the code does (it prints only fixed codes with the prefix "ROTATE": NOT_ARMED, NEW_OK, NEW_FAILED, OLD_REJECTED, OLD_STILL_ACCEPTED, ALREADY_DONE, NO_CHANGE-style notices, or ERR <CODE>; never a password, username, connection string or error message):
+1. Does nothing (NOT_ARMED, exit 0) unless the variable ARMED equals "yes". Applying the staged Function is therefore harmless until Kem arms it.
+2. Target password = NEW_MONGO_PASSWORD (or, only with MODE=rollback, OLD_MONGO_PASSWORD_TMP). It must be 24-128 letters/digits only (URL-safe, because MONGO_URL embeds the raw variable); otherwise ERR BAD_TARGET_FORMAT with nothing changed.
+3. Takes the username and host from MONGO_URL (never printed). Candidate "current" passwords: the one inside MONGO_URL and OLD_MONGO_PASSWORD_TMP (so it also works if the MongoDB variable change was applied first and MONGO_URL already carries the new password).
+4. If the target already works, reports NEW_OK / OLD_REJECTED / ALREADY_DONE and stops (idempotent on re-run). Otherwise finds a candidate that authenticates (none works: ERR NO_CREDENTIAL_WORKS, nothing changed), runs the single write (updateUser on the admin database with the new password; failure: ERR UPDATE_FAILED <codeName>, nothing changed), then tests that the new password connects (NEW_OK) and the old one is rejected (OLD_REJECTED). Network errors while Mongo restarts are retried (6 x 10 s) before failing.
+5. Every check that can fail runs before the single write.
+
+Runbook for Kem (dashboard; no value ever in this session or the memo):
+1. Apply the staged Function (it will log ROTATE NOT_ARMED and exit). If Railway asks for confirmation, confirm; the patch is only this Function.
+2. On the Function set NEW_MONGO_PASSWORD (generate 32+ letters/digits in the browser task; not reported anywhere) and OLD_MONGO_PASSWORD_TMP (copy of the current MONGO_INITDB_ROOT_PASSWORD, kept only for rollback). Each change redeploys the Function and it logs NOT_ARMED again.
+3. Rotate: set ARMED=yes on the Function and apply; it runs once. Lyra reads its logs (get-logs) and expects ROTATE NEW_OK + ROTATE OLD_REJECTED.
+4. As soon as NEW_OK is seen, change ONLY MONGO_INITDB_ROOT_PASSWORD on the MongoDB service to the same new value and apply. Railway redeploys MongoDB and its dependents (backend). Gap between steps 3 and 4: the database already has the new password while the variable still holds the old one; the backend's open connections keep working, new connections fail until step 4 completes, so do step 4 immediately. (Applying 3 and 4 in one batch also works because of step 3 of the code, but the backend may fail to connect briefly if Mongo restarts first; the sequential order is preferred.)
+5. Verify (Lyra): backend deploy log "Connected to MongoDB" with no authentication error and readiness passing; MongoDB Online; Vincent logs in and opens a conversation; /api/hub/mcp still answers.
+6. Clean up: delete the Function mf-mongo-rotate (Settings > Delete Service); this removes NEW_MONGO_PASSWORD and OLD_MONGO_PASSWORD_TMP. Confirm with describe-environment.
+Rollback: before cleanup, set MODE=rollback on the Function and re-run it (it restores OLD_MONGO_PASSWORD_TMP, with ARMED=yes), then set MONGO_INITDB_ROOT_PASSWORD back. If the backend cannot connect after step 4, first make the variable match the database (roll forward) before anything else. Last resort (explicit approval needed): temporarily start mongod without auth through the MongoDB start command, repair the user, restore the start command. No backup exists (waived).
+Risks: no backup; a brief connection gap between steps 3 and 4; a non-alphanumeric password would break the connection string (the code refuses it); the Function holds two password variables until deleted; Mongo is private-network only, so the benefit of this rotation is modest.
+
+Function source as staged (contains no secret; reads everything from variables):
+```ts
+import { MongoClient } from "mongodb@6";
+
+// One-off MongoDB password rotation. Prints ONLY fixed status codes: never a password,
+// username, connection string, error message or any other value.
+//
+// Inputs (all environment variables):
+//   MONGO_URL               reference to the MongoDB service's MONGO_URL (host and user)
+//   NEW_MONGO_PASSWORD      target password, set later in the Railway dashboard (never in code)
+//   OLD_MONGO_PASSWORD_TMP  temporary copy of the current password, set in the dashboard
+//   ARMED                   must equal "yes" or nothing is attempted
+//   MODE                    optional; "rollback" makes OLD_MONGO_PASSWORD_TMP the target
+//
+// Safety: every check that can fail runs BEFORE the single write; a failure before it leaves
+// the database untouched. The password inside MONGO_URL may already be the new one (if the
+// variable change was applied first), so the saved copy of the other password is also tried.
+// Re-running after success is a no-op (ALREADY_DONE).
+
+const say = (s: string) => console.log(`ROTATE ${s}`);
+const done = (code: number): never => {
+  process.exit(code);
+};
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+function isAuthFailure(e: unknown): boolean {
+  const x = e as { code?: number; codeName?: string };
+  return x?.code === 18 || x?.codeName === "AuthenticationFailed";
+}
+
+// true = credentials work, false = authentication rejected. Network trouble (Mongo may be
+// restarting) is retried, then thrown.
+async function canAuth(url: string): Promise<boolean> {
+  for (let attempt = 1; ; attempt++) {
+    const c = new MongoClient(url, { serverSelectionTimeoutMS: 10000 });
+    try {
+      await c.connect();
+      await c.db("admin").command({ ping: 1 });
+      return true;
+    } catch (e) {
+      if (isAuthFailure(e)) return false;
+      if (attempt >= 6) throw e;
+    } finally {
+      await c.close().catch(() => {});
+    }
+    await sleep(10000);
+  }
+}
+
+try {
+  if (Bun.env.ARMED !== "yes") {
+    say("NOT_ARMED");
+    done(0);
+  }
+
+  const baseUrl = Bun.env.MONGO_URL;
+  if (!baseUrl) {
+    say("ERR NO_MONGO_URL");
+    done(1);
+  }
+
+  const rollback = Bun.env.MODE === "rollback";
+  const target = rollback ? Bun.env.OLD_MONGO_PASSWORD_TMP : Bun.env.NEW_MONGO_PASSWORD;
+  if (!target) {
+    say("ERR NO_TARGET_PASSWORD");
+    done(1);
+  }
+  // MONGO_URL is composed from the raw variable, so the password must be URL-safe.
+  if (!/^[A-Za-z0-9]{24,128}$/.test(target!)) {
+    say("ERR BAD_TARGET_FORMAT");
+    done(1);
+  }
+
+  const parsed = new URL(baseUrl!);
+  const user = decodeURIComponent(parsed.username);
+  if (!user) {
+    say("ERR NO_USER_IN_URL");
+    done(1);
+  }
+  const urlFor = (pw: string): string => {
+    const u = new URL(baseUrl!);
+    u.password = pw;
+    return u.toString();
+  };
+
+  // Passwords the database might hold other than the target.
+  const other = rollback ? Bun.env.NEW_MONGO_PASSWORD : Bun.env.OLD_MONGO_PASSWORD_TMP;
+  const candidates = [...new Set([decodeURIComponent(parsed.password), other])].filter(
+    (p): p is string => !!p && p !== target,
+  );
+
+  if (await canAuth(urlFor(target!))) {
+    // Already set (re-run, or the variable was already updated): confirm the others are rejected.
+    let othersRejected = true;
+    for (const p of candidates) {
+      if (await canAuth(urlFor(p))) othersRejected = false;
+    }
+    say("NEW_OK");
+    say(othersRejected ? "OLD_REJECTED" : "OLD_STILL_ACCEPTED");
+    say("ALREADY_DONE");
+    done(othersRejected ? 0 : 1);
+  }
+
+  let working: string | undefined;
+  for (const p of candidates) {
+    if (await canAuth(urlFor(p))) {
+      working = p;
+      break;
+    }
+  }
+  if (!working) {
+    say("ERR NO_CREDENTIAL_WORKS");
+    done(1);
+  }
+
+  // --- the only write ---
+  const admin = new MongoClient(urlFor(working!), { serverSelectionTimeoutMS: 15000 });
+  try {
+    await admin.connect();
+    await admin.db("admin").command({ updateUser: user, pwd: target });
+  } catch (e) {
+    const x = e as { codeName?: string; code?: number };
+    const code = x?.codeName ?? x?.code ?? "unknown";
+    say(`ERR UPDATE_FAILED ${String(code).replace(/[^A-Za-z0-9_]/g, "")}`);
+    done(1);
+  } finally {
+    await admin.close().catch(() => {});
+  }
+
+  // --- verification ---
+  const newOk = await canAuth(urlFor(target!));
+  const oldRejected = !(await canAuth(urlFor(working!)));
+  say(newOk ? "NEW_OK" : "NEW_FAILED");
+  say(oldRejected ? "OLD_REJECTED" : "OLD_STILL_ACCEPTED");
+  done(newOk && oldRejected ? 0 : 1);
+} catch (e) {
+  say(`ERR UNEXPECTED ${String((e as Error)?.name ?? "Error").replace(/[^A-Za-z0-9_]/g, "")}`);
+  done(1);
+}
+```
+
+Status: Function STAGED only; awaiting Kem to apply it in the dashboard and set the variables. Not started: FREELLMAPI_KEY, fingerprint-marker refresh. skyloom untouched.
