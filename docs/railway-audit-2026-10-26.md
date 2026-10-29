@@ -542,3 +542,19 @@ Independent check (Railway MCP; no values read):
 Verdict: Mongo password rotation PASS on the deployment/log side. Limit: startup shows the backend can authenticate to MongoDB, but a user-level confirmation is still pending: Vincent should log in and open a conversation (a database read) and send one message (a write). Conversation reads/writes were not exercised by this check.
 Function: do not delete before this verification; with it complete, deleting mf-mongo-rotate (Settings > Delete Service, destructive confirmation by a human) is now appropriate. Deleting it also removes NEW_MONGO_PASSWORD, OLD_MONGO_PASSWORD_TMP and ARMED. The Function is a rollback path only until deleted; the old password is NOT valid in the database any more. After deletion verify with describe-environment that only MongoDB, freellmapi and @mindferry-backend remain.
 Remaining open items: FREELLMAPI_KEY and the freellmapi upstream provider key (need the FreeLLMAPI dashboard); final refresh of the credential fingerprint marker after the last rotation; the optional login/conversation smoke test. Not started in this task; skyloom untouched.
+
+## Stage 1 — mf-mongo-rotate DELETED; environment clean (2026-10-29; verified by Lyra, read-only)
+Kem's report (browser task, 2026-10-28, project mindferry): verified the exact service (name mf-mongo-rotate, Function image, Completed, Unexposed, Restart Never, no public domain; not MongoDB, freellmapi or the backend); Settings > Delete service, typed the name to confirm, confirmed the single staged change and the Destructive Changes dialog for mindferry/production; canvas afterwards shows it gone, no pending changes, MongoDB / freellmapi / @mindferry-backend Online; no Mongo password, variable, CREDS or backend change; no secrets reported.
+
+Independent check (describe-environment, list-services, describe-service; no values read):
+- mf-mongo-rotate: GONE from the service list; no leftover service, volume or bucket (volumes are only mongodb-volume and freellmapi-data); no shared variables; its variables (MONGO_URL reference, NEW_MONGO_PASSWORD, OLD_MONGO_PASSWORD_TMP, ARMED) went with the service.
+- Present and unchanged since the last verification: MongoDB deployment ddcc06a2-fe9e-4d83-b413-fa5df48739be (SUCCESS, no TCP proxy, private network only; variable names MONGOHOST, MONGOPASSWORD, MONGOPORT, MONGOUSER, MONGO_INITDB_ROOT_PASSWORD, MONGO_INITDB_ROOT_USERNAME, MONGO_URL); freellmapi 1f77213b (SUCCESS, 2026-10-13); @mindferry-backend 31135ee8-c4a4-46c3-93d9-5a188eb524a9 (SUCCESS, commit 9717193, 14 variable names unchanged). No staged/pending changes in mindferry. skyloom not touched.
+
+Status: MongoDB password rotation COMPLETE on the deployment/log side (database holds the new password, MONGO_INITDB_ROOT_PASSWORD updated, MONGOPASSWORD / MONGO_URL / MONGO_URI follow by reference, backend connected, helper Function removed, old password no longer valid, no backup existed - waived).
+
+Rotation scoreboard: ANTHROPIC_API_KEY done (old key deleted by Vincent); JWT_SECRET/JWT_REFRESH_SECRET done; CREDS_KEY/CREDS_IV done; Mongo password done; ALLOW_REGISTRATION=false done.
+Remaining:
+1. Vincent functional check: sign in, open a conversation, send one short message (exercises reads/writes after the JWT, CREDS and Mongo changes).
+2. FREELLMAPI_KEY rotation: needs a new unified key from the FreeLLMAPI dashboard (Vincent) set on the backend by a browser task, plus the upstream provider key held by freellmapi (identify it on the dashboard's Keys page, rotate at that provider and re-enter; its ENCRYPTION_KEY stays out of scope).
+3. Credential fingerprint marker refresh (collection librechatCredentialMetadata, hashes only) as a controlled step after the last rotation; currently the startup warning lists all four credentials as differing from the marker.
+4. Final verification and closing report.
