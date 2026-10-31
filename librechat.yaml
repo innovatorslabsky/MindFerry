@@ -24,6 +24,8 @@ contextHub:
     # Public links to documents: anyone with the link can read the text. See docs/library.md.
     sharing:
       enabled: true
+      notice: 'User-shared content; copyright belongs to the original authors. Rights holders can request removal via "Report this page".'
+      reportEmail: vincentnguyen.workspace@gmail.com
 
 # MCP directory: a searchable view of the awesome-mcp-servers listing in the
 # "Browse curated servers" dialog. Off unless enabled; fetched at most once per
