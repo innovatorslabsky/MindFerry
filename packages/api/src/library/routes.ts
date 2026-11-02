@@ -18,9 +18,9 @@ import {
   WorkerResultTooLargeError,
   WorkerUnavailableError,
 } from './worker/errors';
+import { createHighlightSchema, KINDS, LOCATIONS, READING_STATUSES, SORTS } from './types';
 import { getLibrarySharing, getLibrarySummaryModel, isLibraryEnabled } from './config';
 import { FetchError, TooLargeError, UnsafeUrlError } from './net/safeFetch';
-import { createHighlightSchema, KINDS, LOCATIONS, SORTS } from './types';
 import { ASK_MODES, convertLibraryAskToChat, needsTopic } from './ask';
 import { isConversationImportError } from '../conversations/import';
 import { isContentFilterError } from '../middleware/contentFilter';
@@ -142,6 +142,10 @@ const patchDocumentSchema = z
     summary: z.string().max(2000).optional(),
     /** Puts back the title and author the page itself gave. */
     restoreMeta: z.literal(true).optional(),
+    /** Null clears it. */
+    readingStatus: z.enum(READING_STATUSES).nullable().optional(),
+    /** Whole stars; null clears it. */
+    rating: z.number().int().min(1).max(5).nullable().optional(),
   })
   .refine((patch) => Object.values(patch).some((value) => value !== undefined), {
     message: 'Nothing to update',
@@ -678,9 +682,14 @@ export function createLibraryHandlers({
     const tag = typeof req.query.tag === 'string' ? req.query.tag.trim().slice(0, 64) : '';
     const kind = KINDS.find((value) => value === req.query.kind);
     const sort = SORTS.find((value) => value === req.query.sort);
+    const status =
+      req.query.status === 'none'
+        ? 'none'
+        : READING_STATUSES.find((value) => value === req.query.status);
     const documents = await service.list(userId, {
       location,
       kind,
+      status,
       sort,
       tag: tag || undefined,
       folder: folder || undefined,

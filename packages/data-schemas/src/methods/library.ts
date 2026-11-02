@@ -320,6 +320,9 @@ function toSummary(doc: ILibraryDocument): LibraryDocumentSummary {
     ...(doc.truncated === undefined ? {} : { truncated: doc.truncated }),
     hasSource: doc.hasSource === true,
     location: doc.location,
+    ...(doc.readingStatus ? { readingStatus: doc.readingStatus } : {}),
+    ...(doc.rating ? { rating: doc.rating } : {}),
+    ...(doc.finishedAt ? { finishedAt: doc.finishedAt } : {}),
     tags: doc.tags ?? [],
     ...(doc.folderId ? { folderId: doc.folderId.toString() } : {}),
     fetchedAt: doc.fetchedAt,
@@ -988,6 +991,11 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     if (query.kind) {
       filter.kind = query.kind;
     }
+    if (query.status === 'none') {
+      filter.readingStatus = { $exists: false };
+    } else if (query.status) {
+      filter.readingStatus = query.status;
+    }
     if (query.folder === 'none') {
       filter.folderId = { $exists: false };
     } else if (query.folder) {
@@ -1113,6 +1121,27 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       } else {
         unset[field] = '';
       }
+    }
+    if (patch.readingStatus === null) {
+      unset.readingStatus = '';
+      unset.finishedAt = '';
+    } else if (patch.readingStatus !== undefined) {
+      set.readingStatus = patch.readingStatus;
+      if (patch.readingStatus === 'finished') {
+        // Saying "finished" again keeps the first date. Done ahead of the update below so it comes back with it.
+        await mongoose.models.LibraryDocument.updateOne(
+          { _id: toObjectId(id), userId: toObjectId(userId), finishedAt: { $exists: false } },
+          { $set: { finishedAt: new Date() } },
+          { timestamps: false },
+        );
+      } else {
+        unset.finishedAt = '';
+      }
+    }
+    if (patch.rating === null) {
+      unset.rating = '';
+    } else if (patch.rating !== undefined) {
+      set.rating = patch.rating;
     }
     if (patch.folderId === null) {
       unset.folderId = '';
@@ -1368,6 +1397,14 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     const owned = await mongoose.models.LibraryDocument.exists({ _id: docId, userId: owner });
     if (!owned) {
       return null;
+    }
+    if (textOffset > 0 || (unitIndex !== undefined && unitIndex > 0)) {
+      // Starting to read puts a document with no status on "reading". The listing order is left alone.
+      await mongoose.models.LibraryDocument.updateOne(
+        { _id: docId, userId: owner, readingStatus: { $exists: false } },
+        { $set: { readingStatus: 'reading' } },
+        { timestamps: false },
+      );
     }
     const doc = (await mongoose.models.LibraryProgress.findOneAndUpdate(
       { userId: owner, documentId: docId },

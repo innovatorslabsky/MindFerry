@@ -19,6 +19,7 @@ export const useLibraryDocumentsQuery = (
       params.tag ?? '',
       params.folder ?? '',
       params.kind ?? '',
+      params.status ?? '',
       params.sort ?? '',
       params.limit ?? null,
       params.skip ?? null,

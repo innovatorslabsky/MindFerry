@@ -4,6 +4,7 @@ import { Button, Input, useToastContext } from '@librechat/client';
 import type { TLibraryDocumentSummary } from 'librechat-data-provider';
 import { useUpdateLibraryDocumentMutation } from '~/data-provider';
 import { NotificationSeverity } from '~/common';
+import ReadingStatus from './ReadingStatus';
 import SummaryField from './SummaryField';
 import { useLocalize } from '~/hooks';
 
@@ -162,6 +163,8 @@ export default function InfoPanel({ document }: { document: TLibraryDocumentSumm
       className="flex h-full flex-col gap-5 overflow-y-auto px-3 py-3"
       data-testid="library-info"
     >
+      <ReadingStatus document={document} />
+
       <section className="flex flex-col gap-1.5">
         <h3 className="text-text-primary text-sm font-semibold">
           {localize('com_library_summary')}

@@ -146,6 +146,8 @@ export function createFakeLibraryMethods() {
             d.userId === userId &&
             (!query.location || d.location === query.location) &&
             (!query.tag || d.tags.includes(query.tag)) &&
+            (!query.status ||
+              (query.status === 'none' ? !d.readingStatus : d.readingStatus === query.status)) &&
             (!query.folder ||
               (query.folder === 'none' ? !d.folderId : d.folderId === query.folder)),
         )
@@ -171,7 +173,7 @@ export function createFakeLibraryMethods() {
         delete doc.folderId;
       }
       Object.assign(doc, rest);
-      for (const field of ['byline', 'note', 'summary'] as const) {
+      for (const field of ['byline', 'note', 'summary', 'readingStatus', 'rating'] as const) {
         if (field in patch && !doc[field]) delete doc[field];
       }
       return { ...doc };

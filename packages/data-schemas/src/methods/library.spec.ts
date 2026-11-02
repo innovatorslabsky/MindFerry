@@ -1398,3 +1398,89 @@ describe('public links', () => {
     expect(await methods.findLibraryShareByToken(kept?.token ?? '')).toBeNull();
   });
 });
+
+describe('reading status and rating', () => {
+  it('sets a status and stars, clears them, and records when a document was finished', async () => {
+    const { document } = await methods.saveLibraryDocument(userA, doc());
+    expect(document.readingStatus).toBeUndefined();
+
+    const finished = await methods.updateLibraryDocument(userA, document.id, {
+      readingStatus: 'finished',
+      rating: 4,
+    });
+    expect(finished).toMatchObject({ readingStatus: 'finished', rating: 4 });
+    expect(finished?.finishedAt).toBeInstanceOf(Date);
+
+    const cleared = await methods.updateLibraryDocument(userA, document.id, {
+      readingStatus: null,
+      rating: null,
+    });
+    expect(cleared?.readingStatus).toBeUndefined();
+    expect(cleared?.rating).toBeUndefined();
+    expect(cleared?.finishedAt).toBeUndefined();
+  });
+
+  it('keeps the first finish date when "finished" is said again, and forgets it for any other status', async () => {
+    const { document } = await methods.saveLibraryDocument(userA, doc());
+    const first = await methods.updateLibraryDocument(userA, document.id, {
+      readingStatus: 'finished',
+    });
+    const again = await methods.updateLibraryDocument(userA, document.id, {
+      readingStatus: 'finished',
+    });
+    expect(again?.finishedAt?.getTime()).toBe(first?.finishedAt?.getTime());
+
+    const back = await methods.updateLibraryDocument(userA, document.id, {
+      readingStatus: 'reading',
+    });
+    expect(back?.readingStatus).toBe('reading');
+    expect(back?.finishedAt).toBeUndefined();
+  });
+
+  it('lists by status, and by none', async () => {
+    const a = await methods.saveLibraryDocument(userA, doc({ urlKey: 'ra', title: 'A' }));
+    await methods.saveLibraryDocument(
+      userA,
+      doc({ urlKey: 'rb', title: 'B', text: 'Another page entirely.' }),
+    );
+    await methods.updateLibraryDocument(userA, a.document.id, { readingStatus: 'want' });
+
+    const want = await methods.listLibraryDocuments(userA, { status: 'want', limit: 10 });
+    expect(want.map((d) => d.title)).toEqual(['A']);
+    const none = await methods.listLibraryDocuments(userA, { status: 'none', limit: 10 });
+    expect(none.map((d) => d.title)).toEqual(['B']);
+  });
+
+  it('puts a document on "reading" when reading begins, but never overrides what the person chose', async () => {
+    const a = await methods.saveLibraryDocument(userA, doc({ urlKey: 'ra', title: 'A' }));
+    const b = await methods.saveLibraryDocument(
+      userA,
+      doc({ urlKey: 'rb', title: 'B', text: 'Another page.' }),
+    );
+    await methods.updateLibraryDocument(userA, b.document.id, { readingStatus: 'dropped' });
+
+    await methods.setLibraryProgress(userA, a.document.id, 0, HASH);
+    expect((await methods.getLibraryDocument(userA, a.document.id))?.readingStatus).toBeUndefined();
+
+    await methods.setLibraryProgress(userA, a.document.id, 50, HASH);
+    await methods.setLibraryProgress(userA, b.document.id, 50, HASH);
+    expect((await methods.getLibraryDocument(userA, a.document.id))?.readingStatus).toBe('reading');
+    expect((await methods.getLibraryDocument(userA, b.document.id))?.readingStatus).toBe('dropped');
+  });
+
+  it('does not reorder the list when reading begins', async () => {
+    const a = await methods.saveLibraryDocument(userA, doc({ urlKey: 'ra', title: 'A' }));
+    const before = (await methods.getLibraryDocument(userA, a.document.id))?.updatedAt;
+    await methods.setLibraryProgress(userA, a.document.id, 50, HASH);
+    const after = (await methods.getLibraryDocument(userA, a.document.id))?.updatedAt;
+    expect(after?.getTime()).toBe(before?.getTime());
+  });
+
+  it('is the owner’s alone', async () => {
+    const { document } = await methods.saveLibraryDocument(userA, doc());
+    expect(
+      await methods.updateLibraryDocument(userB, document.id, { readingStatus: 'finished' }),
+    ).toBeNull();
+    expect((await methods.getLibraryDocument(userA, document.id))?.readingStatus).toBeUndefined();
+  });
+});

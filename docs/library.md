@@ -118,6 +118,22 @@ A row with nothing to show is left out, and both are hidden as soon as you searc
 narrow the list by kind, tag or folder. Books are not on the shelves; they are measured in chapters and
 pages, not minutes.
 
+## Reading status and rating
+
+Each document can carry a **reading status**, like a Goodreads shelf: _Want to read_, _Reading_, _Finished_
+or _Did not finish_, and a rating of one to five stars. Both are set in the Info panel of the reader.
+Pressing the star you already gave takes the rating off, and _No status_ clears the status.
+
+- Opening a document and reading into it (scrolling past the top of an article, or moving to a later
+  chapter or page of a book) puts it on _Reading_ **if it has no status yet**. What you chose yourself is
+  never changed this way, and the list order does not move when it happens.
+- Setting _Finished_ records the date, so "finished this year" can be counted later. Saying _Finished_
+  again keeps the first date, and any other status forgets it.
+- The list has a **status filter** beside the type filter, and each row shows its status. Documents that
+  were never given one are not listed under any status. While a status filter is on, the shelves are
+  hidden and **Pin this view** is off, because a pinned view does not keep a status.
+- The status and rating are the owner's own: they are not part of a public link.
+
 ## Daily review
 
 **Daily review** (button above the list, `/library/review`) shows a few old highlights, one card at a

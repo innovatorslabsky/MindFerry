@@ -1046,6 +1046,9 @@ export function listLibraryDocuments(
   if (params.kind) {
     query.set('kind', params.kind);
   }
+  if (params.status) {
+    query.set('status', params.status);
+  }
   if (params.sort) {
     query.set('sort', params.sort);
   }

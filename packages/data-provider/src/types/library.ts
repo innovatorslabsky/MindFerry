@@ -2,6 +2,7 @@
 
 export type TLibraryLocation = 'inbox' | 'later' | 'archive' | 'feed';
 export type TLibraryKind = 'article' | 'pdf' | 'epub';
+export type TLibraryReadingStatus = 'want' | 'reading' | 'finished' | 'dropped';
 export type TLibraryHighlightColor = 'yellow' | 'blue' | 'green' | 'red' | 'purple';
 
 export type TLibraryTocEntry = {
@@ -46,6 +47,12 @@ export type TLibraryDocumentSummary = {
   /** The original PDF is stored, so a page can be shown as the page itself. */
   hasSource: boolean;
   location: TLibraryLocation;
+  /** Where the person is with it; unset until they say, or start reading it. */
+  readingStatus?: TLibraryReadingStatus;
+  /** Whole stars, 1 to 5. */
+  rating?: number;
+  /** When it was marked finished. */
+  finishedAt?: string;
   tags: string[];
   /** The folder it is filed in, if any. */
   folderId?: string;
@@ -67,6 +74,10 @@ export type TLibraryDocumentPatch = {
   /** Empty removes the note, or the summary. */
   note?: string;
   summary?: string;
+  /** Null clears it. */
+  readingStatus?: TLibraryReadingStatus | null;
+  /** Whole stars, 1 to 5; null clears it. */
+  rating?: number | null;
 };
 
 /** An article with its text. Highlight offsets are `textContent` offsets of `contentHtml`. */
@@ -131,6 +142,8 @@ export type TLibraryListParams = {
   /** A folder id, or `none` for documents in no folder. */
   folder?: string;
   kind?: TLibraryKind;
+  /** A reading status, or `none` for documents with none. */
+  status?: TLibraryReadingStatus | 'none';
   sort?: TLibrarySort;
   limit?: number;
   skip?: number;

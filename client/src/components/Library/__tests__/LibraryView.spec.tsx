@@ -220,6 +220,27 @@ describe('LibraryView: finding things', () => {
   });
 });
 
+describe('LibraryView: reading status', () => {
+  it('lists by status, labels each row with its status, and drops the shelves while narrowed', () => {
+    mockList = {
+      data: { documents: [doc({ id: 'd1', readingStatus: 'finished' })] },
+      isLoading: false,
+      isError: false,
+    };
+    renderView();
+    expect(screen.getByTestId('library-row')).toHaveTextContent('com_library_status_finished');
+    expect(mockQueryParams).not.toHaveProperty('status', 'reading');
+
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_status_reading' }));
+    expect(mockQueryParams).toMatchObject({ location: 'inbox', status: 'reading' });
+    expect(screen.queryByTestId('shelves')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_status_any' }));
+    expect(mockQueryParams).not.toHaveProperty('status', 'reading');
+    expect(screen.getByTestId('shelves')).toBeInTheDocument();
+  });
+});
+
 describe('LibraryView: the Feed tab and tags', () => {
   it('shows the followed feeds only on the Feed tab, and saves your own links to the inbox', () => {
     renderView();

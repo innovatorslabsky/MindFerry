@@ -6,6 +6,7 @@
 
 export type LibraryLocationValue = 'inbox' | 'later' | 'archive' | 'feed';
 export type LibraryKindValue = 'article' | 'pdf' | 'epub';
+export type LibraryReadingStatusValue = 'want' | 'reading' | 'finished' | 'dropped';
 export type LibraryHighlightColorValue = 'yellow' | 'blue' | 'green' | 'red' | 'purple';
 
 export interface LibraryAnchorRecord {
@@ -82,6 +83,10 @@ export interface LibraryDocumentSummary {
   /** The original PDF is kept, so its pages can be shown as images. */
   hasSource: boolean;
   location: LibraryLocationValue;
+  readingStatus?: LibraryReadingStatusValue;
+  /** Whole stars, 1 to 5. */
+  rating?: number;
+  finishedAt?: Date;
   tags: string[];
   folderId?: string;
   fetchedAt: Date;
@@ -161,6 +166,10 @@ export interface LibraryDocumentPatch {
   summary?: string;
   /** A folder id to file the document in, or `null` to take it out of its folder. */
   folderId?: string | null;
+  /** `null` clears it. Setting `finished` records when; any other value forgets that. */
+  readingStatus?: LibraryReadingStatusValue | null;
+  /** Whole stars, 1 to 5; `null` clears it. */
+  rating?: number | null;
 }
 
 export interface LibraryListQuery {
@@ -171,6 +180,8 @@ export interface LibraryListQuery {
   folder?: string;
   /** Only this kind of document. */
   kind?: LibraryKindValue;
+  /** Only documents with this reading status, or only those with none when `'none'`. */
+  status?: LibraryReadingStatusValue | 'none';
   /** Newest change first when left out. */
   sort?: LibrarySortValue;
   limit: number;

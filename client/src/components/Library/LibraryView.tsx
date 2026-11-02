@@ -14,6 +14,7 @@ import type {
   TLibraryFolder,
   TLibraryKind,
   TLibraryLocation,
+  TLibraryReadingStatus,
   TLibrarySort,
   TLibraryViewFilter,
 } from 'librechat-data-provider';
@@ -27,6 +28,7 @@ import {
   useUpdateLibraryDocumentMutation,
   useUploadLibraryFileMutation,
 } from '~/data-provider';
+import { READING_STATUS_LABEL, READING_STATUSES } from './readingStatus';
 import { NotificationSeverity } from '~/common';
 import { useShortcuts } from './useShortcuts';
 import { useDebounce } from '~/hooks/Input';
@@ -118,6 +120,7 @@ function DocumentRow({
   const meta = [
     document.kind === 'pdf' ? localize('com_library_kind_pdf') : undefined,
     document.kind === 'epub' ? localize('com_library_kind_epub') : undefined,
+    document.readingStatus ? localize(READING_STATUS_LABEL[document.readingStatus]) : undefined,
     document.siteName ?? document.byline,
     isBook
       ? localize(document.kind === 'pdf' ? 'com_library_pages' : 'com_library_chapters', {
@@ -255,6 +258,7 @@ export default function LibraryView() {
   const [tag, setTag] = useState('');
   const [folder, setFolder] = useState('');
   const [kind, setKind] = useState<TLibraryKind | ''>('');
+  const [status, setStatus] = useState<TLibraryReadingStatus | ''>('');
   const [sort, setSort] = useState<TLibrarySort>('updated');
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [toDelete, setToDelete] = useState<TLibraryDocumentSummary | null>(null);
@@ -274,6 +278,7 @@ export default function LibraryView() {
           tag: tag || undefined,
           folder: folder || undefined,
           kind: kind || undefined,
+          status: status || undefined,
           sort,
           limit,
         },
@@ -362,6 +367,7 @@ export default function LibraryView() {
     setSearch('');
     setLocation(filter.location ?? 'inbox');
     setKind(filter.kind ?? '');
+    setStatus('');
     setTag(filter.tag ?? '');
     setFolder(filter.folder ?? '');
     setSort(filter.sort ?? 'updated');
@@ -375,7 +381,7 @@ export default function LibraryView() {
   useEffect(() => {
     setSelected(new Set());
     setActiveId(null);
-  }, [location, query, tag, folder, kind, sort]);
+  }, [location, query, tag, folder, kind, status, sort]);
 
   const activeIndex = rows.findIndex((row) => row.id === activeId);
   const active = activeIndex >= 0 ? rows[activeIndex] : undefined;
@@ -531,6 +537,38 @@ export default function LibraryView() {
             </div>
           )}
 
+          {!query && (
+            <div
+              role="group"
+              aria-label={localize('com_library_status')}
+              className="flex flex-wrap gap-1.5 md:flex-col md:gap-1"
+            >
+              <Button
+                type="button"
+                size="sm"
+                variant="outline-toggle"
+                className="md:justify-start"
+                aria-pressed={status === ''}
+                onClick={() => setStatus('')}
+              >
+                {localize('com_library_status_any')}
+              </Button>
+              {READING_STATUSES.map((value) => (
+                <Button
+                  key={value}
+                  type="button"
+                  size="sm"
+                  variant="outline-toggle"
+                  className="md:justify-start"
+                  aria-pressed={status === value}
+                  onClick={() => setStatus(value)}
+                >
+                  {localize(READING_STATUS_LABEL[value])}
+                </Button>
+              ))}
+            </div>
+          )}
+
           <Button asChild variant="outline" size="sm" className="md:justify-start">
             <Link to="/library/review">{localize('com_library_review_link')}</Link>
           </Button>
@@ -546,7 +584,7 @@ export default function LibraryView() {
               folder: folder || undefined,
               sort,
             }}
-            canPin={!query}
+            canPin={!query && !status}
             onOpen={openView}
           />
         </nav>
@@ -642,7 +680,7 @@ export default function LibraryView() {
             </>
           )}
 
-          {!query && location === 'inbox' && !tag && !folder && !kind && <Shelves />}
+          {!query && location === 'inbox' && !tag && !folder && !kind && !status && <Shelves />}
 
           {rows.length > 0 && (
             <div

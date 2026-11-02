@@ -3748,5 +3748,14 @@
   "com_library_share_missing": "This link doesn't work. It may have been withdrawn.",
   "com_library_share_original": "Open the original",
   "com_library_share_section": "Chapter or page",
-  "com_library_share_report": "Report this page"
+  "com_library_share_report": "Report this page",
+  "com_library_status": "Reading status",
+  "com_library_status_none": "No status",
+  "com_library_status_any": "Any status",
+  "com_library_status_want": "Want to read",
+  "com_library_status_reading": "Reading",
+  "com_library_status_finished": "Finished",
+  "com_library_status_dropped": "Did not finish",
+  "com_library_rating": "Your rating",
+  "com_library_rating_stars": "{{0}} out of 5 stars"
 }
