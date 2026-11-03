@@ -243,3 +243,37 @@ export const useLibrarySharedUnitQuery = (
     () => dataService.getLibrarySharedUnit(token, index ?? 0),
     { refetchOnWindowFocus: false, retry: false, enabled: index != null },
   );
+
+/** A document's reading sessions, newest first, and how long it has been read in all. */
+export const useLibrarySessionsQuery = (
+  id: string,
+  config?: UseQueryOptions<t.TLibrarySessionSummary>,
+): QueryObserverResult<t.TLibrarySessionSummary> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+  return useQuery<t.TLibrarySessionSummary>(
+    [QueryKeys.librarySessions, id],
+    () => dataService.getLibrarySessions(id),
+    {
+      refetchOnWindowFocus: false,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
+/** Reading over the last `days` days, by the person's own calendar. */
+export const useLibraryStatsQuery = (
+  days: number,
+  config?: UseQueryOptions<{ stats: t.TLibraryReadingStats }>,
+): QueryObserverResult<{ stats: t.TLibraryReadingStats }> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+  return useQuery<{ stats: t.TLibraryReadingStats }>(
+    [QueryKeys.libraryStats, days],
+    () => dataService.getLibraryStats(days, new Date().getTimezoneOffset()),
+    {
+      refetchOnWindowFocus: false,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};

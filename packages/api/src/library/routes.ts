@@ -379,6 +379,11 @@ export interface LibraryHandlers {
   summarize: Handler;
   ask: Handler;
   count: Handler;
+  saveSession: Handler;
+  addSession: Handler;
+  getSessions: Handler;
+  deleteSession: Handler;
+  readingStats: Handler;
   getShare: Handler;
   setShare: Handler;
   deleteShare: Handler;
@@ -399,6 +404,26 @@ export interface LibraryHandlers {
   removeHighlight: Handler;
   setProgress: Handler;
 }
+
+const sessionBodySchema = z.object({
+  startedAt: z.string().datetime(),
+  activeSeconds: z
+    .number()
+    .int()
+    .min(0)
+    .max(6 * 60 * 60),
+  words: z.number().int().min(0).max(500_000),
+});
+
+const manualSessionBodySchema = z.object({
+  minutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 60),
+  words: z.number().int().min(0).max(2_000_000).optional(),
+  date: z.string().datetime().optional(),
+});
 
 const shareBodySchema = z.object({ includeHighlights: z.boolean() });
 
@@ -1042,6 +1067,68 @@ export function createLibraryHandlers({
     res.status(200).json({ count: await serviceFor(req).count(userId) });
   };
 
+  /** The reader keeps this up to date while a document is open; each report carries the totals so far. */
+  const saveSession: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const body = sessionBodySchema.safeParse(req.body);
+    if (!body.success) return fail(res, 400, 'invalid_request', 'Invalid session');
+    const session = await serviceFor(req).saveSession(userId, param(req, 'id'), param(req, 'sid'), {
+      startedAt: new Date(body.data.startedAt),
+      activeSeconds: body.data.activeSeconds,
+      words: body.data.words,
+    });
+    if (!session) return fail(res, 404, 'not_found', 'Document not found');
+    res.status(200).json({ session });
+  };
+
+  const addSession: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const body = manualSessionBodySchema.safeParse(req.body);
+    if (!body.success) return fail(res, 400, 'invalid_request', 'Invalid reading time');
+    const session = await serviceFor(req).addManualSession(userId, param(req, 'id'), {
+      minutes: body.data.minutes,
+      ...(body.data.words === undefined ? {} : { words: body.data.words }),
+      ...(body.data.date === undefined ? {} : { date: new Date(body.data.date) }),
+    });
+    if (!session) return fail(res, 404, 'not_found', 'Document not found');
+    res.status(201).json({ session });
+  };
+
+  const getSessions: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    res.status(200).json(await serviceFor(req).getSessions(userId, param(req, 'id')));
+  };
+
+  const deleteSession: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const removed = await serviceFor(req).deleteSession(
+      userId,
+      param(req, 'id'),
+      param(req, 'sid'),
+    );
+    if (!removed) return fail(res, 404, 'not_found', 'Session not found');
+    res.status(204).end();
+  };
+
+  const readingStats: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const whole = (raw: unknown): number | undefined => {
+      const parsed = typeof raw === 'string' ? Number.parseInt(raw, 10) : NaN;
+      return Number.isFinite(parsed) ? parsed : undefined;
+    };
+    const days = Math.min(366, Math.max(1, whole(req.query.days) ?? 30));
+    const stats = await serviceFor(req).readingStats(userId, {
+      days,
+      offsetMinutes: whole(req.query.offset),
+    });
+    res.status(200).json({ stats });
+  };
+
   const getShare: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
@@ -1229,6 +1316,11 @@ export function createLibraryHandlers({
     reviewHighlight,
     chat,
     summarize,
+    saveSession,
+    addSession,
+    getSessions,
+    deleteSession,
+    readingStats,
     getShare,
     setShare,
     deleteShare,

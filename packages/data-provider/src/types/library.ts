@@ -364,3 +364,54 @@ export type TLibrarySharedUnitResponse = {
   unit: TLibraryUnit;
   highlights: TLibrarySharedHighlight[];
 };
+
+/** One stretch of reading a document. `auto` is kept by the reader; `manual` was logged by hand. */
+export type TLibrarySession = {
+  id: string;
+  documentId: string;
+  kind: 'auto' | 'manual';
+  startedAt: string;
+  endedAt: string;
+  activeSeconds: number;
+  words: number;
+};
+
+export type TLibrarySessionSummary = {
+  sessions: TLibrarySession[];
+  totals: { seconds: number; words: number; sessions: number };
+};
+
+/** What the reader reports for the session it is keeping: the totals so far. */
+export type TLibrarySessionReport = {
+  startedAt: string;
+  activeSeconds: number;
+  words: number;
+};
+
+/** Reading done elsewhere. */
+export type TLibraryManualSession = {
+  minutes: number;
+  words?: number;
+  /** An ISO date-time; now when left out. */
+  date?: string;
+};
+
+export type TLibraryReadingDay = {
+  /** The person's own calendar day, `YYYY-MM-DD`. */
+  date: string;
+  seconds: number;
+  words: number;
+  sessions: number;
+};
+
+export type TLibraryReadingStats = {
+  days: TLibraryReadingDay[];
+  totals: {
+    seconds: number;
+    words: number;
+    sessions: number;
+    documents: number;
+    finished: number;
+  };
+  longestSessionSeconds: number;
+};

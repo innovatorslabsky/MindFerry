@@ -22,6 +22,11 @@ import type {
   LibraryResourceRecord,
   LibraryUnitRecord,
   LibraryUnitSummary,
+  LibraryManualSessionInput,
+  LibraryReadingStats,
+  LibrarySessionInput,
+  LibrarySessionRecord,
+  LibrarySessionSummary,
   LibraryShareRecord,
   LibraryShareTarget,
 } from '@librechat/data-schemas';
@@ -95,6 +100,11 @@ type Methods = Pick<
   | 'upsertLibraryShare'
   | 'deleteLibraryShare'
   | 'findLibraryShareByToken'
+  | 'saveLibrarySession'
+  | 'addLibraryManualSession'
+  | 'getLibrarySessions'
+  | 'deleteLibrarySession'
+  | 'getLibraryReadingStats'
   | 'listLibraryReviewHighlights'
   | 'countLibraryReviewedSince'
   | 'markLibraryHighlightReviewed'
@@ -322,6 +332,26 @@ export interface LibraryService {
   deleteShare: (userId: string, documentId: string) => Promise<boolean>;
   /** What a public token points at, from any tenant; `null` if no link has it. */
   findShare: (token: string) => Promise<LibraryShareTarget | null>;
+  /** Records the reading time of a session the reader is keeping; `null` if it is not theirs to write. */
+  saveSession: (
+    userId: string,
+    documentId: string,
+    sid: string,
+    input: LibrarySessionInput,
+  ) => Promise<LibrarySessionRecord | null>;
+  /** Logs reading done elsewhere; `null` when the document is not theirs. */
+  addManualSession: (
+    userId: string,
+    documentId: string,
+    input: LibraryManualSessionInput,
+  ) => Promise<LibrarySessionRecord | null>;
+  getSessions: (userId: string, documentId: string) => Promise<LibrarySessionSummary>;
+  deleteSession: (userId: string, documentId: string, sid: string) => Promise<boolean>;
+  /** Reading over the last `days` days of the person's own calendar. */
+  readingStats: (
+    userId: string,
+    options: { days: number; offsetMinutes?: number },
+  ) => Promise<LibraryReadingStats>;
   /** Saves a newsletter to the person's Feed tab. The same message again updates the same document. */
   receiveEmail: (userId: string, email: InboundEmail) => Promise<SaveResult>;
   /** `false` when the highlight is not the person's. */
@@ -334,6 +364,9 @@ export interface LibraryService {
     unitIndex?: number,
   ) => Promise<LibraryProgressRecord | null>;
 }
+
+/** How many of a document's latest sessions the Info panel lists. */
+const RECENT_SESSIONS = 20;
 
 function stripTags(html: string): string {
   return html
@@ -807,6 +840,26 @@ export function createLibraryService({
 
     findShare(token: string) {
       return methods.findLibraryShareByToken(token);
+    },
+
+    saveSession(userId: string, documentId: string, sid: string, input: LibrarySessionInput) {
+      return methods.saveLibrarySession(userId, documentId, sid, input);
+    },
+
+    addManualSession(userId: string, documentId: string, input: LibraryManualSessionInput) {
+      return methods.addLibraryManualSession(userId, documentId, input);
+    },
+
+    getSessions(userId: string, documentId: string) {
+      return methods.getLibrarySessions(userId, documentId, RECENT_SESSIONS);
+    },
+
+    deleteSession(userId: string, documentId: string, sid: string) {
+      return methods.deleteLibrarySession(userId, documentId, sid);
+    },
+
+    readingStats(userId: string, options: { days: number; offsetMinutes?: number }) {
+      return methods.getLibraryReadingStats(userId, options);
     },
 
     findInboxOwner(token: string) {

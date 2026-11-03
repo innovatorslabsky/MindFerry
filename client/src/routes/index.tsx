@@ -59,6 +59,10 @@ const loadLibraryReview = () =>
     Component: m.LibraryReviewRoute,
   }));
 
+const loadLibraryStats = () =>
+  importWithRecovery(() => import('~/components/Library')).then((m) => ({
+    Component: m.LibraryStatsRoute,
+  }));
 const loadLibraryAsk = () =>
   importWithRecovery(() => import('~/components/Library')).then((m) => ({
     Component: m.LibraryAskRoute,
@@ -222,6 +226,10 @@ export const router = createBrowserRouter(
                 {
                   path: 'library/ask',
                   lazy: loadLibraryAsk,
+                },
+                {
+                  path: 'library/stats',
+                  lazy: loadLibraryStats,
                 },
                 {
                   path: 'library/:id',

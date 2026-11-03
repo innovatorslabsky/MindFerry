@@ -14,6 +14,7 @@ import {
 } from '~/utils/libraryAnchors';
 import { useCreateLibraryHighlightMutation, useSetLibraryProgressMutation } from '~/data-provider';
 import { OUTLINE_SELECTOR } from '~/utils/libraryOutline';
+import { useReadingSession } from './useReadingSession';
 import HighlightToolbar from './HighlightToolbar';
 import { NotificationSeverity } from '~/common';
 import { libraryErrorKey } from './errors';
@@ -94,6 +95,15 @@ function ReaderBody({
   const setProgress = useSetLibraryProgressMutation();
 
   const canHighlight = highlightingDisabledReason == null && aligned;
+
+  useReadingSession({
+    documentId,
+    content,
+    scroller,
+    anchorText,
+    unitKey: unit ? `${unit.kind}:${unit.index}` : 'document',
+    aligned,
+  });
 
   /** Whether what the browser built is the text the server anchors in. */
   useEffect(() => {

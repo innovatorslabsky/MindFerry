@@ -235,6 +235,60 @@ export interface LibraryProgressRecord {
   updatedAt: Date;
 }
 
+/** One stretch of reading, as its owner sees it. */
+export interface LibrarySessionRecord {
+  id: string;
+  documentId: string;
+  kind: 'auto' | 'manual';
+  startedAt: Date;
+  endedAt: Date;
+  activeSeconds: number;
+  words: number;
+}
+
+/** What the reader reports for a session it is keeping: the totals so far, not what changed. */
+export interface LibrarySessionInput {
+  startedAt: Date;
+  activeSeconds: number;
+  words: number;
+}
+
+/** Reading done somewhere else, logged by hand. */
+export interface LibraryManualSessionInput {
+  minutes: number;
+  words?: number;
+  /** When it happened; now when left out. */
+  date?: Date;
+}
+
+export interface LibrarySessionSummary {
+  sessions: LibrarySessionRecord[];
+  totals: { seconds: number; words: number; sessions: number };
+}
+
+export interface LibraryReadingDay {
+  /** The person's own calendar day, `YYYY-MM-DD`. */
+  date: string;
+  seconds: number;
+  words: number;
+  sessions: number;
+}
+
+export interface LibraryReadingStats {
+  /** One entry per day of the window, oldest first, with zeros for days nothing was read. */
+  days: LibraryReadingDay[];
+  totals: {
+    seconds: number;
+    words: number;
+    sessions: number;
+    /** Different documents read in the window. */
+    documents: number;
+    /** Documents marked finished in the window. */
+    finished: number;
+  };
+  longestSessionSeconds: number;
+}
+
 export interface LibraryDataDeleteResult {
   documents: number;
   highlights: number;
@@ -247,6 +301,7 @@ export interface LibraryDataDeleteResult {
   feeds: number;
   inboxes: number;
   shares: number;
+  sessions: number;
 }
 
 /** A public link to a document, as its owner sees it. */

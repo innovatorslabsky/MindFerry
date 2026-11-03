@@ -44,6 +44,8 @@ export enum QueryKeys {
   libraryCount = 'libraryCount',
   libraryInbox = 'libraryInbox',
   libraryShare = 'libraryShare',
+  librarySessions = 'librarySessions',
+  libraryStats = 'libraryStats',
   librarySharedDocument = 'librarySharedDocument',
   librarySharedUnit = 'librarySharedUnit',
   librarySource = 'librarySource',

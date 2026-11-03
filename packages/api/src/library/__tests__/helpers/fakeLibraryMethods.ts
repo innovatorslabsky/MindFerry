@@ -8,6 +8,7 @@ import type {
   LibraryMethods,
   LibraryProgressRecord,
   LibraryResourceRecord,
+  LibrarySessionRecord,
   LibraryUnitRecord,
   LibraryViewRecord,
 } from '@librechat/data-schemas';
@@ -24,6 +25,7 @@ export function createFakeLibraryMethods() {
   const sources = new Map<string, Uint8Array>();
   const reviews = new Map<string, { reviewedAt: Date; muted: boolean }>();
   const inboxes = new Map<string, { tokenHash: string; createdAt: Date }>();
+  const sessions = new Map<string, LibrarySessionRecord & { userId: string }>();
   const shares = new Map<
     string,
     { documentId: string; token: string; includeHighlights: boolean; createdAt: Date }
@@ -242,6 +244,71 @@ export function createFakeLibraryMethods() {
         if (inbox.tokenHash === tokenHash) return { userId };
       }
       return null;
+    },
+    async saveLibrarySession(userId, documentId, sid, input, now = new Date()) {
+      if (documents.get(documentId)?.userId !== userId) return null;
+      const existing = sessions.get(`${userId}:${sid}`);
+      if (existing && existing.documentId !== documentId) return null;
+      const next = {
+        id: sid,
+        userId,
+        documentId,
+        kind: 'auto' as const,
+        startedAt: existing?.startedAt ?? input.startedAt,
+        endedAt: now,
+        activeSeconds: Math.max(existing?.activeSeconds ?? 0, input.activeSeconds),
+        words: Math.max(existing?.words ?? 0, input.words),
+      };
+      sessions.set(`${userId}:${sid}`, next);
+      return { ...next };
+    },
+    async addLibraryManualSession(userId, documentId, input, now = new Date()) {
+      if (documents.get(documentId)?.userId !== userId) return null;
+      const startedAt = input.date ?? now;
+      const next = {
+        id: `manual-${sessions.size}`.padEnd(22, 'x'),
+        userId,
+        documentId,
+        kind: 'manual' as const,
+        startedAt,
+        endedAt: new Date(startedAt.getTime() + input.minutes * 60_000),
+        activeSeconds: input.minutes * 60,
+        words: input.words ?? 0,
+      };
+      sessions.set(`${userId}:${next.id}`, next);
+      return { ...next };
+    },
+    async getLibrarySessions(userId, documentId, limit) {
+      const mine = [...sessions.values()]
+        .filter((s) => s.userId === userId && s.documentId === documentId)
+        .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
+      return {
+        sessions: mine.slice(0, limit).map(({ userId: _owner, ...rest }) => rest),
+        totals: {
+          seconds: mine.reduce((sum, s) => sum + s.activeSeconds, 0),
+          words: mine.reduce((sum, s) => sum + s.words, 0),
+          sessions: mine.length,
+        },
+      };
+    },
+    async deleteLibrarySession(userId, documentId, sid) {
+      const found = sessions.get(`${userId}:${sid}`);
+      if (!found || found.documentId !== documentId) return false;
+      return sessions.delete(`${userId}:${sid}`);
+    },
+    async getLibraryReadingStats(userId, options) {
+      const mine = [...sessions.values()].filter((s) => s.userId === userId);
+      return {
+        days: [],
+        totals: {
+          seconds: mine.reduce((sum, s) => sum + s.activeSeconds, 0),
+          words: mine.reduce((sum, s) => sum + s.words, 0),
+          sessions: mine.length,
+          documents: new Set(mine.map((s) => s.documentId)).size,
+          finished: options.days,
+        },
+        longestSessionSeconds: Math.max(0, ...mine.map((s) => s.activeSeconds)),
+      };
     },
     async getLibraryShare(userId, documentId) {
       const share = shares.get(`${userId}:${documentId}`);
@@ -491,6 +558,7 @@ export function createFakeLibraryMethods() {
         feeds: 0,
         inboxes: 0,
         shares: 0,
+        sessions: 0,
         views: 0,
       };
     },

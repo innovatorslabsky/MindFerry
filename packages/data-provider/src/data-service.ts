@@ -1108,6 +1108,36 @@ export async function exportLibraryHighlights(
   };
 }
 
+export function saveLibrarySession(
+  id: string,
+  sid: string,
+  report: t.TLibrarySessionReport,
+): Promise<{ session: t.TLibrarySession }> {
+  return request.put(endpoints.librarySession(id, sid), report);
+}
+
+export function addLibraryManualSession(
+  id: string,
+  session: t.TLibraryManualSession,
+): Promise<{ session: t.TLibrarySession }> {
+  return request.post(endpoints.librarySessions(id), session);
+}
+
+export function getLibrarySessions(id: string): Promise<t.TLibrarySessionSummary> {
+  return request.get(endpoints.librarySessions(id));
+}
+
+export function deleteLibrarySession(id: string, sid: string): Promise<void> {
+  return request.delete(endpoints.librarySession(id, sid));
+}
+
+export function getLibraryStats(
+  days: number,
+  offsetMinutes: number,
+): Promise<{ stats: t.TLibraryReadingStats }> {
+  return request.get(endpoints.libraryStats(days, offsetMinutes));
+}
+
 export function getLibraryShare(id: string): Promise<t.TLibraryShareResponse> {
   return request.get(endpoints.libraryDocumentShare(id));
 }

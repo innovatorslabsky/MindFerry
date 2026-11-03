@@ -6,4 +6,5 @@ export {
   LibraryReaderRoute,
   LibraryReviewRoute,
   LibraryAskRoute,
+  LibraryStatsRoute,
 } from './routes';

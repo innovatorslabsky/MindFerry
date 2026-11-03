@@ -21,6 +21,11 @@ describe('library routes wiring', () => {
     ['/review', 'get'],
     ['/review/:id', 'post'],
     ['/documents/:id/chat', 'post'],
+    ['/stats', 'get'],
+    ['/documents/:id/sessions', 'get'],
+    ['/documents/:id/sessions', 'post'],
+    ['/documents/:id/sessions/:sid', 'put'],
+    ['/documents/:id/sessions/:sid', 'delete'],
     ['/documents/:id/share', 'get'],
     ['/documents/:id/share', 'put'],
     ['/documents/:id/share', 'delete'],
@@ -105,6 +110,11 @@ describe('library routes wiring', () => {
     const db = require('~/models');
     for (const name of [
       'saveLibraryDocument',
+      'saveLibrarySession',
+      'addLibraryManualSession',
+      'getLibrarySessions',
+      'deleteLibrarySession',
+      'getLibraryReadingStats',
       'getLibraryShare',
       'upsertLibraryShare',
       'deleteLibraryShare',

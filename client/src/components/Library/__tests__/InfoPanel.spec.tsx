@@ -20,6 +20,12 @@ jest.mock('~/data-provider', () => ({
     return { mutate: mockUpdate, isLoading: false };
   },
 }));
+jest.mock('../ReadingSessions', () => ({
+  __esModule: true,
+  default: ({ documentId }: { documentId: string }) => (
+    <div data-testid="sessions-section">{documentId}</div>
+  ),
+}));
 jest.mock('@librechat/client', () => ({
   ...mockClient,
   useToastContext: () => ({ showToast: mockToast }),
@@ -80,6 +86,12 @@ describe('InfoPanel: details', () => {
     const link = screen.getByRole('link', { name: 'www.example.test' });
     expect(link).toHaveAttribute('href', 'https://www.example.test/post');
     expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+  });
+
+  it('carries the reading time of this document, and its reading status', () => {
+    render(<InfoPanel document={doc({ id: 'd7' })} />);
+    expect(screen.getByTestId('sessions-section')).toHaveTextContent('d7');
+    expect(screen.getByTestId('library-reading-status')).toBeInTheDocument();
   });
 
   it('describes a book by its sections, and gives a newsletter no link', () => {

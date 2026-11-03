@@ -281,6 +281,68 @@ export const useDeleteLibraryShareMutation = (
   });
 };
 
+/** The reader's running report of a session. Quiet: nothing refetches because of it. */
+export const useSaveLibrarySessionMutation = (
+  options?: t.MutationOptions<
+    { session: t.TLibrarySession },
+    { id: string; sid: string; report: t.TLibrarySessionReport }
+  >,
+): UseMutationResult<
+  { session: t.TLibrarySession },
+  unknown,
+  { id: string; sid: string; report: t.TLibrarySessionReport },
+  unknown
+> =>
+  useMutation(
+    ({ id, sid, report }: { id: string; sid: string; report: t.TLibrarySessionReport }) =>
+      dataService.saveLibrarySession(id, sid, report),
+    options,
+  );
+
+/** Logs reading done elsewhere. */
+export const useAddLibrarySessionMutation = (
+  options?: t.MutationOptions<
+    { session: t.TLibrarySession },
+    { id: string; session: t.TLibraryManualSession }
+  >,
+): UseMutationResult<
+  { session: t.TLibrarySession },
+  unknown,
+  { id: string; session: t.TLibraryManualSession },
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation(
+    ({ id, session }: { id: string; session: t.TLibraryManualSession }) =>
+      dataService.addLibraryManualSession(id, session),
+    {
+      ...options,
+      onSuccess: (data, variables, context) => {
+        queryClient.invalidateQueries([QueryKeys.librarySessions, variables.id]);
+        queryClient.invalidateQueries([QueryKeys.libraryStats]);
+        options?.onSuccess?.(data, variables, context);
+      },
+    },
+  );
+};
+
+export const useDeleteLibrarySessionMutation = (
+  options?: t.MutationOptions<void, { id: string; sid: string }>,
+): UseMutationResult<void, unknown, { id: string; sid: string }, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation(
+    ({ id, sid }: { id: string; sid: string }) => dataService.deleteLibrarySession(id, sid),
+    {
+      ...options,
+      onSuccess: (data, variables, context) => {
+        queryClient.invalidateQueries([QueryKeys.librarySessions, variables.id]);
+        queryClient.invalidateQueries([QueryKeys.libraryStats]);
+        options?.onSuccess?.(data, variables, context);
+      },
+    },
+  );
+};
+
 export const usePreviewLibraryFeedMutation = (
   options?: t.MutationOptions<{ feed: t.TLibraryFeedPreview }, string>,
 ): UseMutationResult<{ feed: t.TLibraryFeedPreview }, unknown, string, unknown> =>
