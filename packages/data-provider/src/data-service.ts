@@ -1046,6 +1046,9 @@ export function listLibraryDocuments(
   if (params.kind) {
     query.set('kind', params.kind);
   }
+  if (params.status) {
+    query.set('status', params.status);
+  }
   if (params.sort) {
     query.set('sort', params.sort);
   }
@@ -1103,6 +1106,50 @@ export async function exportLibraryHighlights(
     blob: response.data as Blob,
     filename: filename ?? `mindferry-highlights.${format === 'csv' ? 'csv' : 'md'}`,
   };
+}
+
+export function addLibraryBook(
+  draft: t.TLibraryBookDraft,
+): Promise<{ document: t.TLibraryDocumentSummary }> {
+  return request.post(endpoints.libraryBooks(), draft);
+}
+
+export function importLibraryGoodreads(data: FormData): Promise<t.TLibraryGoodreadsResult> {
+  return request.postMultiPart(endpoints.libraryImportGoodreads(), data);
+}
+
+export function importLibraryKindle(data: FormData): Promise<t.TLibraryKindleResult> {
+  return request.postMultiPart(endpoints.libraryImportKindle(), data);
+}
+
+export function saveLibrarySession(
+  id: string,
+  sid: string,
+  report: t.TLibrarySessionReport,
+): Promise<{ session: t.TLibrarySession }> {
+  return request.put(endpoints.librarySession(id, sid), report);
+}
+
+export function addLibraryManualSession(
+  id: string,
+  session: t.TLibraryManualSession,
+): Promise<{ session: t.TLibrarySession }> {
+  return request.post(endpoints.librarySessions(id), session);
+}
+
+export function getLibrarySessions(id: string): Promise<t.TLibrarySessionSummary> {
+  return request.get(endpoints.librarySessions(id));
+}
+
+export function deleteLibrarySession(id: string, sid: string): Promise<void> {
+  return request.delete(endpoints.librarySession(id, sid));
+}
+
+export function getLibraryStats(
+  days: number,
+  offsetMinutes: number,
+): Promise<{ stats: t.TLibraryReadingStats }> {
+  return request.get(endpoints.libraryStats(days, offsetMinutes));
 }
 
 export function getLibraryShare(id: string): Promise<t.TLibraryShareResponse> {

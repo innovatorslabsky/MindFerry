@@ -18,19 +18,21 @@ import {
   WorkerResultTooLargeError,
   WorkerUnavailableError,
 } from './worker/errors';
+import { createHighlightSchema, KINDS, LOCATIONS, READING_STATUSES, SORTS } from './types';
 import { getLibrarySharing, getLibrarySummaryModel, isLibraryEnabled } from './config';
 import { FetchError, TooLargeError, UnsafeUrlError } from './net/safeFetch';
-import { createHighlightSchema, KINDS, LOCATIONS, SORTS } from './types';
 import { ASK_MODES, convertLibraryAskToChat, needsTopic } from './ask';
 import { isConversationImportError } from '../conversations/import';
 import { isContentFilterError } from '../middleware/contentFilter';
 import { buildSummaryPrompt, cleanSummary } from './summarize';
 import { PdfEncryptedError, PdfError } from './pdf/parsePdf';
 import { EpubDrmError, EpubError } from './epub/parseEpub';
+import { GoodreadsFormatError } from './import/goodreads';
 import { contextHubRateLimitKey } from '../hub/ratelimit';
 import { isInboxToken, parseInboundEmail } from './inbox';
 import { UnsupportedUploadError } from './ingest/upload';
 import { convertLibraryDocumentToChat } from './chat';
+import { KindleFormatError } from './import/kindle';
 import { NotReadableError } from './ingest/extract';
 import { FeedParseError } from './feed/parseFeed';
 import { MAX_OCR_PAGE_CHARS } from './service';
@@ -142,6 +144,10 @@ const patchDocumentSchema = z
     summary: z.string().max(2000).optional(),
     /** Puts back the title and author the page itself gave. */
     restoreMeta: z.literal(true).optional(),
+    /** Null clears it. */
+    readingStatus: z.enum(READING_STATUSES).nullable().optional(),
+    /** Whole stars; null clears it. */
+    rating: z.number().int().min(1).max(5).nullable().optional(),
   })
   .refine((patch) => Object.values(patch).some((value) => value !== undefined), {
     message: 'Nothing to update',
@@ -375,6 +381,14 @@ export interface LibraryHandlers {
   summarize: Handler;
   ask: Handler;
   count: Handler;
+  addBook: Handler;
+  importGoodreads: Handler;
+  importKindle: Handler;
+  saveSession: Handler;
+  addSession: Handler;
+  getSessions: Handler;
+  deleteSession: Handler;
+  readingStats: Handler;
   getShare: Handler;
   setShare: Handler;
   deleteShare: Handler;
@@ -395,6 +409,35 @@ export interface LibraryHandlers {
   removeHighlight: Handler;
   setProgress: Handler;
 }
+
+const bookBodySchema = z.object({
+  title: z.string().trim().min(1).max(300),
+  byline: z.string().trim().max(200).optional(),
+  pages: z.number().int().min(1).max(20_000).optional(),
+  readingStatus: z.enum(READING_STATUSES).optional(),
+  rating: z.number().int().min(1).max(5).optional(),
+  tags: z.array(z.string().trim().min(1).max(64)).max(20).optional(),
+});
+
+const sessionBodySchema = z.object({
+  startedAt: z.string().datetime(),
+  activeSeconds: z
+    .number()
+    .int()
+    .min(0)
+    .max(6 * 60 * 60),
+  words: z.number().int().min(0).max(500_000),
+});
+
+const manualSessionBodySchema = z.object({
+  minutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 60),
+  words: z.number().int().min(0).max(2_000_000).optional(),
+  date: z.string().datetime().optional(),
+});
 
 const shareBodySchema = z.object({ includeHighlights: z.boolean() });
 
@@ -678,9 +721,14 @@ export function createLibraryHandlers({
     const tag = typeof req.query.tag === 'string' ? req.query.tag.trim().slice(0, 64) : '';
     const kind = KINDS.find((value) => value === req.query.kind);
     const sort = SORTS.find((value) => value === req.query.sort);
+    const status =
+      req.query.status === 'none'
+        ? 'none'
+        : READING_STATUSES.find((value) => value === req.query.status);
     const documents = await service.list(userId, {
       location,
       kind,
+      status,
       sort,
       tag: tag || undefined,
       folder: folder || undefined,
@@ -1033,6 +1081,120 @@ export function createLibraryHandlers({
     res.status(200).json({ count: await serviceFor(req).count(userId) });
   };
 
+  const addBook: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const body = bookBodySchema.safeParse(req.body);
+    if (!body.success) return fail(res, 400, 'invalid_request', 'A title is required');
+    const { byline, ...rest } = body.data;
+    const document = await serviceFor(req).addBook(userId, {
+      ...rest,
+      ...(byline ? { byline } : {}),
+    });
+    res.status(201).json({ document });
+  };
+
+  /** A Goodreads library export, sent as a file; nothing of it is kept but the books it lists. */
+  const importGoodreads: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const bytes = (req as UploadedRequest).file?.buffer;
+    if (!bytes || bytes.length === 0) {
+      return fail(res, 400, 'invalid_request', 'A file is required');
+    }
+    try {
+      const result = await serviceFor(req).importGoodreads(userId, bytes.toString('utf8'));
+      res.status(200).json(result);
+    } catch (error) {
+      if (error instanceof GoodreadsFormatError) {
+        return fail(res, 422, 'invalid_file', 'This is not a Goodreads library export');
+      }
+      logger.error('[library] Could not import a Goodreads export:', error);
+      fail(res, 500, 'internal_error', 'Could not import the file');
+    }
+  };
+
+  /** A Kindle `My Clippings.txt`, sent as a file; its highlights become documents, the file itself is not kept. */
+  const importKindle: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const bytes = (req as UploadedRequest).file?.buffer;
+    if (!bytes || bytes.length === 0) {
+      return fail(res, 400, 'invalid_request', 'A file is required');
+    }
+    try {
+      res.status(200).json(await serviceFor(req).importKindle(userId, bytes.toString('utf8')));
+    } catch (error) {
+      if (error instanceof KindleFormatError) {
+        return fail(res, 422, 'invalid_file', 'This is not a Kindle clippings file');
+      }
+      logger.error('[library] Could not import Kindle clippings:', error);
+      fail(res, 500, 'internal_error', 'Could not import the file');
+    }
+  };
+
+  /** The reader keeps this up to date while a document is open; each report carries the totals so far. */
+  const saveSession: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const body = sessionBodySchema.safeParse(req.body);
+    if (!body.success) return fail(res, 400, 'invalid_request', 'Invalid session');
+    const session = await serviceFor(req).saveSession(userId, param(req, 'id'), param(req, 'sid'), {
+      startedAt: new Date(body.data.startedAt),
+      activeSeconds: body.data.activeSeconds,
+      words: body.data.words,
+    });
+    if (!session) return fail(res, 404, 'not_found', 'Document not found');
+    res.status(200).json({ session });
+  };
+
+  const addSession: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const body = manualSessionBodySchema.safeParse(req.body);
+    if (!body.success) return fail(res, 400, 'invalid_request', 'Invalid reading time');
+    const session = await serviceFor(req).addManualSession(userId, param(req, 'id'), {
+      minutes: body.data.minutes,
+      ...(body.data.words === undefined ? {} : { words: body.data.words }),
+      ...(body.data.date === undefined ? {} : { date: new Date(body.data.date) }),
+    });
+    if (!session) return fail(res, 404, 'not_found', 'Document not found');
+    res.status(201).json({ session });
+  };
+
+  const getSessions: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    res.status(200).json(await serviceFor(req).getSessions(userId, param(req, 'id')));
+  };
+
+  const deleteSession: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const removed = await serviceFor(req).deleteSession(
+      userId,
+      param(req, 'id'),
+      param(req, 'sid'),
+    );
+    if (!removed) return fail(res, 404, 'not_found', 'Session not found');
+    res.status(204).end();
+  };
+
+  const readingStats: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const whole = (raw: unknown): number | undefined => {
+      const parsed = typeof raw === 'string' ? Number.parseInt(raw, 10) : NaN;
+      return Number.isFinite(parsed) ? parsed : undefined;
+    };
+    const days = Math.min(366, Math.max(1, whole(req.query.days) ?? 30));
+    const stats = await serviceFor(req).readingStats(userId, {
+      days,
+      offsetMinutes: whole(req.query.offset),
+    });
+    res.status(200).json({ stats });
+  };
+
   const getShare: Handler = async (req, res) => {
     const userId = gate(req, res);
     if (!userId) return;
@@ -1220,6 +1382,14 @@ export function createLibraryHandlers({
     reviewHighlight,
     chat,
     summarize,
+    addBook,
+    importGoodreads,
+    importKindle,
+    saveSession,
+    addSession,
+    getSessions,
+    deleteSession,
+    readingStats,
     getShare,
     setShare,
     deleteShare,

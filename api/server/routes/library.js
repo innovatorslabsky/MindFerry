@@ -116,6 +116,36 @@ function handleUpload(req, res, next) {
   });
 }
 
+/** A Goodreads export or a Kindle clippings file is plain text: it is read as the text it is, never as a file type. */
+const textSingle = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+}).single('file');
+
+function handleTextUpload(req, res, next) {
+  textSingle(req, res, (err) => {
+    if (err && err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({
+        error: {
+          message: 'File exceeds the maximum allowed size',
+          type: 'too_large',
+          code: 'too_large',
+        },
+      });
+    }
+    if (err) {
+      return res.status(400).json({
+        error: {
+          message: 'Could not read the upload',
+          type: 'invalid_request',
+          code: 'invalid_request',
+        },
+      });
+    }
+    next();
+  });
+}
+
 router.post('/documents', ...save, handlers.save);
 router.post(
   '/clip',
@@ -194,10 +224,32 @@ router.post(
   handleUpload,
   handlers.upload,
 );
+router.post('/books', ...save, handlers.addBook);
+router.post(
+  '/import/goodreads',
+  requireJwtAuth,
+  configMiddleware,
+  librarySaveLimiter,
+  handleTextUpload,
+  handlers.importGoodreads,
+);
+router.post(
+  '/import/kindle',
+  requireJwtAuth,
+  configMiddleware,
+  librarySaveLimiter,
+  handleTextUpload,
+  handlers.importKindle,
+);
 router.post('/feeds/preview', ...save, handlers.previewFeed);
 router.get('/export', ...browse, handlers.exportHighlights);
 router.get('/review', ...browse, handlers.dailyReview);
 router.post('/review/:id', ...browse, handlers.reviewHighlight);
+router.get('/stats', ...browse, handlers.readingStats);
+router.get('/documents/:id/sessions', ...browse, handlers.getSessions);
+router.post('/documents/:id/sessions', ...browse, handlers.addSession);
+router.put('/documents/:id/sessions/:sid', ...browse, handlers.saveSession);
+router.delete('/documents/:id/sessions/:sid', ...browse, handlers.deleteSession);
 router.get('/documents/:id/share', ...browse, handlers.getShare);
 router.put('/documents/:id/share', ...browse, handlers.setShare);
 router.delete('/documents/:id/share', ...browse, handlers.deleteShare);

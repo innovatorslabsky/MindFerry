@@ -14,6 +14,7 @@ jest.mock('~/common', () => ({ NotificationSeverity: { ERROR: 'error', SUCCESS: 
 jest.mock('~/data-provider', () => ({
   useCreateLibraryHighlightMutation: () => ({ mutate: mockCreate }),
   useSetLibraryProgressMutation: () => ({ mutate: mockProgress }),
+  useSaveLibrarySessionMutation: () => ({ mutate: jest.fn() }),
 }));
 const mockGetResource = jest.fn();
 jest.mock('librechat-data-provider', () => ({

@@ -37,6 +37,7 @@ export type CreateHighlight = z.infer<typeof createHighlightSchema>;
 export const LOCATIONS = ['inbox', 'later', 'archive', 'feed'] as const;
 export type Location = (typeof LOCATIONS)[number];
 export const KINDS = ['article', 'pdf', 'epub'] as const;
+export const READING_STATUSES = ['want', 'reading', 'finished', 'dropped'] as const;
 export const SORTS = ['updated', 'created', 'title', 'shortest', 'longest'] as const;
 
 /**

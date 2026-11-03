@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import type {
   LibraryAnchorRecord,
   LibraryBookInput,
@@ -12,6 +12,13 @@ import type {
   LibraryFolderCreateResult,
   LibraryFolderRecord,
   LibraryFolderRenameResult,
+  LibraryManualBookInput,
+  LibraryManualSessionInput,
+  LibraryReadingDay,
+  LibraryReadingStats,
+  LibrarySessionInput,
+  LibrarySessionRecord,
+  LibrarySessionSummary,
   LibraryShareRecord,
   LibraryShareTarget,
   LibraryViewCreateResult,
@@ -44,6 +51,7 @@ import type { ILibraryHighlight } from '~/schema/libraryHighlight';
 import type { ILibraryDocument } from '~/schema/libraryDocument';
 import type { ILibraryProgress } from '~/schema/libraryProgress';
 import type { ILibraryResource } from '~/schema/libraryResource';
+import type { ILibrarySession } from '~/schema/librarySession';
 import type { ILibrarySource } from '~/schema/librarySource';
 import type { ILibraryFolder } from '~/schema/libraryFolder';
 import type { ILibraryShare } from '~/schema/libraryShare';
@@ -245,6 +253,50 @@ export interface LibraryMethods {
   deleteLibraryShare: (userId: string, documentId: string) => Promise<boolean>;
   /** What a public token points at, or `null` when no link has that token (any more). */
   findLibraryShareByToken: (token: string) => Promise<LibraryShareTarget | null>;
+  /**
+   * Adds books read somewhere else, skipping any whose `externalId` is already there. Nothing the person
+   * has since changed on a book already there is touched.
+   */
+  importLibraryManualBooks: (
+    userId: string,
+    books: LibraryManualBookInput[],
+  ) => Promise<{ created: number; existing: number }>;
+  /** Adds one book to track by hand, and returns it. */
+  createLibraryManualBook: (
+    userId: string,
+    book: LibraryManualBookInput,
+  ) => Promise<LibraryDocumentSummary>;
+  /**
+   * Records reading time for a session the reader is keeping. The numbers are totals so far, so a late or
+   * repeated report can raise them but never lower them, and they are held to what the clock allows.
+   * `null` when the document is not the person's or `sid` is not one the caller may write.
+   */
+  saveLibrarySession: (
+    userId: string,
+    documentId: string,
+    sid: string,
+    input: LibrarySessionInput,
+    now?: Date,
+  ) => Promise<LibrarySessionRecord | null>;
+  /** Logs reading done elsewhere; `null` when the document is not the person's. */
+  addLibraryManualSession: (
+    userId: string,
+    documentId: string,
+    input: LibraryManualSessionInput,
+    now?: Date,
+  ) => Promise<LibrarySessionRecord | null>;
+  /** The latest sessions on a document, and what all of them add up to. */
+  getLibrarySessions: (
+    userId: string,
+    documentId: string,
+    limit: number,
+  ) => Promise<LibrarySessionSummary>;
+  deleteLibrarySession: (userId: string, documentId: string, sid: string) => Promise<boolean>;
+  /** Reading over the last `days` days of the person's own calendar. */
+  getLibraryReadingStats: (
+    userId: string,
+    options: { days: number; offsetMinutes?: number; now?: Date },
+  ) => Promise<LibraryReadingStats>;
 }
 
 const UNIT_INSERT_BATCH = 100;
@@ -259,6 +311,19 @@ const RESOURCE_INSERT_BATCH = 4;
 
 /** Where an article's picture is kept among its resources. No book chapter can refer to it. */
 const THUMBNAIL_PATH = '__thumbnail__';
+
+const SESSION_SID = /^[A-Za-z0-9_-]{16,64}$/;
+/** No one reads for longer than this in one sitting that the reader would keep a session open for. */
+const MAX_SESSION_SECONDS = 6 * 60 * 60;
+/** A manual entry may cover a whole day. */
+const MAX_MANUAL_MINUTES = 24 * 60;
+/** 15 words a second is 900 a minute: faster than anyone reads, so more than this is not reading. */
+const MAX_WORDS_PER_SECOND = 15;
+const MAX_MANUAL_WORDS = 2_000_000;
+/** The reader reports a little ahead of the clock; this much is let through. */
+const SESSION_CLOCK_SLACK_SECONDS = 5;
+const MAX_SESSION_AGE_MS = 12 * 60 * 60_000;
+const DAY_MS = 24 * 60 * 60_000;
 
 /** 128 bits: enough that a link cannot be found by trying. */
 const SHARE_TOKEN_BYTES = 16;
@@ -306,6 +371,7 @@ function toSummary(doc: ILibraryDocument): LibraryDocumentSummary {
     ...(doc.note ? { note: doc.note } : {}),
     ...(doc.summary ? { summary: doc.summary } : {}),
     ...(doc.thumbnailPath ? { thumbnailPath: doc.thumbnailPath } : {}),
+    ...(doc.pages ? { pages: doc.pages } : {}),
     ...(doc.metaEdited ? { metaEdited: true } : {}),
     wordCount: doc.wordCount,
     readingMinutes: doc.readingMinutes,
@@ -320,6 +386,9 @@ function toSummary(doc: ILibraryDocument): LibraryDocumentSummary {
     ...(doc.truncated === undefined ? {} : { truncated: doc.truncated }),
     hasSource: doc.hasSource === true,
     location: doc.location,
+    ...(doc.readingStatus ? { readingStatus: doc.readingStatus } : {}),
+    ...(doc.rating ? { rating: doc.rating } : {}),
+    ...(doc.finishedAt ? { finishedAt: doc.finishedAt } : {}),
     tags: doc.tags ?? [],
     ...(doc.folderId ? { folderId: doc.folderId.toString() } : {}),
     fetchedAt: doc.fetchedAt,
@@ -988,6 +1057,11 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     if (query.kind) {
       filter.kind = query.kind;
     }
+    if (query.status === 'none') {
+      filter.readingStatus = { $exists: false };
+    } else if (query.status) {
+      filter.readingStatus = query.status;
+    }
     if (query.folder === 'none') {
       filter.folderId = { $exists: false };
     } else if (query.folder) {
@@ -1114,6 +1188,27 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
         unset[field] = '';
       }
     }
+    if (patch.readingStatus === null) {
+      unset.readingStatus = '';
+      unset.finishedAt = '';
+    } else if (patch.readingStatus !== undefined) {
+      set.readingStatus = patch.readingStatus;
+      if (patch.readingStatus === 'finished') {
+        // Saying "finished" again keeps the first date. Done ahead of the update below so it comes back with it.
+        await mongoose.models.LibraryDocument.updateOne(
+          { _id: toObjectId(id), userId: toObjectId(userId), finishedAt: { $exists: false } },
+          { $set: { finishedAt: new Date() } },
+          { timestamps: false },
+        );
+      } else {
+        unset.finishedAt = '';
+      }
+    }
+    if (patch.rating === null) {
+      unset.rating = '';
+    } else if (patch.rating !== undefined) {
+      set.rating = patch.rating;
+    }
     if (patch.folderId === null) {
       unset.folderId = '';
     } else if (patch.folderId !== undefined) {
@@ -1161,6 +1256,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       mongoose.models.LibraryResource.deleteMany({ userId: owner, documentId }),
       mongoose.models.LibrarySource.deleteMany({ userId: owner, documentId }),
       mongoose.models.LibraryShare.deleteMany({ userId: owner, documentId }),
+      mongoose.models.LibrarySession.deleteMany({ userId: owner, documentId }),
     ]);
     return true;
   }
@@ -1369,6 +1465,14 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     if (!owned) {
       return null;
     }
+    if (textOffset > 0 || (unitIndex !== undefined && unitIndex > 0)) {
+      // Starting to read puts a document with no status on "reading". The listing order is left alone.
+      await mongoose.models.LibraryDocument.updateOne(
+        { _id: docId, userId: owner, readingStatus: { $exists: false } },
+        { $set: { readingStatus: 'reading' } },
+        { timestamps: false },
+      );
+    }
     const doc = (await mongoose.models.LibraryProgress.findOneAndUpdate(
       { userId: owner, documentId: docId },
       unitIndex === undefined
@@ -1525,6 +1629,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       inboxes,
       views,
       shares,
+      sessions,
     ] = await Promise.all([
       mongoose.models.LibraryDocument.deleteMany({ userId: owner }),
       mongoose.models.LibraryHighlight.deleteMany({ userId: owner }),
@@ -1537,6 +1642,7 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       mongoose.models.LibraryInbox.deleteMany({ userId: owner }),
       mongoose.models.LibraryView.deleteMany({ userId: owner }),
       mongoose.models.LibraryShare.deleteMany({ userId: owner }),
+      mongoose.models.LibrarySession.deleteMany({ userId: owner }),
     ]);
     return {
       documents: documents.deletedCount,
@@ -1550,6 +1656,338 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
       inboxes: inboxes.deletedCount,
       views: views.deletedCount,
       shares: shares.deletedCount,
+      sessions: sessions.deletedCount,
+    };
+  }
+
+  const EMPTY_HASH = createHash('sha256').update('').digest('hex');
+  const MANUAL_BATCH = 500;
+
+  /** The upsert that adds a tracked-by-hand book once, keyed by where it came from or by a fresh name. */
+  function manualBookOp(owner: Types.ObjectId, book: LibraryManualBookInput, now: Date) {
+    const urlKey = createHash('sha256')
+      .update(`manual:${book.externalId ?? randomBytes(SHARE_TOKEN_BYTES).toString('hex')}`)
+      .digest('hex');
+    const finished = book.readingStatus === 'finished';
+    return {
+      urlKey,
+      op: {
+        updateOne: {
+          filter: { userId: owner, urlKey },
+          update: {
+            $setOnInsert: {
+              userId: owner,
+              urlKey,
+              normalizedUrl: `manual://${urlKey.slice(0, 16)}`,
+              kind: 'manual',
+              title: book.title,
+              ...(book.byline ? { byline: book.byline } : {}),
+              ...(book.pages ? { pages: book.pages } : {}),
+              contentHtml: '',
+              text: '',
+              contentHash: EMPTY_HASH,
+              wordCount: 0,
+              readingMinutes: 0,
+              unitCount: 0,
+              toc: [],
+              location: book.location ?? 'inbox',
+              tags: book.tags ?? [],
+              ...(book.readingStatus ? { readingStatus: book.readingStatus } : {}),
+              ...(book.rating ? { rating: book.rating } : {}),
+              ...(finished ? { finishedAt: book.finishedAt ?? now } : {}),
+              fetchedAt: now,
+            },
+          },
+          upsert: true,
+        },
+      },
+    };
+  }
+
+  async function importLibraryManualBooks(
+    userId: string,
+    books: LibraryManualBookInput[],
+  ): Promise<{ created: number; existing: number }> {
+    const owner = toObjectId(userId);
+    const now = new Date();
+    let created = 0;
+    for (let i = 0; i < books.length; i += MANUAL_BATCH) {
+      const ops = books.slice(i, i + MANUAL_BATCH).map((book) => manualBookOp(owner, book, now).op);
+      const result = await tenantSafeBulkWrite(mongoose.models.LibraryDocument, ops);
+      created += result.upsertedCount;
+    }
+    return { created, existing: books.length - created };
+  }
+
+  async function createLibraryManualBook(
+    userId: string,
+    book: LibraryManualBookInput,
+  ): Promise<LibraryDocumentSummary> {
+    const owner = toObjectId(userId);
+    const { urlKey, op } = manualBookOp(owner, book, new Date());
+    await tenantSafeBulkWrite(mongoose.models.LibraryDocument, [op]);
+    const doc = (await mongoose.models.LibraryDocument.findOne(
+      { userId: owner, urlKey },
+      SUMMARY_PROJECTION,
+    ).lean()) as unknown as ILibraryDocument;
+    return toSummary(doc);
+  }
+
+  function toSessionRecord(session: ILibrarySession): LibrarySessionRecord {
+    return {
+      id: session.sid,
+      documentId: session.documentId.toString(),
+      kind: session.kind,
+      startedAt: session.startedAt,
+      endedAt: session.endedAt,
+      activeSeconds: session.activeSeconds,
+      words: session.words,
+    };
+  }
+
+  function wholeNumber(value: number, max: number): number {
+    return Number.isFinite(value) ? Math.min(max, Math.max(0, Math.floor(value))) : 0;
+  }
+
+  async function ownsDocument(userId: string, documentId: string): Promise<boolean> {
+    if (!Types.ObjectId.isValid(documentId)) {
+      return false;
+    }
+    return Boolean(
+      await mongoose.models.LibraryDocument.exists({
+        _id: toObjectId(documentId),
+        userId: toObjectId(userId),
+      }),
+    );
+  }
+
+  async function saveLibrarySession(
+    userId: string,
+    documentId: string,
+    sid: string,
+    input: LibrarySessionInput,
+    now: Date = new Date(),
+  ): Promise<LibrarySessionRecord | null> {
+    if (!SESSION_SID.test(sid) || !(await ownsDocument(userId, documentId))) {
+      return null;
+    }
+    const owner = toObjectId(userId);
+    const doc = toObjectId(documentId);
+    const Session = mongoose.models.LibrarySession;
+    const existing = (await Session.findOne({
+      userId: owner,
+      sid,
+    }).lean()) as unknown as ILibrarySession | null;
+    if (existing && existing.documentId.toString() !== doc.toString()) {
+      return null;
+    }
+    // The start is what the reader first said, kept within the last half day and not in the future.
+    const asked = input.startedAt.getTime();
+    const startedAt =
+      existing?.startedAt ??
+      new Date(
+        Number.isFinite(asked)
+          ? Math.min(now.getTime(), Math.max(now.getTime() - MAX_SESSION_AGE_MS, asked))
+          : now.getTime(),
+      );
+    const allowed = Math.min(
+      MAX_SESSION_SECONDS,
+      Math.floor((now.getTime() - startedAt.getTime()) / 1000) + SESSION_CLOCK_SLACK_SECONDS,
+    );
+    const activeSeconds = wholeNumber(input.activeSeconds, Math.max(0, allowed));
+    const words = wholeNumber(input.words, activeSeconds * MAX_WORDS_PER_SECOND);
+    const write = () =>
+      Session.findOneAndUpdate(
+        { userId: owner, sid },
+        {
+          $setOnInsert: { documentId: doc, kind: 'auto', startedAt },
+          $set: { endedAt: now },
+          $max: { activeSeconds, words },
+        },
+        { upsert: true, new: true },
+      ).lean() as unknown as Promise<ILibrarySession>;
+    try {
+      return toSessionRecord(await write());
+    } catch (error) {
+      // Two reports for a new session at once: the second finds the first and updates it.
+      if ((error as { code?: number }).code === 11000) {
+        return toSessionRecord(await write());
+      }
+      throw error;
+    }
+  }
+
+  async function addLibraryManualSession(
+    userId: string,
+    documentId: string,
+    input: LibraryManualSessionInput,
+    now: Date = new Date(),
+  ): Promise<LibrarySessionRecord | null> {
+    if (!(await ownsDocument(userId, documentId))) {
+      return null;
+    }
+    const seconds = wholeNumber(input.minutes, MAX_MANUAL_MINUTES) * 60;
+    if (seconds === 0) {
+      return null;
+    }
+    const asked = input.date?.getTime();
+    const startedAt = new Date(
+      asked !== undefined && Number.isFinite(asked)
+        ? Math.min(now.getTime(), asked)
+        : now.getTime(),
+    );
+    const doc = (await mongoose.models.LibrarySession.create({
+      userId: toObjectId(userId),
+      documentId: toObjectId(documentId),
+      sid: randomBytes(SHARE_TOKEN_BYTES).toString('base64url'),
+      kind: 'manual',
+      startedAt,
+      endedAt: new Date(startedAt.getTime() + seconds * 1000),
+      activeSeconds: seconds,
+      words: wholeNumber(input.words ?? 0, MAX_MANUAL_WORDS),
+    })) as unknown as ILibrarySession;
+    return toSessionRecord(doc);
+  }
+
+  async function getLibrarySessions(
+    userId: string,
+    documentId: string,
+    limit: number,
+  ): Promise<LibrarySessionSummary> {
+    const empty = { sessions: [], totals: { seconds: 0, words: 0, sessions: 0 } };
+    if (!Types.ObjectId.isValid(documentId)) {
+      return empty;
+    }
+    const match = { userId: toObjectId(userId), documentId: toObjectId(documentId) };
+    const Session = mongoose.models.LibrarySession;
+    const [rows, totals] = await Promise.all([
+      Session.find(match).sort({ startedAt: -1 }).limit(limit).lean() as unknown as Promise<
+        ILibrarySession[]
+      >,
+      Session.aggregate([
+        { $match: match },
+        {
+          $group: {
+            _id: null,
+            seconds: { $sum: '$activeSeconds' },
+            words: { $sum: '$words' },
+            sessions: { $sum: 1 },
+          },
+        },
+      ]) as Promise<Array<{ seconds: number; words: number; sessions: number }>>,
+    ]);
+    const total = totals[0];
+    return {
+      sessions: rows.map(toSessionRecord),
+      totals: total
+        ? { seconds: total.seconds, words: total.words, sessions: total.sessions }
+        : empty.totals,
+    };
+  }
+
+  async function deleteLibrarySession(
+    userId: string,
+    documentId: string,
+    sid: string,
+  ): Promise<boolean> {
+    if (!Types.ObjectId.isValid(documentId)) {
+      return false;
+    }
+    const result = await mongoose.models.LibrarySession.deleteOne({
+      userId: toObjectId(userId),
+      documentId: toObjectId(documentId),
+      sid,
+    });
+    return result.deletedCount > 0;
+  }
+
+  /** Minutes east of UTC, from the browser's minutes behind UTC; none that make sense means UTC. */
+  function eastMinutesOf(offsetMinutes: number | undefined): number {
+    const usable =
+      typeof offsetMinutes === 'number' &&
+      Number.isInteger(offsetMinutes) &&
+      Math.abs(offsetMinutes) <= 14 * 60;
+    return usable ? -offsetMinutes : 0;
+  }
+
+  /** `+HH:MM`, the form a MongoDB date operator takes. */
+  function timezoneOf(eastMinutes: number): string {
+    const abs = Math.abs(eastMinutes);
+    const hh = String(Math.floor(abs / 60)).padStart(2, '0');
+    const mm = String(abs % 60).padStart(2, '0');
+    return `${eastMinutes < 0 ? '-' : '+'}${hh}:${mm}`;
+  }
+
+  async function getLibraryReadingStats(
+    userId: string,
+    options: { days: number; offsetMinutes?: number; now?: Date },
+  ): Promise<LibraryReadingStats> {
+    const now = options.now ?? new Date();
+    const days = Math.min(366, Math.max(1, Math.floor(options.days)));
+    const east = eastMinutesOf(options.offsetMinutes);
+    const timezone = timezoneOf(east);
+    const eastMs = east * 60_000;
+    // The person's calendar: shift by their offset, read the date off, and shift back for the query.
+    const localNow = new Date(now.getTime() + eastMs);
+    const todayLocal = Date.UTC(
+      localNow.getUTCFullYear(),
+      localNow.getUTCMonth(),
+      localNow.getUTCDate(),
+    );
+    const firstLocal = todayLocal - (days - 1) * DAY_MS;
+    const since = new Date(firstLocal - eastMs);
+    const owner = toObjectId(userId);
+    const match = { userId: owner, startedAt: { $gte: since } };
+    const Session = mongoose.models.LibrarySession;
+    const [perDay, overall, finished] = await Promise.all([
+      Session.aggregate([
+        { $match: match },
+        {
+          $group: {
+            _id: { $dateToString: { format: '%Y-%m-%d', date: '$startedAt', timezone } },
+            seconds: { $sum: '$activeSeconds' },
+            words: { $sum: '$words' },
+            sessions: { $sum: 1 },
+          },
+        },
+      ]) as Promise<Array<{ _id: string; seconds: number; words: number; sessions: number }>>,
+      Session.aggregate([
+        { $match: match },
+        {
+          $group: {
+            _id: null,
+            documents: { $addToSet: '$documentId' },
+            longest: { $max: '$activeSeconds' },
+          },
+        },
+      ]) as Promise<Array<{ documents: unknown[]; longest: number }>>,
+      mongoose.models.LibraryDocument.countDocuments({
+        userId: owner,
+        finishedAt: { $gte: since },
+      }),
+    ]);
+    const byDate = new Map(perDay.map((row) => [row._id, row]));
+    const list: LibraryReadingDay[] = [];
+    for (let i = 0; i < days; i++) {
+      const date = new Date(firstLocal + i * DAY_MS).toISOString().slice(0, 10);
+      const row = byDate.get(date);
+      list.push({
+        date,
+        seconds: row?.seconds ?? 0,
+        words: row?.words ?? 0,
+        sessions: row?.sessions ?? 0,
+      });
+    }
+    return {
+      days: list,
+      totals: {
+        seconds: list.reduce((sum, day) => sum + day.seconds, 0),
+        words: list.reduce((sum, day) => sum + day.words, 0),
+        sessions: list.reduce((sum, day) => sum + day.sessions, 0),
+        documents: overall[0]?.documents.length ?? 0,
+        finished,
+      },
+      longestSessionSeconds: overall[0]?.longest ?? 0,
     };
   }
 
@@ -1586,7 +2024,14 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     const owner = toObjectId(userId);
     const doc = toObjectId(documentId);
     // Only a document the person owns can be shared.
-    if (!(await mongoose.models.LibraryDocument.exists({ _id: doc, userId: owner }))) {
+    // Only a document the person owns can be shared, and a book tracked by hand has nothing to show.
+    if (
+      !(await mongoose.models.LibraryDocument.exists({
+        _id: doc,
+        userId: owner,
+        kind: { $ne: 'manual' },
+      }))
+    ) {
       return null;
     }
     const share = (await mongoose.models.LibraryShare.findOneAndUpdate(
@@ -1680,5 +2125,12 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     upsertLibraryShare,
     deleteLibraryShare,
     findLibraryShareByToken,
+    importLibraryManualBooks,
+    createLibraryManualBook,
+    saveLibrarySession,
+    addLibraryManualSession,
+    getLibrarySessions,
+    deleteLibrarySession,
+    getLibraryReadingStats,
   };
 }

@@ -3,7 +3,11 @@ import mongoose, { Schema, Document, Types } from 'mongoose';
 export const LIBRARY_LOCATIONS = ['inbox', 'later', 'archive', 'feed'] as const;
 export type LibraryLocation = (typeof LIBRARY_LOCATIONS)[number];
 
-export const LIBRARY_KINDS = ['article', 'pdf', 'epub'] as const;
+export const LIBRARY_READING_STATUSES = ['want', 'reading', 'finished', 'dropped'] as const;
+export type LibraryReadingStatus = (typeof LIBRARY_READING_STATUSES)[number];
+
+/** `manual` is a book the person reads somewhere else and only tracks here: it has no text. */
+export const LIBRARY_KINDS = ['article', 'pdf', 'epub', 'manual'] as const;
 export type LibraryKind = (typeof LIBRARY_KINDS)[number];
 
 export interface ILibraryTocEntry {
@@ -47,6 +51,8 @@ export interface ILibraryDocument extends Document {
   readingMinutes: number;
   /** Chapters (EPUB) or pages (PDF); 0 for an article. */
   unitCount: number;
+  /** How many pages a tracked-by-hand book has, when known. */
+  pages?: number;
   toc: ILibraryTocEntry[];
   /** A PDF with almost no text: probably scanned images, and not searchable until OCR exists. */
   needsOcr?: boolean;
@@ -57,6 +63,12 @@ export interface ILibraryDocument extends Document {
   /** The original PDF file is stored (`LibrarySource`), so a page can be shown as the page itself. */
   hasSource?: boolean;
   location: LibraryLocation;
+  /** Where the person is with it, like a Goodreads shelf. Unset until they say, or start reading it. */
+  readingStatus?: LibraryReadingStatus;
+  /** Whole stars, 1 to 5. */
+  rating?: number;
+  /** When the status last became `finished`; kept off otherwise, so "finished this year" can be counted. */
+  finishedAt?: Date;
   tags: string[];
   /** The folder the document is filed in, if any. */
   folderId?: Types.ObjectId;
@@ -90,6 +102,7 @@ const libraryDocumentSchema: Schema<ILibraryDocument> = new Schema(
     wordCount: { type: Number, required: true, default: 0 },
     readingMinutes: { type: Number, required: true, default: 0 },
     unitCount: { type: Number, required: true, default: 0 },
+    pages: { type: Number, min: 1 },
     toc: {
       type: [
         new Schema<ILibraryTocEntry>(
@@ -108,6 +121,9 @@ const libraryDocumentSchema: Schema<ILibraryDocument> = new Schema(
     truncated: { type: Boolean },
     hasSource: { type: Boolean },
     location: { type: String, enum: LIBRARY_LOCATIONS, required: true, default: 'inbox' },
+    readingStatus: { type: String, enum: LIBRARY_READING_STATUSES },
+    rating: { type: Number, min: 1, max: 5 },
+    finishedAt: { type: Date },
     tags: { type: [String], default: [] },
     folderId: { type: mongoose.Schema.Types.ObjectId, ref: 'LibraryFolder' },
     fetchedAt: { type: Date, required: true },
@@ -120,6 +136,7 @@ libraryDocumentSchema.index({ userId: 1, urlKey: 1 }, { unique: true });
 libraryDocumentSchema.index({ userId: 1, location: 1, updatedAt: -1 });
 libraryDocumentSchema.index({ userId: 1, tags: 1, updatedAt: -1 });
 libraryDocumentSchema.index({ userId: 1, folderId: 1, updatedAt: -1 });
+libraryDocumentSchema.index({ userId: 1, readingStatus: 1, updatedAt: -1 });
 /** `userId` prefixes the text index so a search is scoped to one user before any scoring. */
 libraryDocumentSchema.index({ userId: 1, title: 'text', text: 'text' });
 

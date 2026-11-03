@@ -44,6 +44,53 @@ export const useUploadLibraryFileMutation = (
   });
 };
 
+/** Adds a book to track by hand. */
+export const useAddLibraryBookMutation = (
+  options?: t.MutationOptions<{ document: t.TLibraryDocumentSummary }, t.TLibraryBookDraft>,
+): UseMutationResult<
+  { document: t.TLibraryDocumentSummary },
+  unknown,
+  t.TLibraryBookDraft,
+  unknown
+> => {
+  const refresh = useRefreshLibraryLists();
+  return useMutation((draft: t.TLibraryBookDraft) => dataService.addLibraryBook(draft), {
+    ...options,
+    onSuccess: (data, variables, context) => {
+      refresh();
+      options?.onSuccess?.(data, variables, context);
+    },
+  });
+};
+
+/** Adds the books of a Goodreads library export. */
+export const useImportLibraryGoodreadsMutation = (
+  options?: t.MutationOptions<t.TLibraryGoodreadsResult, FormData>,
+): UseMutationResult<t.TLibraryGoodreadsResult, unknown, FormData, unknown> => {
+  const refresh = useRefreshLibraryLists();
+  return useMutation((form: FormData) => dataService.importLibraryGoodreads(form), {
+    ...options,
+    onSuccess: (data, variables, context) => {
+      refresh();
+      options?.onSuccess?.(data, variables, context);
+    },
+  });
+};
+
+/** Adds the highlights of a Kindle `My Clippings.txt`. */
+export const useImportLibraryKindleMutation = (
+  options?: t.MutationOptions<t.TLibraryKindleResult, FormData>,
+): UseMutationResult<t.TLibraryKindleResult, unknown, FormData, unknown> => {
+  const refresh = useRefreshLibraryLists();
+  return useMutation((form: FormData) => dataService.importLibraryKindle(form), {
+    ...options,
+    onSuccess: (data, variables, context) => {
+      refresh();
+      options?.onSuccess?.(data, variables, context);
+    },
+  });
+};
+
 export type UpdateLibraryDocumentVariables = {
   id: string;
   patch: t.TLibraryDocumentPatch;
@@ -279,6 +326,68 @@ export const useDeleteLibraryShareMutation = (
       options?.onSuccess?.(data, id, context);
     },
   });
+};
+
+/** The reader's running report of a session. Quiet: nothing refetches because of it. */
+export const useSaveLibrarySessionMutation = (
+  options?: t.MutationOptions<
+    { session: t.TLibrarySession },
+    { id: string; sid: string; report: t.TLibrarySessionReport }
+  >,
+): UseMutationResult<
+  { session: t.TLibrarySession },
+  unknown,
+  { id: string; sid: string; report: t.TLibrarySessionReport },
+  unknown
+> =>
+  useMutation(
+    ({ id, sid, report }: { id: string; sid: string; report: t.TLibrarySessionReport }) =>
+      dataService.saveLibrarySession(id, sid, report),
+    options,
+  );
+
+/** Logs reading done elsewhere. */
+export const useAddLibrarySessionMutation = (
+  options?: t.MutationOptions<
+    { session: t.TLibrarySession },
+    { id: string; session: t.TLibraryManualSession }
+  >,
+): UseMutationResult<
+  { session: t.TLibrarySession },
+  unknown,
+  { id: string; session: t.TLibraryManualSession },
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation(
+    ({ id, session }: { id: string; session: t.TLibraryManualSession }) =>
+      dataService.addLibraryManualSession(id, session),
+    {
+      ...options,
+      onSuccess: (data, variables, context) => {
+        queryClient.invalidateQueries([QueryKeys.librarySessions, variables.id]);
+        queryClient.invalidateQueries([QueryKeys.libraryStats]);
+        options?.onSuccess?.(data, variables, context);
+      },
+    },
+  );
+};
+
+export const useDeleteLibrarySessionMutation = (
+  options?: t.MutationOptions<void, { id: string; sid: string }>,
+): UseMutationResult<void, unknown, { id: string; sid: string }, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation(
+    ({ id, sid }: { id: string; sid: string }) => dataService.deleteLibrarySession(id, sid),
+    {
+      ...options,
+      onSuccess: (data, variables, context) => {
+        queryClient.invalidateQueries([QueryKeys.librarySessions, variables.id]);
+        queryClient.invalidateQueries([QueryKeys.libraryStats]);
+        options?.onSuccess?.(data, variables, context);
+      },
+    },
+  );
 };
 
 export const usePreviewLibraryFeedMutation = (

@@ -21,6 +21,12 @@ describe('library routes wiring', () => {
     ['/review', 'get'],
     ['/review/:id', 'post'],
     ['/documents/:id/chat', 'post'],
+    ['/stats', 'get'],
+    ['/books', 'post'],
+    ['/documents/:id/sessions', 'get'],
+    ['/documents/:id/sessions', 'post'],
+    ['/documents/:id/sessions/:sid', 'put'],
+    ['/documents/:id/sessions/:sid', 'delete'],
     ['/documents/:id/share', 'get'],
     ['/documents/:id/share', 'put'],
     ['/documents/:id/share', 'delete'],
@@ -94,6 +100,16 @@ describe('library routes wiring', () => {
     expect(find(path, method)?.stack.length).toBe(4);
   });
 
+  it.each(['/import/goodreads', '/import/kindle'])(
+    'registers the import %s behind auth, config, a rate limit and the file reader',
+    (path) => {
+      const route = find(path, 'post');
+      expect(route).toBeDefined();
+      // requireJwtAuth, configMiddleware, limiter, text file reader, handler
+      expect(route.stack.length).toBe(5);
+    },
+  );
+
   it('registers the upload behind auth, config, a rate limit and the file parser', () => {
     const route = find('/uploads', 'post');
     expect(route).toBeDefined();
@@ -105,6 +121,13 @@ describe('library routes wiring', () => {
     const db = require('~/models');
     for (const name of [
       'saveLibraryDocument',
+      'importLibraryManualBooks',
+      'createLibraryManualBook',
+      'saveLibrarySession',
+      'addLibraryManualSession',
+      'getLibrarySessions',
+      'deleteLibrarySession',
+      'getLibraryReadingStats',
       'getLibraryShare',
       'upsertLibraryShare',
       'deleteLibraryShare',

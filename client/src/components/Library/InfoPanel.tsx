@@ -4,6 +4,8 @@ import { Button, Input, useToastContext } from '@librechat/client';
 import type { TLibraryDocumentSummary } from 'librechat-data-provider';
 import { useUpdateLibraryDocumentMutation } from '~/data-provider';
 import { NotificationSeverity } from '~/common';
+import ReadingSessions from './ReadingSessions';
+import ReadingStatus from './ReadingStatus';
 import SummaryField from './SummaryField';
 import { useLocalize } from '~/hooks';
 
@@ -136,6 +138,26 @@ function RestoreMetadata({ documentId }: { documentId: string }) {
   );
 }
 
+/** How long a document is, in the words that suit its kind; nothing for a book with no known pages. */
+function lengthOf(
+  document: TLibraryDocumentSummary,
+  localize: ReturnType<typeof useLocalize>,
+): string | undefined {
+  if (document.kind === 'manual') {
+    return document.pages ? localize('com_library_pages', { 0: document.pages }) : undefined;
+  }
+  if (document.kind === 'article') {
+    return localize('com_library_length_article', {
+      0: Math.max(1, document.readingMinutes),
+      1: document.wordCount.toLocaleString(),
+    });
+  }
+  return localize('com_library_length_book', {
+    0: document.unitCount,
+    1: Math.max(1, document.readingMinutes),
+  });
+}
+
 /** What is known about a document: the summary the person keeps, where it came from, how long it is. */
 export default function InfoPanel({ document }: { document: TLibraryDocumentSummary }) {
   const localize = useLocalize();
@@ -145,23 +167,19 @@ export default function InfoPanel({ document }: { document: TLibraryDocumentSumm
     article: 'com_library_kind_article_one',
     pdf: 'com_library_kind_pdf',
     epub: 'com_library_kind_epub',
+    manual: 'com_library_kind_manual',
   } as const;
-  const length =
-    document.kind === 'article'
-      ? localize('com_library_length_article', {
-          0: Math.max(1, document.readingMinutes),
-          1: document.wordCount.toLocaleString(),
-        })
-      : localize('com_library_length_book', {
-          0: document.unitCount,
-          1: Math.max(1, document.readingMinutes),
-        });
+  const length = lengthOf(document, localize);
 
   return (
     <div
       className="flex h-full flex-col gap-5 overflow-y-auto px-3 py-3"
       data-testid="library-info"
     >
+      <ReadingStatus document={document} />
+
+      <ReadingSessions documentId={document.id} />
+
       <section className="flex flex-col gap-1.5">
         <h3 className="text-text-primary text-sm font-semibold">
           {localize('com_library_summary')}
@@ -170,6 +188,7 @@ export default function InfoPanel({ document }: { document: TLibraryDocumentSumm
           documentId={document.id}
           value={document.summary ?? ''}
           maxLength={MAX_SUMMARY_LENGTH}
+          canWrite={document.kind !== 'manual'}
         />
       </section>
 

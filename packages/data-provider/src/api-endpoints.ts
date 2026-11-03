@@ -230,6 +230,21 @@ export const libraryFeedPreview = () => `${BASE_URL}/api/library/feeds/preview`;
 export const libraryExport = (format: 'markdown' | 'csv', documentId?: string) =>
   `${BASE_URL}/api/library/export?format=${format}${documentId ? `&documentId=${encodeURIComponent(documentId)}` : ''}`;
 
+export const libraryBooks = () => `${BASE_URL}/api/library/books`;
+
+export const libraryImportGoodreads = () => `${BASE_URL}/api/library/import/goodreads`;
+
+export const libraryImportKindle = () => `${BASE_URL}/api/library/import/kindle`;
+
+export const librarySessions = (id: string) =>
+  `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/sessions`;
+
+export const librarySession = (id: string, sid: string) =>
+  `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/sessions/${encodeURIComponent(sid)}`;
+
+export const libraryStats = (days: number, offsetMinutes: number) =>
+  `${BASE_URL}/api/library/stats?days=${days}&offset=${offsetMinutes}`;
+
 export const libraryDocumentShare = (id: string) =>
   `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/share`;
 

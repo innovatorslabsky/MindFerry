@@ -7,6 +7,7 @@ import libraryHighlightSchema from '~/schema/libraryHighlight';
 import libraryDocumentSchema from '~/schema/libraryDocument';
 import libraryProgressSchema from '~/schema/libraryProgress';
 import libraryResourceSchema from '~/schema/libraryResource';
+import librarySessionSchema from '~/schema/librarySession';
 import libraryFolderSchema from '~/schema/libraryFolder';
 import libraryInboxSchema from '~/schema/libraryInbox';
 import libraryShareSchema from '~/schema/libraryShare';
@@ -64,6 +65,9 @@ beforeAll(async () => {
   }
   if (!mongoose.models.LibraryView) {
     mongoose.model('LibraryView', libraryViewSchema);
+  }
+  if (!mongoose.models.LibrarySession) {
+    mongoose.model('LibrarySession', librarySessionSchema);
   }
   if (!mongoose.models.LibraryShare) {
     mongoose.model('LibraryShare', libraryShareSchema);
@@ -285,6 +289,7 @@ describe('deletion', () => {
       inboxes: 0,
       views: 0,
       shares: 0,
+      sessions: 0,
     });
     expect(await methods.listLibraryDocuments(userB, { limit: 10 })).toHaveLength(1);
     expect(await methods.listLibraryHighlights(userB)).toHaveLength(1);
@@ -1396,5 +1401,416 @@ describe('public links', () => {
 
     expect(await methods.deleteAllLibraryData(userA)).toMatchObject({ shares: 1 });
     expect(await methods.findLibraryShareByToken(kept?.token ?? '')).toBeNull();
+  });
+});
+
+describe('reading status and rating', () => {
+  it('sets a status and stars, clears them, and records when a document was finished', async () => {
+    const { document } = await methods.saveLibraryDocument(userA, doc());
+    expect(document.readingStatus).toBeUndefined();
+
+    const finished = await methods.updateLibraryDocument(userA, document.id, {
+      readingStatus: 'finished',
+      rating: 4,
+    });
+    expect(finished).toMatchObject({ readingStatus: 'finished', rating: 4 });
+    expect(finished?.finishedAt).toBeInstanceOf(Date);
+
+    const cleared = await methods.updateLibraryDocument(userA, document.id, {
+      readingStatus: null,
+      rating: null,
+    });
+    expect(cleared?.readingStatus).toBeUndefined();
+    expect(cleared?.rating).toBeUndefined();
+    expect(cleared?.finishedAt).toBeUndefined();
+  });
+
+  it('keeps the first finish date when "finished" is said again, and forgets it for any other status', async () => {
+    const { document } = await methods.saveLibraryDocument(userA, doc());
+    const first = await methods.updateLibraryDocument(userA, document.id, {
+      readingStatus: 'finished',
+    });
+    const again = await methods.updateLibraryDocument(userA, document.id, {
+      readingStatus: 'finished',
+    });
+    expect(again?.finishedAt?.getTime()).toBe(first?.finishedAt?.getTime());
+
+    const back = await methods.updateLibraryDocument(userA, document.id, {
+      readingStatus: 'reading',
+    });
+    expect(back?.readingStatus).toBe('reading');
+    expect(back?.finishedAt).toBeUndefined();
+  });
+
+  it('lists by status, and by none', async () => {
+    const a = await methods.saveLibraryDocument(userA, doc({ urlKey: 'ra', title: 'A' }));
+    await methods.saveLibraryDocument(
+      userA,
+      doc({ urlKey: 'rb', title: 'B', text: 'Another page entirely.' }),
+    );
+    await methods.updateLibraryDocument(userA, a.document.id, { readingStatus: 'want' });
+
+    const want = await methods.listLibraryDocuments(userA, { status: 'want', limit: 10 });
+    expect(want.map((d) => d.title)).toEqual(['A']);
+    const none = await methods.listLibraryDocuments(userA, { status: 'none', limit: 10 });
+    expect(none.map((d) => d.title)).toEqual(['B']);
+  });
+
+  it('puts a document on "reading" when reading begins, but never overrides what the person chose', async () => {
+    const a = await methods.saveLibraryDocument(userA, doc({ urlKey: 'ra', title: 'A' }));
+    const b = await methods.saveLibraryDocument(
+      userA,
+      doc({ urlKey: 'rb', title: 'B', text: 'Another page.' }),
+    );
+    await methods.updateLibraryDocument(userA, b.document.id, { readingStatus: 'dropped' });
+
+    await methods.setLibraryProgress(userA, a.document.id, 0, HASH);
+    expect((await methods.getLibraryDocument(userA, a.document.id))?.readingStatus).toBeUndefined();
+
+    await methods.setLibraryProgress(userA, a.document.id, 50, HASH);
+    await methods.setLibraryProgress(userA, b.document.id, 50, HASH);
+    expect((await methods.getLibraryDocument(userA, a.document.id))?.readingStatus).toBe('reading');
+    expect((await methods.getLibraryDocument(userA, b.document.id))?.readingStatus).toBe('dropped');
+  });
+
+  it('does not reorder the list when reading begins', async () => {
+    const a = await methods.saveLibraryDocument(userA, doc({ urlKey: 'ra', title: 'A' }));
+    const before = (await methods.getLibraryDocument(userA, a.document.id))?.updatedAt;
+    await methods.setLibraryProgress(userA, a.document.id, 50, HASH);
+    const after = (await methods.getLibraryDocument(userA, a.document.id))?.updatedAt;
+    expect(after?.getTime()).toBe(before?.getTime());
+  });
+
+  it('is the owner’s alone', async () => {
+    const { document } = await methods.saveLibraryDocument(userA, doc());
+    expect(
+      await methods.updateLibraryDocument(userB, document.id, { readingStatus: 'finished' }),
+    ).toBeNull();
+    expect((await methods.getLibraryDocument(userA, document.id))?.readingStatus).toBeUndefined();
+  });
+});
+
+describe('reading sessions', () => {
+  const NOW = new Date('2026-03-10T12:00:00Z');
+  const SID = 'session-aaaaaaaaaaaa';
+  const at = (seconds: number) => new Date(NOW.getTime() + seconds * 1000);
+  const first = async () => (await methods.saveLibraryDocument(userA, doc())).document.id;
+
+  it('keeps one session up to date and never lets a late report lower it', async () => {
+    const id = await first();
+    const startedAt = at(-600);
+    await methods.saveLibrarySession(
+      userA,
+      id,
+      SID,
+      { startedAt, activeSeconds: 120, words: 400 },
+      NOW,
+    );
+    await methods.saveLibrarySession(
+      userA,
+      id,
+      SID,
+      { startedAt, activeSeconds: 300, words: 900 },
+      at(30),
+    );
+    const late = await methods.saveLibrarySession(
+      userA,
+      id,
+      SID,
+      { startedAt, activeSeconds: 200, words: 500 },
+      at(40),
+    );
+    expect(late).toMatchObject({ id: SID, kind: 'auto', activeSeconds: 300, words: 900 });
+    expect(await mongoose.models.LibrarySession.countDocuments({})).toBe(1);
+  });
+
+  it('holds the numbers to what the clock and a human reader allow', async () => {
+    const id = await first();
+    // Ten seconds in: a claim of an hour is cut to the ten, plus the slack.
+    const quick = await methods.saveLibrarySession(
+      userA,
+      id,
+      SID,
+      { startedAt: at(-10), activeSeconds: 3600, words: 1_000_000 },
+      NOW,
+    );
+    expect(quick?.activeSeconds).toBe(15);
+    expect(quick?.words).toBe(15 * 15);
+
+    // A start in the future is today, and one from last week is no more than half a day ago.
+    const future = await methods.saveLibrarySession(
+      userA,
+      id,
+      'session-bbbbbbbbbbbb',
+      { startedAt: at(3600), activeSeconds: 1000, words: 1 },
+      NOW,
+    );
+    expect(future?.startedAt.getTime()).toBe(NOW.getTime());
+    expect(future?.activeSeconds).toBe(5);
+    const old = await methods.saveLibrarySession(
+      userA,
+      id,
+      'session-cccccccccccc',
+      { startedAt: new Date('2020-01-01T00:00:00Z'), activeSeconds: 999_999, words: 0 },
+      NOW,
+    );
+    expect(old?.startedAt.getTime()).toBe(NOW.getTime() - 12 * 60 * 60_000);
+    expect(old?.activeSeconds).toBe(6 * 60 * 60);
+  });
+
+  it('refuses a document that is not the person’s, a bad name, and one name on two documents', async () => {
+    const mine = await first();
+    const other = (await methods.saveLibraryDocument(userA, doc({ urlKey: 'k2' }))).document.id;
+    const input = { startedAt: at(-60), activeSeconds: 30, words: 50 };
+
+    expect(await methods.saveLibrarySession(userB, mine, SID, input, NOW)).toBeNull();
+    expect(await methods.saveLibrarySession(userA, mine, 'short', input, NOW)).toBeNull();
+    expect(
+      await methods.saveLibrarySession(userA, mine, 'has spaces in it!!', input, NOW),
+    ).toBeNull();
+    expect(await methods.saveLibrarySession(userA, mine, SID, input, NOW)).not.toBeNull();
+    expect(await methods.saveLibrarySession(userA, other, SID, input, NOW)).toBeNull();
+    expect(await methods.saveLibrarySession(userA, 'not-an-id', SID, input, NOW)).toBeNull();
+  });
+
+  it('logs reading done elsewhere, within a day and not in the future', async () => {
+    const id = await first();
+    const manual = await methods.addLibraryManualSession(
+      userA,
+      id,
+      { minutes: 45, words: 9000, date: new Date('2026-03-09T20:00:00Z') },
+      NOW,
+    );
+    expect(manual).toMatchObject({ kind: 'manual', activeSeconds: 45 * 60, words: 9000 });
+    expect(manual?.endedAt.getTime()).toBe(manual!.startedAt.getTime() + 45 * 60_000);
+
+    const capped = await methods.addLibraryManualSession(userA, id, { minutes: 99_999 }, NOW);
+    expect(capped?.activeSeconds).toBe(24 * 60 * 60);
+    const future = await methods.addLibraryManualSession(
+      userA,
+      id,
+      { minutes: 5, date: at(86_400) },
+      NOW,
+    );
+    expect(future?.startedAt.getTime()).toBe(NOW.getTime());
+
+    expect(await methods.addLibraryManualSession(userA, id, { minutes: 0 }, NOW)).toBeNull();
+    expect(await methods.addLibraryManualSession(userB, id, { minutes: 5 }, NOW)).toBeNull();
+  });
+
+  it('lists a document’s sessions newest first with the totals of all of them, for its owner only', async () => {
+    const id = await first();
+    await methods.addLibraryManualSession(userA, id, { minutes: 10, date: at(-7200) }, NOW);
+    await methods.addLibraryManualSession(userA, id, { minutes: 20, date: at(-3600) }, NOW);
+    await methods.addLibraryManualSession(userA, id, { minutes: 30, date: at(-60) }, NOW);
+
+    const summary = await methods.getLibrarySessions(userA, id, 2);
+    expect(summary.sessions.map((s) => s.activeSeconds)).toEqual([30 * 60, 20 * 60]);
+    expect(summary.totals).toMatchObject({ seconds: 60 * 60, sessions: 3 });
+    expect((await methods.getLibrarySessions(userB, id, 10)).totals.sessions).toBe(0);
+  });
+
+  it('deletes one session, the owner’s alone', async () => {
+    const id = await first();
+    const made = await methods.addLibraryManualSession(userA, id, { minutes: 10 }, NOW);
+    expect(await methods.deleteLibrarySession(userB, id, made!.id)).toBe(false);
+    expect(await methods.deleteLibrarySession(userA, id, made!.id)).toBe(true);
+    expect(await methods.deleteLibrarySession(userA, id, made!.id)).toBe(false);
+  });
+
+  it('goes with the document, and with all of a person’s library data', async () => {
+    const id = await first();
+    const other = (await methods.saveLibraryDocument(userA, doc({ urlKey: 'k2' }))).document.id;
+    await methods.addLibraryManualSession(userA, id, { minutes: 10 }, NOW);
+    await methods.addLibraryManualSession(userA, other, { minutes: 10 }, NOW);
+
+    await methods.deleteLibraryDocument(userA, id);
+    expect(await mongoose.models.LibrarySession.countDocuments({})).toBe(1);
+    const gone = await methods.deleteAllLibraryData(userA);
+    expect(gone.sessions).toBe(1);
+    expect(await mongoose.models.LibrarySession.countDocuments({})).toBe(0);
+  });
+
+  describe('stats', () => {
+    it('gives every day of the window, with zeros where nothing was read', async () => {
+      const id = await first();
+      await methods.addLibraryManualSession(
+        userA,
+        id,
+        { minutes: 30, words: 6000, date: new Date('2026-03-09T09:00:00Z') },
+        NOW,
+      );
+      const stats = await methods.getLibraryReadingStats(userA, { days: 4, now: NOW });
+      expect(stats.days.map((d) => d.date)).toEqual([
+        '2026-03-07',
+        '2026-03-08',
+        '2026-03-09',
+        '2026-03-10',
+      ]);
+      expect(stats.days.map((d) => d.seconds)).toEqual([0, 0, 1800, 0]);
+      expect(stats.totals).toMatchObject({ seconds: 1800, words: 6000, sessions: 1, documents: 1 });
+      expect(stats.longestSessionSeconds).toBe(1800);
+    });
+
+    it('reads the day off the person’s own clock', async () => {
+      const id = await first();
+      // 20:00 UTC on the 9th is already 03:00 on the 10th for someone at UTC+7.
+      await methods.addLibraryManualSession(
+        userA,
+        id,
+        { minutes: 10, date: new Date('2026-03-09T20:00:00Z') },
+        NOW,
+      );
+      const utc = await methods.getLibraryReadingStats(userA, { days: 2, now: NOW });
+      expect(utc.days.map((d) => [d.date, d.seconds])).toEqual([
+        ['2026-03-09', 600],
+        ['2026-03-10', 0],
+      ]);
+      // The browser reports minutes behind UTC, so east of it is negative.
+      const east = await methods.getLibraryReadingStats(userA, {
+        days: 2,
+        offsetMinutes: -420,
+        now: NOW,
+      });
+      expect(east.days.map((d) => [d.date, d.seconds])).toEqual([
+        ['2026-03-09', 0],
+        ['2026-03-10', 600],
+      ]);
+    });
+
+    it('counts what was finished in the window, leaves out older reading, and is the owner’s alone', async () => {
+      const id = await first();
+      await methods.addLibraryManualSession(
+        userA,
+        id,
+        { minutes: 10, date: new Date('2026-01-01T09:00:00Z') },
+        NOW,
+      );
+      await methods.updateLibraryDocument(userA, id, { readingStatus: 'finished' });
+
+      const stats = await methods.getLibraryReadingStats(userA, {
+        days: 7,
+        now: new Date(),
+      });
+      expect(stats.totals).toMatchObject({ seconds: 0, sessions: 0, documents: 0, finished: 1 });
+      const none = await methods.getLibraryReadingStats(userB, { days: 7, now: new Date() });
+      expect(none.totals).toMatchObject({ finished: 0, sessions: 0 });
+    });
+  });
+});
+
+describe('books tracked by hand', () => {
+  it('adds a book with no text, with what the person knows of it', async () => {
+    const book = await methods.createLibraryManualBook(userA, {
+      title: 'The Left Hand of Darkness',
+      byline: 'Ursula K. Le Guin',
+      pages: 304,
+      readingStatus: 'finished',
+      rating: 5,
+      tags: ['sci-fi'],
+      location: 'archive',
+    });
+    expect(book).toMatchObject({
+      kind: 'manual',
+      title: 'The Left Hand of Darkness',
+      byline: 'Ursula K. Le Guin',
+      pages: 304,
+      readingStatus: 'finished',
+      rating: 5,
+      tags: ['sci-fi'],
+      location: 'archive',
+      unitCount: 0,
+      wordCount: 0,
+    });
+    expect(book.finishedAt).toBeInstanceOf(Date);
+    expect(book.normalizedUrl.startsWith('manual://')).toBe(true);
+
+    const read = await methods.getLibraryDocument(userA, book.id);
+    expect(read?.text).toBe('');
+    expect(read?.contentHtml).toBe('');
+  });
+
+  it('records the date a finished book was finished, and not for one that was not', async () => {
+    const date = new Date('2021-05-01T00:00:00Z');
+    const done = await methods.createLibraryManualBook(userA, {
+      title: 'Done',
+      readingStatus: 'finished',
+      finishedAt: date,
+    });
+    expect(done.finishedAt?.getTime()).toBe(date.getTime());
+    const want = await methods.createLibraryManualBook(userA, {
+      title: 'Later',
+      readingStatus: 'want',
+      finishedAt: date,
+    });
+    expect(want.finishedAt).toBeUndefined();
+  });
+
+  it('is a new book each time unless it says where it came from', async () => {
+    const a = await methods.createLibraryManualBook(userA, { title: 'Same title' });
+    const b = await methods.createLibraryManualBook(userA, { title: 'Same title' });
+    expect(a.id).not.toBe(b.id);
+
+    const x = await methods.createLibraryManualBook(userA, { title: 'X', externalId: 'gr-1' });
+    const y = await methods.createLibraryManualBook(userA, { title: 'Y', externalId: 'gr-1' });
+    expect(y.id).toBe(x.id);
+    expect(y.title).toBe('X');
+  });
+
+  it('imports many at once, adds only the new ones, and leaves a book already there as it is', async () => {
+    const first = await methods.importLibraryManualBooks(userA, [
+      { title: 'One', externalId: '1', readingStatus: 'want' },
+      { title: 'Two', externalId: '2' },
+    ]);
+    expect(first).toEqual({ created: 2, existing: 0 });
+
+    const [one] = await methods.listLibraryDocuments(userA, { limit: 10, sort: 'title' });
+    await methods.updateLibraryDocument(userA, one.id, { readingStatus: 'finished', rating: 4 });
+
+    const again = await methods.importLibraryManualBooks(userA, [
+      { title: 'One', externalId: '1', readingStatus: 'want' },
+      { title: 'Three', externalId: '3' },
+    ]);
+    expect(again).toEqual({ created: 1, existing: 1 });
+    const kept = await methods.getLibraryDocument(userA, one.id);
+    expect(kept).toMatchObject({ readingStatus: 'finished', rating: 4 });
+    expect(await mongoose.models.LibraryDocument.countDocuments({ kind: 'manual' })).toBe(3);
+  });
+
+  it('keeps one person’s import apart from another’s, even for the same book', async () => {
+    await methods.importLibraryManualBooks(userA, [{ title: 'Shared', externalId: 'gr-9' }]);
+    const other = await methods.importLibraryManualBooks(userB, [
+      { title: 'Shared', externalId: 'gr-9' },
+    ]);
+    expect(other.created).toBe(1);
+    expect(await methods.listLibraryDocuments(userB, { limit: 10 })).toHaveLength(1);
+  });
+
+  it('takes more than one batch', async () => {
+    const books = Array.from({ length: 1100 }, (_, i) => ({
+      title: `Book ${i}`,
+      externalId: `b${i}`,
+    }));
+    expect(await methods.importLibraryManualBooks(userA, books)).toEqual({
+      created: 1100,
+      existing: 0,
+    });
+  });
+
+  it('can be found by title, filtered by status, and given sessions, but not shared', async () => {
+    const book = await methods.createLibraryManualBook(userA, {
+      title: 'Wanderlust and other afflictions',
+      readingStatus: 'reading',
+    });
+    const found = await methods.searchLibraryDocuments(userA, 'wanderlust', 10);
+    expect(found.map((d) => d.id)).toEqual([book.id]);
+    const reading = await methods.listLibraryDocuments(userA, { status: 'reading', limit: 10 });
+    expect(reading.map((d) => d.id)).toEqual([book.id]);
+
+    const session = await methods.addLibraryManualSession(userA, book.id, { minutes: 30 });
+    expect(session?.kind).toBe('manual');
+    expect(
+      await methods.upsertLibraryShare(userA, book.id, { includeHighlights: false }),
+    ).toBeNull();
   });
 });

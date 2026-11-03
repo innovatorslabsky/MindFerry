@@ -1,7 +1,9 @@
 /** The reading library: saved articles, PDFs and EPUBs, their highlights, and reading position. */
 
 export type TLibraryLocation = 'inbox' | 'later' | 'archive' | 'feed';
-export type TLibraryKind = 'article' | 'pdf' | 'epub';
+/** `manual` is a book read somewhere else and tracked here by hand; it has no text. */
+export type TLibraryKind = 'article' | 'pdf' | 'epub' | 'manual';
+export type TLibraryReadingStatus = 'want' | 'reading' | 'finished' | 'dropped';
 export type TLibraryHighlightColor = 'yellow' | 'blue' | 'green' | 'red' | 'purple';
 
 export type TLibraryTocEntry = {
@@ -36,6 +38,8 @@ export type TLibraryDocumentSummary = {
   readingMinutes: number;
   /** Chapters (EPUB) or pages (PDF); 0 for an article. */
   unitCount: number;
+  /** Pages of a book tracked by hand, when known. */
+  pages?: number;
   toc: TLibraryTocEntry[];
   /** A PDF with almost no text: probably scanned images. */
   needsOcr?: boolean;
@@ -46,6 +50,12 @@ export type TLibraryDocumentSummary = {
   /** The original PDF is stored, so a page can be shown as the page itself. */
   hasSource: boolean;
   location: TLibraryLocation;
+  /** Where the person is with it; unset until they say, or start reading it. */
+  readingStatus?: TLibraryReadingStatus;
+  /** Whole stars, 1 to 5. */
+  rating?: number;
+  /** When it was marked finished. */
+  finishedAt?: string;
   tags: string[];
   /** The folder it is filed in, if any. */
   folderId?: string;
@@ -67,6 +77,10 @@ export type TLibraryDocumentPatch = {
   /** Empty removes the note, or the summary. */
   note?: string;
   summary?: string;
+  /** Null clears it. */
+  readingStatus?: TLibraryReadingStatus | null;
+  /** Whole stars, 1 to 5; null clears it. */
+  rating?: number | null;
 };
 
 /** An article with its text. Highlight offsets are `textContent` offsets of `contentHtml`. */
@@ -131,6 +145,8 @@ export type TLibraryListParams = {
   /** A folder id, or `none` for documents in no folder. */
   folder?: string;
   kind?: TLibraryKind;
+  /** A reading status, or `none` for documents with none. */
+  status?: TLibraryReadingStatus | 'none';
   sort?: TLibrarySort;
   limit?: number;
   skip?: number;
@@ -350,4 +366,84 @@ export type TLibrarySharedResponse = {
 export type TLibrarySharedUnitResponse = {
   unit: TLibraryUnit;
   highlights: TLibrarySharedHighlight[];
+};
+
+/** One stretch of reading a document. `auto` is kept by the reader; `manual` was logged by hand. */
+export type TLibrarySession = {
+  id: string;
+  documentId: string;
+  kind: 'auto' | 'manual';
+  startedAt: string;
+  endedAt: string;
+  activeSeconds: number;
+  words: number;
+};
+
+export type TLibrarySessionSummary = {
+  sessions: TLibrarySession[];
+  totals: { seconds: number; words: number; sessions: number };
+};
+
+/** What the reader reports for the session it is keeping: the totals so far. */
+export type TLibrarySessionReport = {
+  startedAt: string;
+  activeSeconds: number;
+  words: number;
+};
+
+/** Reading done elsewhere. */
+export type TLibraryManualSession = {
+  minutes: number;
+  words?: number;
+  /** An ISO date-time; now when left out. */
+  date?: string;
+};
+
+export type TLibraryReadingDay = {
+  /** The person's own calendar day, `YYYY-MM-DD`. */
+  date: string;
+  seconds: number;
+  words: number;
+  sessions: number;
+};
+
+export type TLibraryReadingStats = {
+  days: TLibraryReadingDay[];
+  totals: {
+    seconds: number;
+    words: number;
+    sessions: number;
+    documents: number;
+    finished: number;
+  };
+  longestSessionSeconds: number;
+};
+
+/** A book to track by hand. */
+export type TLibraryBookDraft = {
+  title: string;
+  byline?: string;
+  pages?: number;
+  readingStatus?: TLibraryReadingStatus;
+  rating?: number;
+  tags?: string[];
+};
+
+export type TLibraryGoodreadsResult = {
+  created: number;
+  /** Books already there from an earlier import. */
+  existing: number;
+  /** Rows with no title, or past the limit. */
+  skipped: number;
+};
+
+export type TLibraryKindleResult = {
+  /** Books whose highlights were read from the file. */
+  books: number;
+  /** Highlights added; ones already there from an earlier import are not counted. */
+  highlights: number;
+  existing: number;
+  /** Highlights that came in with a note. */
+  notes: number;
+  skipped: number;
 };

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, FileText, FileType } from 'lucide-react';
+import { BookMarked, BookOpen, FileText, FileType } from 'lucide-react';
 import type { TLibraryDocumentSummary } from 'librechat-data-provider';
 import { useLibraryThumbnailQuery } from '~/data-provider';
 import { cn } from '~/utils';
 
-const ICONS = { article: FileText, pdf: FileType, epub: BookOpen } as const;
+const ICONS = { article: FileText, pdf: FileType, epub: BookOpen, manual: BookMarked } as const;
 
 /**
  * The picture beside a document in a list: its cover or lead image when it has one, otherwise a tile

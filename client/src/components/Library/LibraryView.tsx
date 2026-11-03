@@ -14,6 +14,7 @@ import type {
   TLibraryFolder,
   TLibraryKind,
   TLibraryLocation,
+  TLibraryReadingStatus,
   TLibrarySort,
   TLibraryViewFilter,
 } from 'librechat-data-provider';
@@ -27,12 +28,14 @@ import {
   useUpdateLibraryDocumentMutation,
   useUploadLibraryFileMutation,
 } from '~/data-provider';
+import { READING_STATUS_LABEL, READING_STATUSES } from './readingStatus';
 import { NotificationSeverity } from '~/common';
 import { useShortcuts } from './useShortcuts';
 import { useDebounce } from '~/hooks/Input';
 import ExportButtons from './ExportButtons';
 import { libraryErrorKey } from './errors';
 import PinnedViews from './PinnedViews';
+import BooksTools from './BooksTools';
 import FeedsPanel from './FeedsPanel';
 import InboxPanel from './InboxPanel';
 import { useLocalize } from '~/hooks';
@@ -69,6 +72,7 @@ const KIND_FILTERS = [
   { value: 'article', label: 'com_library_kind_article' },
   { value: 'pdf', label: 'com_library_kind_pdf' },
   { value: 'epub', label: 'com_library_kind_epub' },
+  { value: 'manual', label: 'com_library_kind_manual' },
 ] as const;
 
 const SORT_OPTIONS = [
@@ -108,7 +112,6 @@ function DocumentRow({
   });
   const move = (location: TLibraryLocation) =>
     update.mutate({ id: document.id, patch: { location } });
-  const isBook = document.kind !== 'article';
   const row = useRef<HTMLLIElement>(null);
   useEffect(() => {
     if (active) {
@@ -118,12 +121,10 @@ function DocumentRow({
   const meta = [
     document.kind === 'pdf' ? localize('com_library_kind_pdf') : undefined,
     document.kind === 'epub' ? localize('com_library_kind_epub') : undefined,
+    document.kind === 'manual' ? localize('com_library_kind_manual_one') : undefined,
+    document.readingStatus ? localize(READING_STATUS_LABEL[document.readingStatus]) : undefined,
     document.siteName ?? document.byline,
-    isBook
-      ? localize(document.kind === 'pdf' ? 'com_library_pages' : 'com_library_chapters', {
-          0: document.unitCount,
-        })
-      : localize('com_library_minutes', { 0: Math.max(1, document.readingMinutes) }),
+    sizeOf(document, localize),
   ].filter(Boolean);
 
   return (
@@ -244,6 +245,23 @@ function DocumentRow({
   );
 }
 
+/** How long or how big a document is, in the words that suit its kind. */
+function sizeOf(
+  document: TLibraryDocumentSummary,
+  localize: ReturnType<typeof useLocalize>,
+): string | undefined {
+  if (document.kind === 'manual') {
+    return document.pages ? localize('com_library_pages', { 0: document.pages }) : undefined;
+  }
+  if (document.kind === 'pdf') {
+    return localize('com_library_pages', { 0: document.unitCount });
+  }
+  if (document.kind === 'epub') {
+    return localize('com_library_chapters', { 0: document.unitCount });
+  }
+  return localize('com_library_minutes', { 0: Math.max(1, document.readingMinutes) });
+}
+
 /** Your saved reading: paste an address or upload a PDF or EPUB, then pick something to read. */
 export default function LibraryView() {
   const localize = useLocalize();
@@ -255,6 +273,7 @@ export default function LibraryView() {
   const [tag, setTag] = useState('');
   const [folder, setFolder] = useState('');
   const [kind, setKind] = useState<TLibraryKind | ''>('');
+  const [status, setStatus] = useState<TLibraryReadingStatus | ''>('');
   const [sort, setSort] = useState<TLibrarySort>('updated');
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [toDelete, setToDelete] = useState<TLibraryDocumentSummary | null>(null);
@@ -274,6 +293,7 @@ export default function LibraryView() {
           tag: tag || undefined,
           folder: folder || undefined,
           kind: kind || undefined,
+          status: status || undefined,
           sort,
           limit,
         },
@@ -362,6 +382,7 @@ export default function LibraryView() {
     setSearch('');
     setLocation(filter.location ?? 'inbox');
     setKind(filter.kind ?? '');
+    setStatus('');
     setTag(filter.tag ?? '');
     setFolder(filter.folder ?? '');
     setSort(filter.sort ?? 'updated');
@@ -375,7 +396,7 @@ export default function LibraryView() {
   useEffect(() => {
     setSelected(new Set());
     setActiveId(null);
-  }, [location, query, tag, folder, kind, sort]);
+  }, [location, query, tag, folder, kind, status, sort]);
 
   const activeIndex = rows.findIndex((row) => row.id === activeId);
   const active = activeIndex >= 0 ? rows[activeIndex] : undefined;
@@ -531,11 +552,46 @@ export default function LibraryView() {
             </div>
           )}
 
+          {!query && (
+            <div
+              role="group"
+              aria-label={localize('com_library_status')}
+              className="flex flex-wrap gap-1.5 md:flex-col md:gap-1"
+            >
+              <Button
+                type="button"
+                size="sm"
+                variant="outline-toggle"
+                className="md:justify-start"
+                aria-pressed={status === ''}
+                onClick={() => setStatus('')}
+              >
+                {localize('com_library_status_any')}
+              </Button>
+              {READING_STATUSES.map((value) => (
+                <Button
+                  key={value}
+                  type="button"
+                  size="sm"
+                  variant="outline-toggle"
+                  className="md:justify-start"
+                  aria-pressed={status === value}
+                  onClick={() => setStatus(value)}
+                >
+                  {localize(READING_STATUS_LABEL[value])}
+                </Button>
+              ))}
+            </div>
+          )}
+
           <Button asChild variant="outline" size="sm" className="md:justify-start">
             <Link to="/library/review">{localize('com_library_review_link')}</Link>
           </Button>
           <Button asChild variant="outline" size="sm" className="md:justify-start">
             <Link to="/library/ask">{localize('com_library_ask_library_link')}</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="md:justify-start">
+            <Link to="/library/stats">{localize('com_library_stats_link')}</Link>
           </Button>
 
           <PinnedViews
@@ -546,7 +602,7 @@ export default function LibraryView() {
               folder: folder || undefined,
               sort,
             }}
-            canPin={!query}
+            canPin={!query && !status}
             onOpen={openView}
           />
         </nav>
@@ -589,6 +645,8 @@ export default function LibraryView() {
               aria-label={localize('com_library_upload')}
             />
           </form>
+
+          <BooksTools />
 
           <Input
             ref={searchInput}
@@ -642,7 +700,7 @@ export default function LibraryView() {
             </>
           )}
 
-          {!query && location === 'inbox' && !tag && !folder && !kind && <Shelves />}
+          {!query && location === 'inbox' && !tag && !folder && !kind && !status && <Shelves />}
 
           {rows.length > 0 && (
             <div

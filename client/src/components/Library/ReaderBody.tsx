@@ -14,9 +14,12 @@ import {
 } from '~/utils/libraryAnchors';
 import { useCreateLibraryHighlightMutation, useSetLibraryProgressMutation } from '~/data-provider';
 import { OUTLINE_SELECTOR } from '~/utils/libraryOutline';
+import { useReadingSession } from './useReadingSession';
 import HighlightToolbar from './HighlightToolbar';
 import { NotificationSeverity } from '~/common';
+import { useReadAloud } from './useReadAloud';
 import { libraryErrorKey } from './errors';
+import ReadAloudBar from './ReadAloudBar';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
@@ -49,6 +52,8 @@ type ReaderBodyProps = {
   unitCount?: number;
   /** Where the reader was last time, if it is still meaningful. */
   resumeAt?: number;
+  /** The language of the text, to prefer voices of it when reading aloud. */
+  documentLang?: string;
   /** Gives the parent a way to scroll to a highlight. */
   registerHandle?: (handle: ReaderBodyHandle | null) => void;
   className?: string;
@@ -72,6 +77,7 @@ function ReaderBody({
   unitCount,
   highlightingDisabledReason,
   resumeAt,
+  documentLang,
   registerHandle,
   className,
 }: ReaderBodyProps) {
@@ -94,6 +100,17 @@ function ReaderBody({
   const setProgress = useSetLibraryProgressMutation();
 
   const canHighlight = highlightingDisabledReason == null && aligned;
+
+  const readAloud = useReadAloud({ text: anchorText, lang: documentLang, content, scroller });
+
+  useReadingSession({
+    documentId,
+    content,
+    scroller,
+    anchorText,
+    unitKey: unit ? `${unit.kind}:${unit.index}` : 'document',
+    aligned,
+  });
 
   /** Whether what the browser built is the text the server anchors in. */
   useEffect(() => {
@@ -326,7 +343,7 @@ function ReaderBody({
         )}
         {pending && <HighlightToolbar top={pending.top} left={pending.left} onPick={onPick} />}
       </div>
-      <div className="border-border-light flex shrink-0 items-center gap-3 border-t px-4 py-1.5">
+      <div className="border-border-light flex shrink-0 flex-wrap items-center gap-3 border-t px-4 py-1.5">
         <input
           type="range"
           min={0}
@@ -338,6 +355,7 @@ function ReaderBody({
           className="h-1 min-w-0 flex-1 cursor-pointer accent-current"
           data-testid="library-progress-slider"
         />
+        {readAloud.supported && <ReadAloudBar readAloud={readAloud} />}
         <span className="text-text-secondary min-w-14 shrink-0 text-right text-xs whitespace-nowrap tabular-nums">
           {localize('com_library_progress_percent', { 0: percent })}
         </span>

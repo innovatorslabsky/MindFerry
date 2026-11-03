@@ -39,7 +39,7 @@ export default function PinnedViews({
 }: {
   /** What the list is showing now. */
   current: TLibraryViewFilter;
-  /** Off while searching, since a search is not one of the filters a view keeps. */
+  /** Off while searching or filtering by reading status, which are not filters a view keeps. */
   canPin: boolean;
   onOpen: (filter: TLibraryViewFilter) => void;
 }) {

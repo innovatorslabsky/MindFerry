@@ -22,6 +22,7 @@ import ReaderBody, { type ReaderBodyHandle } from './ReaderBody';
 import { NotificationSeverity } from '~/common';
 import ReaderShortcuts from './ReaderShortcuts';
 import { useShortcuts } from './useShortcuts';
+import ManualBookView from './ManualBookView';
 import PdfPageView from './PdfPageView';
 import AskButtons from './AskButtons';
 import ReaderMenu from './ReaderMenu';
@@ -167,7 +168,7 @@ export default function ReaderView() {
   const documentQuery = useLibraryDocumentQuery(id);
   const data = documentQuery.data;
   const document = data?.document;
-  const isBook = document != null && document.kind !== 'article';
+  const isBook = document != null && (document.kind === 'pdf' || document.kind === 'epub');
   const units = data?.units;
   const articleHtml = document != null && 'contentHtml' in document ? document.contentHtml : '';
   const outline = useMemo(() => (isBook ? [] : outlineOf(articleHtml)), [isBook, articleHtml]);
@@ -238,6 +239,10 @@ export default function ReaderView() {
     );
   }
 
+  if (document.kind === 'manual') {
+    return <ManualBookView document={document} />;
+  }
+
   const unit = isBook ? unitQuery.data?.unit : undefined;
   const isPdf = document.kind === 'pdf';
   const isOriginalLink = /^https?:\/\//i.test(document.normalizedUrl);
@@ -264,6 +269,7 @@ export default function ReaderView() {
         contentHash={document.contentHash}
         highlights={highlights}
         resumeAt={resumeOffset(data.progress, document.contentHash)}
+        documentLang={document.lang}
         registerHandle={registerHandle}
       />
     );
@@ -288,6 +294,7 @@ export default function ReaderView() {
         highlights={highlights}
         unit={{ kind: 'page', index: unit.index }}
         resumeAt={resumeOffset(data.progress, unit.contentHash, unit.index)}
+        documentLang={document.lang}
         registerHandle={registerHandle}
       />
     );
@@ -303,6 +310,7 @@ export default function ReaderView() {
         unit={{ kind: 'chapter', index: unit.index }}
         unitCount={document.unitCount}
         resumeAt={resumeOffset(data.progress, unit.contentHash, unit.index)}
+        documentLang={document.lang}
         registerHandle={registerHandle}
       />
     );

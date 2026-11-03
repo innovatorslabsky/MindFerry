@@ -118,6 +118,88 @@ A row with nothing to show is left out, and both are hidden as soon as you searc
 narrow the list by kind, tag or folder. Books are not on the shelves; they are measured in chapters and
 pages, not minutes.
 
+## Reading status and rating
+
+Each document can carry a **reading status**, like a Goodreads shelf: _Want to read_, _Reading_, _Finished_
+or _Did not finish_, and a rating of one to five stars. Both are set in the Info panel of the reader.
+Pressing the star you already gave takes the rating off, and _No status_ clears the status.
+
+- Opening a document and reading into it (scrolling past the top of an article, or moving to a later
+  chapter or page of a book) puts it on _Reading_ **if it has no status yet**. What you chose yourself is
+  never changed this way, and the list order does not move when it happens.
+- Setting _Finished_ records the date, so "finished this year" can be counted later. Saying _Finished_
+  again keeps the first date, and any other status forgets it.
+- The list has a **status filter** beside the type filter, and each row shows its status. Documents that
+  were never given one are not listed under any status. While a status filter is on, the shelves are
+  hidden and **Pin this view** is off, because a pinned view does not keep a status.
+- The status and rating are the owner's own: they are not part of a public link.
+
+## Reading time and stats
+
+While a document is open in the reader, the library times how long it is really read and how many words go
+by, and keeps it as a **reading session**. Time counts only while the page is in front of you (the tab is
+visible and the window has focus) and you have scrolled, moved, or pressed a key in the last minute and a
+half. Words count only for text that went by on screen: reading back over a passage adds nothing, and a jump
+(a link, the progress slider) is not reading. Silence of five minutes ends a session and the next activity
+starts a new one. Listening counts too, since the page scrolls along.
+
+- The **Info** panel of a document shows how long it has been read, in how many sessions, and lists the
+  latest ones. **Log** adds reading done somewhere else (whole minutes, up to a day); an entry added by hand
+  can be removed again, a measured one cannot.
+- **Reading stats** (in the list's side column) shows the last 7, 30 or 90 days by your own calendar: time
+  and words read, sessions, documents read, documents finished, the longest session, and time read each day.
+  There is no streak or goal: it shows what happened.
+- The reader reports a session every 15 seconds and when the tab is hidden; a closed tab can lose the last few
+  seconds. The server holds each report to what the clock allows and never lets a late report lower a total.
+- A PDF read as page images is not timed; its text view is. A session is private to its owner and is deleted
+  with the document, and with all of a person's library data.
+
+## Books you read elsewhere
+
+**Add a book** (above the list) tracks a book you read on paper, on a Kindle or as an audiobook: a title,
+optionally an author and the number of pages, and where you are with it. It is a document of its own kind
+(_Tracked books_) with no text, so its page is its status, stars, reading time, your note and tags. It can be
+listed, searched by title and filtered like any other, but it cannot be shared, summarized or asked about.
+Finished and set-aside books go to the Archive, books to read to Later, the rest to the Inbox.
+
+**Import from Goodreads** adds the books of a Goodreads library export (_My Books, Import and export, Export
+Library_), sent as the CSV file:
+
+- the shelf becomes the status (`read` is _Finished_, `currently-reading` _Reading_, `to-read` _Want to
+  read_, a shelf named like _did not finish_ or _abandoned_ is _Did not finish_); other shelves have no
+  status. Stars, pages, and the date read (or else the date added) come with it, and the shelves become tags,
+  all of them also tagged `goodreads`;
+- a book already imported is skipped, so importing again adds only new ones and never changes a book you have
+  since edited; a file of more than 5,000 books is read up to that many;
+- the file is read and not kept, and one that is not a Goodreads export is refused.
+
+**Import Kindle highlights** adds the highlights of the `documents/My Clippings.txt` file on a Kindle
+(connect it by USB). Each book becomes one document in the Archive, tagged `kindle`, holding its highlights,
+each of them highlighted in the reader.
+
+- A note goes with the highlight at its location, or else the one before it. Bookmarks, which have no text,
+  are left out. When a highlight was extended later and the Kindle kept both, only the longer one is kept.
+- The file is read by its shape (a title line, a dash line, then the text), so entries written in any language
+  come in; recognising a _note_ as such depends on the word the Kindle used, so in a language not known here
+  a note comes in as a highlight of its own.
+- Importing again, even with a longer file, adds only what is new. Up to 200 books and 3,000 highlights a book
+  are read, and highlights longer than 10,000 characters are left out.
+- The Kindle's own books cannot be imported (they are protected by the publisher); this brings in only what
+  you highlighted.
+
+## Listening
+
+**Listen** (in the bar under the text) reads the text aloud with the voices your device or browser already
+has, starting at the sentence at the top of the screen. It reads a sentence at a time, draws the sentence
+being read and keeps it on screen, and has pause, stop, a speed from 0.75x to 2x and a choice of voice (those
+of the document's language first). The speed and voice are remembered in the browser.
+
+- Nothing is sent anywhere: the voices are the device's, so how natural they sound depends on it. A browser
+  without speech does not show the button, and a device that has no voice installed says so when it cannot read.
+- On a browser without the CSS Custom Highlight API the page still scrolls along but the sentence is not
+  drawn. A PDF read as page images has no text to read, and its text view does.
+- Moving to another chapter or document stops the reading.
+
 ## Daily review
 
 **Daily review** (button above the list, `/library/review`) shows a few old highlights, one card at a

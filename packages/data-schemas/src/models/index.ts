@@ -16,6 +16,7 @@ import { createLibraryDocumentModel } from './libraryDocument';
 import { createLibraryProgressModel } from './libraryProgress';
 import { createLibraryResourceModel } from './libraryResource';
 import { createHubOAuthClientModel } from './hubOAuthClient';
+import { createLibrarySessionModel } from './librarySession';
 import { createAgentCategoryModel } from './agentCategory';
 import { createLibrarySourceModel } from './librarySource';
 import { createLibraryFolderModel } from './libraryFolder';
@@ -92,6 +93,7 @@ export function createModels(mongoose: typeof import('mongoose')): {
   LibraryFolder: ReturnType<typeof createLibraryFolderModel>;
   LibraryView: ReturnType<typeof createLibraryViewModel>;
   LibraryShare: ReturnType<typeof createLibraryShareModel>;
+  LibrarySession: ReturnType<typeof createLibrarySessionModel>;
   AgentCategory: ReturnType<typeof createAgentCategoryModel>;
   MCPServer: ReturnType<typeof createMCPServerModel>;
   Role: ReturnType<typeof createRoleModel>;
@@ -157,6 +159,7 @@ export function createModels(mongoose: typeof import('mongoose')): {
     LibraryFolder: createLibraryFolderModel(mongoose),
     LibraryView: createLibraryViewModel(mongoose),
     LibraryShare: createLibraryShareModel(mongoose),
+    LibrarySession: createLibrarySessionModel(mongoose),
     AgentCategory: createAgentCategoryModel(mongoose),
     MCPServer: createMCPServerModel(mongoose),
     Role: createRoleModel(mongoose),

@@ -210,12 +210,40 @@ export function paintHighlights(
 
 /** Drops the page-wide highlight registrations when the reader goes away. */
 export function releaseHighlights(): void {
+  clearSpeaking();
   const custom = customHighlights();
   if (custom) {
     for (const color of HIGHLIGHT_COLORS) {
       custom.registry.delete(registryName(color));
     }
   }
+}
+
+const SPEAKING = 'library-speaking';
+
+/**
+ * Shows which stretch of the text is being read aloud, with the CSS Custom Highlight API where the
+ * browser has it. Without it nothing is drawn, rather than rewriting the text the highlights sit in.
+ * Returns the range so the caller can keep it in view, or `null` when it could not be placed.
+ */
+export function paintSpeaking(root: Element, start: number, end: number): Range | null {
+  const range = rangeFromOffsets(root, start, end);
+  const custom = customHighlights();
+  if (custom) {
+    if (range) {
+      const highlight = new custom.Highlight(range);
+      // Below the default, so the person's own highlights are drawn over it.
+      (highlight as { priority?: number }).priority = -1;
+      custom.registry.set(SPEAKING, highlight);
+    } else {
+      custom.registry.delete(SPEAKING);
+    }
+  }
+  return range;
+}
+
+export function clearSpeaking(): void {
+  customHighlights()?.registry.delete(SPEAKING);
 }
 
 /** Scrolls the first painted piece of a highlight into view, if it is painted. */

@@ -5,7 +5,8 @@
  */
 
 export type LibraryLocationValue = 'inbox' | 'later' | 'archive' | 'feed';
-export type LibraryKindValue = 'article' | 'pdf' | 'epub';
+export type LibraryKindValue = 'article' | 'pdf' | 'epub' | 'manual';
+export type LibraryReadingStatusValue = 'want' | 'reading' | 'finished' | 'dropped';
 export type LibraryHighlightColorValue = 'yellow' | 'blue' | 'green' | 'red' | 'purple';
 
 export interface LibraryAnchorRecord {
@@ -74,6 +75,8 @@ export interface LibraryDocumentSummary {
   wordCount: number;
   readingMinutes: number;
   unitCount: number;
+  /** Pages of a book tracked by hand, when known. */
+  pages?: number;
   toc: LibraryTocRecord[];
   needsOcr?: boolean;
   truncated?: boolean;
@@ -82,6 +85,10 @@ export interface LibraryDocumentSummary {
   /** The original PDF is kept, so its pages can be shown as images. */
   hasSource: boolean;
   location: LibraryLocationValue;
+  readingStatus?: LibraryReadingStatusValue;
+  /** Whole stars, 1 to 5. */
+  rating?: number;
+  finishedAt?: Date;
   tags: string[];
   folderId?: string;
   fetchedAt: Date;
@@ -161,6 +168,10 @@ export interface LibraryDocumentPatch {
   summary?: string;
   /** A folder id to file the document in, or `null` to take it out of its folder. */
   folderId?: string | null;
+  /** `null` clears it. Setting `finished` records when; any other value forgets that. */
+  readingStatus?: LibraryReadingStatusValue | null;
+  /** Whole stars, 1 to 5; `null` clears it. */
+  rating?: number | null;
 }
 
 export interface LibraryListQuery {
@@ -171,6 +182,8 @@ export interface LibraryListQuery {
   folder?: string;
   /** Only this kind of document. */
   kind?: LibraryKindValue;
+  /** Only documents with this reading status, or only those with none when `'none'`. */
+  status?: LibraryReadingStatusValue | 'none';
   /** Newest change first when left out. */
   sort?: LibrarySortValue;
   limit: number;
@@ -224,6 +237,75 @@ export interface LibraryProgressRecord {
   updatedAt: Date;
 }
 
+/** A book read somewhere else and tracked here by hand. It has no text. */
+export interface LibraryManualBookInput {
+  /** Names the book in the place it came from, so importing the same list twice adds nothing new. */
+  externalId?: string;
+  title: string;
+  byline?: string;
+  pages?: number;
+  readingStatus?: LibraryReadingStatusValue;
+  /** Whole stars, 1 to 5. */
+  rating?: number;
+  finishedAt?: Date;
+  tags?: string[];
+  location?: LibraryLocationValue;
+}
+
+/** One stretch of reading, as its owner sees it. */
+export interface LibrarySessionRecord {
+  id: string;
+  documentId: string;
+  kind: 'auto' | 'manual';
+  startedAt: Date;
+  endedAt: Date;
+  activeSeconds: number;
+  words: number;
+}
+
+/** What the reader reports for a session it is keeping: the totals so far, not what changed. */
+export interface LibrarySessionInput {
+  startedAt: Date;
+  activeSeconds: number;
+  words: number;
+}
+
+/** Reading done somewhere else, logged by hand. */
+export interface LibraryManualSessionInput {
+  minutes: number;
+  words?: number;
+  /** When it happened; now when left out. */
+  date?: Date;
+}
+
+export interface LibrarySessionSummary {
+  sessions: LibrarySessionRecord[];
+  totals: { seconds: number; words: number; sessions: number };
+}
+
+export interface LibraryReadingDay {
+  /** The person's own calendar day, `YYYY-MM-DD`. */
+  date: string;
+  seconds: number;
+  words: number;
+  sessions: number;
+}
+
+export interface LibraryReadingStats {
+  /** One entry per day of the window, oldest first, with zeros for days nothing was read. */
+  days: LibraryReadingDay[];
+  totals: {
+    seconds: number;
+    words: number;
+    sessions: number;
+    /** Different documents read in the window. */
+    documents: number;
+    /** Documents marked finished in the window. */
+    finished: number;
+  };
+  longestSessionSeconds: number;
+}
+
 export interface LibraryDataDeleteResult {
   documents: number;
   highlights: number;
@@ -236,6 +318,7 @@ export interface LibraryDataDeleteResult {
   feeds: number;
   inboxes: number;
   shares: number;
+  sessions: number;
 }
 
 /** A public link to a document, as its owner sees it. */
