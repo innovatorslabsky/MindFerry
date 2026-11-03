@@ -11,7 +11,7 @@ export interface ExportDocument {
   byline?: string;
   siteName?: string;
   normalizedUrl: string;
-  kind: 'article' | 'pdf' | 'epub';
+  kind: 'article' | 'pdf' | 'epub' | 'manual';
 }
 
 export interface ExportHighlight {

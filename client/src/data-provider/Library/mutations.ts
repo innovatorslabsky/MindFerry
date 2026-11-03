@@ -44,6 +44,39 @@ export const useUploadLibraryFileMutation = (
   });
 };
 
+/** Adds a book to track by hand. */
+export const useAddLibraryBookMutation = (
+  options?: t.MutationOptions<{ document: t.TLibraryDocumentSummary }, t.TLibraryBookDraft>,
+): UseMutationResult<
+  { document: t.TLibraryDocumentSummary },
+  unknown,
+  t.TLibraryBookDraft,
+  unknown
+> => {
+  const refresh = useRefreshLibraryLists();
+  return useMutation((draft: t.TLibraryBookDraft) => dataService.addLibraryBook(draft), {
+    ...options,
+    onSuccess: (data, variables, context) => {
+      refresh();
+      options?.onSuccess?.(data, variables, context);
+    },
+  });
+};
+
+/** Adds the books of a Goodreads library export. */
+export const useImportLibraryGoodreadsMutation = (
+  options?: t.MutationOptions<t.TLibraryGoodreadsResult, FormData>,
+): UseMutationResult<t.TLibraryGoodreadsResult, unknown, FormData, unknown> => {
+  const refresh = useRefreshLibraryLists();
+  return useMutation((form: FormData) => dataService.importLibraryGoodreads(form), {
+    ...options,
+    onSuccess: (data, variables, context) => {
+      refresh();
+      options?.onSuccess?.(data, variables, context);
+    },
+  });
+};
+
 export type UpdateLibraryDocumentVariables = {
   id: string;
   patch: t.TLibraryDocumentPatch;

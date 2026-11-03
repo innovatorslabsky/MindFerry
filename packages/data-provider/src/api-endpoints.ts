@@ -230,6 +230,10 @@ export const libraryFeedPreview = () => `${BASE_URL}/api/library/feeds/preview`;
 export const libraryExport = (format: 'markdown' | 'csv', documentId?: string) =>
   `${BASE_URL}/api/library/export?format=${format}${documentId ? `&documentId=${encodeURIComponent(documentId)}` : ''}`;
 
+export const libraryBooks = () => `${BASE_URL}/api/library/books`;
+
+export const libraryImportGoodreads = () => `${BASE_URL}/api/library/import/goodreads`;
+
 export const librarySessions = (id: string) =>
   `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/sessions`;
 

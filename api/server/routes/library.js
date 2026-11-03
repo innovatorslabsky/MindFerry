@@ -116,6 +116,36 @@ function handleUpload(req, res, next) {
   });
 }
 
+/** A Goodreads export is plain text, so it is read as the text it is and never parsed as a file type. */
+const csvSingle = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+}).single('file');
+
+function handleCsvUpload(req, res, next) {
+  csvSingle(req, res, (err) => {
+    if (err && err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({
+        error: {
+          message: 'File exceeds the maximum allowed size',
+          type: 'too_large',
+          code: 'too_large',
+        },
+      });
+    }
+    if (err) {
+      return res.status(400).json({
+        error: {
+          message: 'Could not read the upload',
+          type: 'invalid_request',
+          code: 'invalid_request',
+        },
+      });
+    }
+    next();
+  });
+}
+
 router.post('/documents', ...save, handlers.save);
 router.post(
   '/clip',
@@ -193,6 +223,15 @@ router.post(
   librarySaveLimiter,
   handleUpload,
   handlers.upload,
+);
+router.post('/books', ...save, handlers.addBook);
+router.post(
+  '/import/goodreads',
+  requireJwtAuth,
+  configMiddleware,
+  librarySaveLimiter,
+  handleCsvUpload,
+  handlers.importGoodreads,
 );
 router.post('/feeds/preview', ...save, handlers.previewFeed);
 router.get('/export', ...browse, handlers.exportHighlights);

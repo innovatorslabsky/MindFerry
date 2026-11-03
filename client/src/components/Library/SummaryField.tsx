@@ -19,10 +19,13 @@ export default function SummaryField({
   documentId,
   value,
   maxLength,
+  canWrite = true,
 }: {
   documentId: string;
   value: string;
   maxLength: number;
+  /** Off for a document with no text, which a model has nothing to summarize. */
+  canWrite?: boolean;
 }) {
   const localize = useLocalize();
   const { showToast } = useToastContext();
@@ -70,7 +73,7 @@ export default function SummaryField({
         />
       )}
       <div className="flex flex-wrap items-center gap-2">
-        {draft_ ? (
+        {draft_ && (
           <>
             <Button
               type="button"
@@ -85,7 +88,8 @@ export default function SummaryField({
             </Button>
             <p className="text-text-secondary text-xs">{localize('com_library_summary_unsaved')}</p>
           </>
-        ) : (
+        )}
+        {!draft_ && canWrite && (
           <Button
             type="button"
             size="sm"

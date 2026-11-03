@@ -27,6 +27,7 @@ import { isContentFilterError } from '../middleware/contentFilter';
 import { buildSummaryPrompt, cleanSummary } from './summarize';
 import { PdfEncryptedError, PdfError } from './pdf/parsePdf';
 import { EpubDrmError, EpubError } from './epub/parseEpub';
+import { GoodreadsFormatError } from './import/goodreads';
 import { contextHubRateLimitKey } from '../hub/ratelimit';
 import { isInboxToken, parseInboundEmail } from './inbox';
 import { UnsupportedUploadError } from './ingest/upload';
@@ -379,6 +380,8 @@ export interface LibraryHandlers {
   summarize: Handler;
   ask: Handler;
   count: Handler;
+  addBook: Handler;
+  importGoodreads: Handler;
   saveSession: Handler;
   addSession: Handler;
   getSessions: Handler;
@@ -404,6 +407,15 @@ export interface LibraryHandlers {
   removeHighlight: Handler;
   setProgress: Handler;
 }
+
+const bookBodySchema = z.object({
+  title: z.string().trim().min(1).max(300),
+  byline: z.string().trim().max(200).optional(),
+  pages: z.number().int().min(1).max(20_000).optional(),
+  readingStatus: z.enum(READING_STATUSES).optional(),
+  rating: z.number().int().min(1).max(5).optional(),
+  tags: z.array(z.string().trim().min(1).max(64)).max(20).optional(),
+});
 
 const sessionBodySchema = z.object({
   startedAt: z.string().datetime(),
@@ -1067,6 +1079,39 @@ export function createLibraryHandlers({
     res.status(200).json({ count: await serviceFor(req).count(userId) });
   };
 
+  const addBook: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const body = bookBodySchema.safeParse(req.body);
+    if (!body.success) return fail(res, 400, 'invalid_request', 'A title is required');
+    const { byline, ...rest } = body.data;
+    const document = await serviceFor(req).addBook(userId, {
+      ...rest,
+      ...(byline ? { byline } : {}),
+    });
+    res.status(201).json({ document });
+  };
+
+  /** A Goodreads library export, sent as a file; nothing of it is kept but the books it lists. */
+  const importGoodreads: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const bytes = (req as UploadedRequest).file?.buffer;
+    if (!bytes || bytes.length === 0) {
+      return fail(res, 400, 'invalid_request', 'A file is required');
+    }
+    try {
+      const result = await serviceFor(req).importGoodreads(userId, bytes.toString('utf8'));
+      res.status(200).json(result);
+    } catch (error) {
+      if (error instanceof GoodreadsFormatError) {
+        return fail(res, 422, 'invalid_file', 'This is not a Goodreads library export');
+      }
+      logger.error('[library] Could not import a Goodreads export:', error);
+      fail(res, 500, 'internal_error', 'Could not import the file');
+    }
+  };
+
   /** The reader keeps this up to date while a document is open; each report carries the totals so far. */
   const saveSession: Handler = async (req, res) => {
     const userId = gate(req, res);
@@ -1316,6 +1361,8 @@ export function createLibraryHandlers({
     reviewHighlight,
     chat,
     summarize,
+    addBook,
+    importGoodreads,
     saveSession,
     addSession,
     getSessions,

@@ -22,6 +22,7 @@ describe('library routes wiring', () => {
     ['/review/:id', 'post'],
     ['/documents/:id/chat', 'post'],
     ['/stats', 'get'],
+    ['/books', 'post'],
     ['/documents/:id/sessions', 'get'],
     ['/documents/:id/sessions', 'post'],
     ['/documents/:id/sessions/:sid', 'put'],
@@ -99,6 +100,13 @@ describe('library routes wiring', () => {
     expect(find(path, method)?.stack.length).toBe(4);
   });
 
+  it('registers the Goodreads import behind auth, config, a rate limit and the file reader', () => {
+    const route = find('/import/goodreads', 'post');
+    expect(route).toBeDefined();
+    // requireJwtAuth, configMiddleware, limiter, csv reader, handler
+    expect(route.stack.length).toBe(5);
+  });
+
   it('registers the upload behind auth, config, a rate limit and the file parser', () => {
     const route = find('/uploads', 'post');
     expect(route).toBeDefined();
@@ -110,6 +118,8 @@ describe('library routes wiring', () => {
     const db = require('~/models');
     for (const name of [
       'saveLibraryDocument',
+      'importLibraryManualBooks',
+      'createLibraryManualBook',
       'saveLibrarySession',
       'addLibraryManualSession',
       'getLibrarySessions',

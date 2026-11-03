@@ -3782,5 +3782,20 @@
   "com_library_stats_documents": "Documents read",
   "com_library_stats_finished": "Finished",
   "com_library_stats_longest": "Longest session",
-  "com_library_stats_per_day": "Time read each day"
+  "com_library_stats_per_day": "Time read each day",
+  "com_library_kind_manual": "Tracked books",
+  "com_library_kind_manual_one": "Tracked by hand",
+  "com_library_manual_hint": "You read this book somewhere else. Keep its status, rating, reading time and your notes here.",
+  "com_library_add_book": "Add a book",
+  "com_library_add_book_title": "Title",
+  "com_library_add_book_author": "Author",
+  "com_library_add_book_pages": "Pages",
+  "com_library_add_book_save": "Add book",
+  "com_library_add_book_done": "Book added",
+  "com_library_add_book_error": "Couldn't add the book. Try again.",
+  "com_library_goodreads_import": "Import from Goodreads",
+  "com_library_goodreads_hint": "In Goodreads, open My Books, then Import and export, then Export Library. Choose the file you get.",
+  "com_library_goodreads_done": "Added {{0}} books ({{1}} were already here).",
+  "com_library_goodreads_invalid": "That doesn't look like a Goodreads library export.",
+  "com_library_goodreads_error": "Couldn't import the file. Try again."
 }

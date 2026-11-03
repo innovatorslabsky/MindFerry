@@ -27,6 +27,10 @@ jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
   useNavigate: () => mockNavigate,
 }));
+jest.mock('../BooksTools', () => ({
+  __esModule: true,
+  default: () => <div data-testid="books-tools" />,
+}));
 jest.mock('~/hooks/Input', () => ({ useDebounce: (value: string) => value }));
 jest.mock('~/common', () => ({ NotificationSeverity: { ERROR: 'error', SUCCESS: 'success' } }));
 jest.mock('~/data-provider', () => ({
@@ -217,6 +221,28 @@ describe('LibraryView: finding things', () => {
     expect(mockQueryParams).not.toHaveProperty('location');
     expect(screen.queryByRole('group')).not.toBeInTheDocument();
     expect(screen.getByText('com_library_empty_search')).toBeInTheDocument();
+  });
+});
+
+describe('LibraryView: tracked books', () => {
+  it('offers to add one by hand and to import a Goodreads export, and can filter to them', () => {
+    renderView();
+    expect(screen.getByTestId('books-tools')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'com_library_kind_manual' }));
+    expect(mockQueryParams).toMatchObject({ kind: 'manual' });
+  });
+
+  it('shows a book tracked by hand with its pages, not a reading time', () => {
+    mockList = {
+      data: { documents: [doc({ id: 'd9', kind: 'manual', pages: 304, readingMinutes: 0 })] },
+      isLoading: false,
+      isError: false,
+    };
+    renderView();
+    const row = screen.getByTestId('library-row');
+    expect(row).toHaveTextContent('com_library_kind_manual_one');
+    expect(row).toHaveTextContent('com_library_pages:304');
+    expect(row).not.toHaveTextContent('com_library_minutes');
   });
 });
 

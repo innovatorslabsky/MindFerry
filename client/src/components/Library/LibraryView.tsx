@@ -35,6 +35,7 @@ import { useDebounce } from '~/hooks/Input';
 import ExportButtons from './ExportButtons';
 import { libraryErrorKey } from './errors';
 import PinnedViews from './PinnedViews';
+import BooksTools from './BooksTools';
 import FeedsPanel from './FeedsPanel';
 import InboxPanel from './InboxPanel';
 import { useLocalize } from '~/hooks';
@@ -71,6 +72,7 @@ const KIND_FILTERS = [
   { value: 'article', label: 'com_library_kind_article' },
   { value: 'pdf', label: 'com_library_kind_pdf' },
   { value: 'epub', label: 'com_library_kind_epub' },
+  { value: 'manual', label: 'com_library_kind_manual' },
 ] as const;
 
 const SORT_OPTIONS = [
@@ -110,7 +112,6 @@ function DocumentRow({
   });
   const move = (location: TLibraryLocation) =>
     update.mutate({ id: document.id, patch: { location } });
-  const isBook = document.kind !== 'article';
   const row = useRef<HTMLLIElement>(null);
   useEffect(() => {
     if (active) {
@@ -120,13 +121,10 @@ function DocumentRow({
   const meta = [
     document.kind === 'pdf' ? localize('com_library_kind_pdf') : undefined,
     document.kind === 'epub' ? localize('com_library_kind_epub') : undefined,
+    document.kind === 'manual' ? localize('com_library_kind_manual_one') : undefined,
     document.readingStatus ? localize(READING_STATUS_LABEL[document.readingStatus]) : undefined,
     document.siteName ?? document.byline,
-    isBook
-      ? localize(document.kind === 'pdf' ? 'com_library_pages' : 'com_library_chapters', {
-          0: document.unitCount,
-        })
-      : localize('com_library_minutes', { 0: Math.max(1, document.readingMinutes) }),
+    sizeOf(document, localize),
   ].filter(Boolean);
 
   return (
@@ -245,6 +243,23 @@ function DocumentRow({
       </div>
     </li>
   );
+}
+
+/** How long or how big a document is, in the words that suit its kind. */
+function sizeOf(
+  document: TLibraryDocumentSummary,
+  localize: ReturnType<typeof useLocalize>,
+): string | undefined {
+  if (document.kind === 'manual') {
+    return document.pages ? localize('com_library_pages', { 0: document.pages }) : undefined;
+  }
+  if (document.kind === 'pdf') {
+    return localize('com_library_pages', { 0: document.unitCount });
+  }
+  if (document.kind === 'epub') {
+    return localize('com_library_chapters', { 0: document.unitCount });
+  }
+  return localize('com_library_minutes', { 0: Math.max(1, document.readingMinutes) });
 }
 
 /** Your saved reading: paste an address or upload a PDF or EPUB, then pick something to read. */
@@ -630,6 +645,8 @@ export default function LibraryView() {
               aria-label={localize('com_library_upload')}
             />
           </form>
+
+          <BooksTools />
 
           <Input
             ref={searchInput}

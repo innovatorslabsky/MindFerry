@@ -6,7 +6,8 @@ export type LibraryLocation = (typeof LIBRARY_LOCATIONS)[number];
 export const LIBRARY_READING_STATUSES = ['want', 'reading', 'finished', 'dropped'] as const;
 export type LibraryReadingStatus = (typeof LIBRARY_READING_STATUSES)[number];
 
-export const LIBRARY_KINDS = ['article', 'pdf', 'epub'] as const;
+/** `manual` is a book the person reads somewhere else and only tracks here: it has no text. */
+export const LIBRARY_KINDS = ['article', 'pdf', 'epub', 'manual'] as const;
 export type LibraryKind = (typeof LIBRARY_KINDS)[number];
 
 export interface ILibraryTocEntry {
@@ -50,6 +51,8 @@ export interface ILibraryDocument extends Document {
   readingMinutes: number;
   /** Chapters (EPUB) or pages (PDF); 0 for an article. */
   unitCount: number;
+  /** How many pages a tracked-by-hand book has, when known. */
+  pages?: number;
   toc: ILibraryTocEntry[];
   /** A PDF with almost no text: probably scanned images, and not searchable until OCR exists. */
   needsOcr?: boolean;
@@ -99,6 +102,7 @@ const libraryDocumentSchema: Schema<ILibraryDocument> = new Schema(
     wordCount: { type: Number, required: true, default: 0 },
     readingMinutes: { type: Number, required: true, default: 0 },
     unitCount: { type: Number, required: true, default: 0 },
+    pages: { type: Number, min: 1 },
     toc: {
       type: [
         new Schema<ILibraryTocEntry>(

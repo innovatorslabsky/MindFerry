@@ -25,6 +25,7 @@ export function createFakeLibraryMethods() {
   const sources = new Map<string, Uint8Array>();
   const reviews = new Map<string, { reviewedAt: Date; muted: boolean }>();
   const inboxes = new Map<string, { tokenHash: string; createdAt: Date }>();
+  const manualBooks = new Set<string>();
   const sessions = new Map<string, LibrarySessionRecord & { userId: string }>();
   const shares = new Map<
     string,
@@ -244,6 +245,40 @@ export function createFakeLibraryMethods() {
         if (inbox.tokenHash === tokenHash) return { userId };
       }
       return null;
+    },
+    async importLibraryManualBooks(userId, books) {
+      let created = 0;
+      for (const book of books) {
+        const key = `${userId}:${book.externalId ?? nextId()}`;
+        if (manualBooks.has(key)) continue;
+        manualBooks.add(key);
+        created++;
+        const id = nextId();
+        documents.set(id, {
+          id,
+          userId,
+          kind: 'manual',
+          title: book.title,
+          ...(book.byline ? { byline: book.byline } : {}),
+          ...(book.pages ? { pages: book.pages } : {}),
+          ...(book.readingStatus ? { readingStatus: book.readingStatus } : {}),
+          ...(book.rating ? { rating: book.rating } : {}),
+          location: book.location ?? 'inbox',
+          tags: book.tags ?? [],
+          text: '',
+          contentHtml: '',
+        } as never);
+      }
+      return { created, existing: books.length - created };
+    },
+    async createLibraryManualBook(userId, book) {
+      await this.importLibraryManualBooks(userId, [
+        { ...book, externalId: book.externalId ?? nextId() },
+      ]);
+      const found = [...documents.values()]
+        .filter((d) => d.userId === userId && d.kind === 'manual')
+        .pop();
+      return { ...found! } as never;
     },
     async saveLibrarySession(userId, documentId, sid, input, now = new Date()) {
       if (documents.get(documentId)?.userId !== userId) return null;

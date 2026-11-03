@@ -1108,6 +1108,16 @@ export async function exportLibraryHighlights(
   };
 }
 
+export function addLibraryBook(
+  draft: t.TLibraryBookDraft,
+): Promise<{ document: t.TLibraryDocumentSummary }> {
+  return request.post(endpoints.libraryBooks(), draft);
+}
+
+export function importLibraryGoodreads(data: FormData): Promise<t.TLibraryGoodreadsResult> {
+  return request.postMultiPart(endpoints.libraryImportGoodreads(), data);
+}
+
 export function saveLibrarySession(
   id: string,
   sid: string,

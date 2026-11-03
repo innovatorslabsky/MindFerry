@@ -1698,3 +1698,119 @@ describe('reading sessions', () => {
     });
   });
 });
+
+describe('books tracked by hand', () => {
+  it('adds a book with no text, with what the person knows of it', async () => {
+    const book = await methods.createLibraryManualBook(userA, {
+      title: 'The Left Hand of Darkness',
+      byline: 'Ursula K. Le Guin',
+      pages: 304,
+      readingStatus: 'finished',
+      rating: 5,
+      tags: ['sci-fi'],
+      location: 'archive',
+    });
+    expect(book).toMatchObject({
+      kind: 'manual',
+      title: 'The Left Hand of Darkness',
+      byline: 'Ursula K. Le Guin',
+      pages: 304,
+      readingStatus: 'finished',
+      rating: 5,
+      tags: ['sci-fi'],
+      location: 'archive',
+      unitCount: 0,
+      wordCount: 0,
+    });
+    expect(book.finishedAt).toBeInstanceOf(Date);
+    expect(book.normalizedUrl.startsWith('manual://')).toBe(true);
+
+    const read = await methods.getLibraryDocument(userA, book.id);
+    expect(read?.text).toBe('');
+    expect(read?.contentHtml).toBe('');
+  });
+
+  it('records the date a finished book was finished, and not for one that was not', async () => {
+    const date = new Date('2021-05-01T00:00:00Z');
+    const done = await methods.createLibraryManualBook(userA, {
+      title: 'Done',
+      readingStatus: 'finished',
+      finishedAt: date,
+    });
+    expect(done.finishedAt?.getTime()).toBe(date.getTime());
+    const want = await methods.createLibraryManualBook(userA, {
+      title: 'Later',
+      readingStatus: 'want',
+      finishedAt: date,
+    });
+    expect(want.finishedAt).toBeUndefined();
+  });
+
+  it('is a new book each time unless it says where it came from', async () => {
+    const a = await methods.createLibraryManualBook(userA, { title: 'Same title' });
+    const b = await methods.createLibraryManualBook(userA, { title: 'Same title' });
+    expect(a.id).not.toBe(b.id);
+
+    const x = await methods.createLibraryManualBook(userA, { title: 'X', externalId: 'gr-1' });
+    const y = await methods.createLibraryManualBook(userA, { title: 'Y', externalId: 'gr-1' });
+    expect(y.id).toBe(x.id);
+    expect(y.title).toBe('X');
+  });
+
+  it('imports many at once, adds only the new ones, and leaves a book already there as it is', async () => {
+    const first = await methods.importLibraryManualBooks(userA, [
+      { title: 'One', externalId: '1', readingStatus: 'want' },
+      { title: 'Two', externalId: '2' },
+    ]);
+    expect(first).toEqual({ created: 2, existing: 0 });
+
+    const [one] = await methods.listLibraryDocuments(userA, { limit: 10, sort: 'title' });
+    await methods.updateLibraryDocument(userA, one.id, { readingStatus: 'finished', rating: 4 });
+
+    const again = await methods.importLibraryManualBooks(userA, [
+      { title: 'One', externalId: '1', readingStatus: 'want' },
+      { title: 'Three', externalId: '3' },
+    ]);
+    expect(again).toEqual({ created: 1, existing: 1 });
+    const kept = await methods.getLibraryDocument(userA, one.id);
+    expect(kept).toMatchObject({ readingStatus: 'finished', rating: 4 });
+    expect(await mongoose.models.LibraryDocument.countDocuments({ kind: 'manual' })).toBe(3);
+  });
+
+  it('keeps one person’s import apart from another’s, even for the same book', async () => {
+    await methods.importLibraryManualBooks(userA, [{ title: 'Shared', externalId: 'gr-9' }]);
+    const other = await methods.importLibraryManualBooks(userB, [
+      { title: 'Shared', externalId: 'gr-9' },
+    ]);
+    expect(other.created).toBe(1);
+    expect(await methods.listLibraryDocuments(userB, { limit: 10 })).toHaveLength(1);
+  });
+
+  it('takes more than one batch', async () => {
+    const books = Array.from({ length: 1100 }, (_, i) => ({
+      title: `Book ${i}`,
+      externalId: `b${i}`,
+    }));
+    expect(await methods.importLibraryManualBooks(userA, books)).toEqual({
+      created: 1100,
+      existing: 0,
+    });
+  });
+
+  it('can be found by title, filtered by status, and given sessions, but not shared', async () => {
+    const book = await methods.createLibraryManualBook(userA, {
+      title: 'Wanderlust and other afflictions',
+      readingStatus: 'reading',
+    });
+    const found = await methods.searchLibraryDocuments(userA, 'wanderlust', 10);
+    expect(found.map((d) => d.id)).toEqual([book.id]);
+    const reading = await methods.listLibraryDocuments(userA, { status: 'reading', limit: 10 });
+    expect(reading.map((d) => d.id)).toEqual([book.id]);
+
+    const session = await methods.addLibraryManualSession(userA, book.id, { minutes: 30 });
+    expect(session?.kind).toBe('manual');
+    expect(
+      await methods.upsertLibraryShare(userA, book.id, { includeHighlights: false }),
+    ).toBeNull();
+  });
+});

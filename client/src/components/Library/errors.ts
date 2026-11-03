@@ -37,6 +37,7 @@ const MESSAGES: Record<string, TranslationKeys> = {
   no_matches: 'com_library_ask_library_no_matches',
   empty_library: 'com_library_ask_library_empty',
   empty_document: 'com_library_ask_empty',
+  invalid_file: 'com_library_goodreads_invalid',
 };
 
 /** A message the person can act on for a failed save, upload or highlight. */

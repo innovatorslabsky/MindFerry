@@ -22,6 +22,7 @@ import type {
   LibraryResourceRecord,
   LibraryUnitRecord,
   LibraryUnitSummary,
+  LibraryManualBookInput,
   LibraryManualSessionInput,
   LibraryReadingStats,
   LibrarySessionInput,
@@ -43,6 +44,7 @@ import { EXPORT_MAX_HIGHLIGHTS, highlightsToCsv, highlightsToMarkdown } from './
 import { emailKey, generateInboxToken, hashInboxToken, textToHtml } from './inbox';
 import { DEFAULT_REVIEW_PER_DAY, MAX_REVIEW_EXTRA, startOfDay } from './review';
 import { ASK_LIMITS, MIN_CHARS_PER_DOCUMENT, needsTopic } from './ask';
+import { locationFor, parseGoodreadsCsv } from './import/goodreads';
 import { createAnchor, resolveAnchor } from './anchor/textQuote';
 import { fetchFeed, subscribeToUrl } from './feed/fetchFeed';
 import { saveHtml, saveUrl } from './ingest/saveDocument';
@@ -100,6 +102,8 @@ type Methods = Pick<
   | 'upsertLibraryShare'
   | 'deleteLibraryShare'
   | 'findLibraryShareByToken'
+  | 'importLibraryManualBooks'
+  | 'createLibraryManualBook'
   | 'saveLibrarySession'
   | 'addLibraryManualSession'
   | 'getLibrarySessions'
@@ -332,6 +336,13 @@ export interface LibraryService {
   deleteShare: (userId: string, documentId: string) => Promise<boolean>;
   /** What a public token points at, from any tenant; `null` if no link has it. */
   findShare: (token: string) => Promise<LibraryShareTarget | null>;
+  /** Adds a book to track by hand: one read somewhere else, with no text here. */
+  addBook: (userId: string, input: ManualBookDraft) => Promise<LibraryDocumentSummary>;
+  /**
+   * Adds the books of a Goodreads library export, skipping ones already imported. Throws
+   * `GoodreadsFormatError` for a file that is not one.
+   */
+  importGoodreads: (userId: string, csv: string) => Promise<GoodreadsResult>;
   /** Records the reading time of a session the reader is keeping; `null` if it is not theirs to write. */
   saveSession: (
     userId: string,
@@ -363,6 +374,24 @@ export interface LibraryService {
     textOffset: number,
     unitIndex?: number,
   ) => Promise<LibraryProgressRecord | null>;
+}
+
+/** What a person types in to add a book by hand. */
+export interface ManualBookDraft {
+  title: string;
+  byline?: string;
+  pages?: number;
+  readingStatus?: LibraryManualBookInput['readingStatus'];
+  rating?: number;
+  tags?: string[];
+}
+
+export interface GoodreadsResult {
+  created: number;
+  /** Books the person already had from an earlier import. */
+  existing: number;
+  /** Rows with no title, or past the limit. */
+  skipped: number;
 }
 
 /** How many of a document's latest sessions the Info panel lists. */
@@ -606,7 +635,7 @@ export function createLibraryService({
       const book = uploadToBook(bytes, await readUpload(bytes), new Date());
       const tags = autoTag
         ? suggestTags({
-            kind: book.kind ?? 'epub',
+            kind: book.kind === 'pdf' ? 'pdf' : 'epub',
             title: book.title,
             text: book.text,
             lang: book.lang,
@@ -840,6 +869,19 @@ export function createLibraryService({
 
     findShare(token: string) {
       return methods.findLibraryShareByToken(token);
+    },
+
+    addBook(userId: string, input: ManualBookDraft) {
+      return methods.createLibraryManualBook(userId, {
+        ...input,
+        location: locationFor(input.readingStatus),
+      });
+    },
+
+    async importGoodreads(userId: string, csv: string) {
+      const { books, skipped } = parseGoodreadsCsv(csv);
+      const { created, existing } = await methods.importLibraryManualBooks(userId, books);
+      return { created, existing, skipped };
     },
 
     saveSession(userId: string, documentId: string, sid: string, input: LibrarySessionInput) {

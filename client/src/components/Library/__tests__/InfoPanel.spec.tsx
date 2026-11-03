@@ -88,6 +88,21 @@ describe('InfoPanel: details', () => {
     expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
   });
 
+  it('describes a book tracked by hand by its pages, and offers no AI summary of a text it does not have', () => {
+    render(
+      <InfoPanel
+        document={doc({ kind: 'manual', pages: 304, normalizedUrl: 'manual://abc', wordCount: 0 })}
+      />,
+    );
+    expect(screen.getByText('com_library_kind_manual')).toBeInTheDocument();
+    expect(screen.getByText('com_library_pages:304')).toBeInTheDocument();
+    expect(screen.queryByText('com_library_summary_write')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+
+    render(<InfoPanel document={doc()} />);
+    expect(screen.getByText('com_library_summary_write')).toBeInTheDocument();
+  });
+
   it('carries the reading time of this document, and its reading status', () => {
     render(<InfoPanel document={doc({ id: 'd7' })} />);
     expect(screen.getByTestId('sessions-section')).toHaveTextContent('d7');

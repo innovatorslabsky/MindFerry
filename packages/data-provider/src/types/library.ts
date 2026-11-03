@@ -1,7 +1,8 @@
 /** The reading library: saved articles, PDFs and EPUBs, their highlights, and reading position. */
 
 export type TLibraryLocation = 'inbox' | 'later' | 'archive' | 'feed';
-export type TLibraryKind = 'article' | 'pdf' | 'epub';
+/** `manual` is a book read somewhere else and tracked here by hand; it has no text. */
+export type TLibraryKind = 'article' | 'pdf' | 'epub' | 'manual';
 export type TLibraryReadingStatus = 'want' | 'reading' | 'finished' | 'dropped';
 export type TLibraryHighlightColor = 'yellow' | 'blue' | 'green' | 'red' | 'purple';
 
@@ -37,6 +38,8 @@ export type TLibraryDocumentSummary = {
   readingMinutes: number;
   /** Chapters (EPUB) or pages (PDF); 0 for an article. */
   unitCount: number;
+  /** Pages of a book tracked by hand, when known. */
+  pages?: number;
   toc: TLibraryTocEntry[];
   /** A PDF with almost no text: probably scanned images. */
   needsOcr?: boolean;
@@ -414,4 +417,22 @@ export type TLibraryReadingStats = {
     finished: number;
   };
   longestSessionSeconds: number;
+};
+
+/** A book to track by hand. */
+export type TLibraryBookDraft = {
+  title: string;
+  byline?: string;
+  pages?: number;
+  readingStatus?: TLibraryReadingStatus;
+  rating?: number;
+  tags?: string[];
+};
+
+export type TLibraryGoodreadsResult = {
+  created: number;
+  /** Books already there from an earlier import. */
+  existing: number;
+  /** Rows with no title, or past the limit. */
+  skipped: number;
 };

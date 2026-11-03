@@ -5,7 +5,7 @@
  */
 
 export type LibraryLocationValue = 'inbox' | 'later' | 'archive' | 'feed';
-export type LibraryKindValue = 'article' | 'pdf' | 'epub';
+export type LibraryKindValue = 'article' | 'pdf' | 'epub' | 'manual';
 export type LibraryReadingStatusValue = 'want' | 'reading' | 'finished' | 'dropped';
 export type LibraryHighlightColorValue = 'yellow' | 'blue' | 'green' | 'red' | 'purple';
 
@@ -75,6 +75,8 @@ export interface LibraryDocumentSummary {
   wordCount: number;
   readingMinutes: number;
   unitCount: number;
+  /** Pages of a book tracked by hand, when known. */
+  pages?: number;
   toc: LibraryTocRecord[];
   needsOcr?: boolean;
   truncated?: boolean;
@@ -233,6 +235,21 @@ export interface LibraryProgressRecord {
   textOffset: number;
   contentHash: string;
   updatedAt: Date;
+}
+
+/** A book read somewhere else and tracked here by hand. It has no text. */
+export interface LibraryManualBookInput {
+  /** Names the book in the place it came from, so importing the same list twice adds nothing new. */
+  externalId?: string;
+  title: string;
+  byline?: string;
+  pages?: number;
+  readingStatus?: LibraryReadingStatusValue;
+  /** Whole stars, 1 to 5. */
+  rating?: number;
+  finishedAt?: Date;
+  tags?: string[];
+  location?: LibraryLocationValue;
 }
 
 /** One stretch of reading, as its owner sees it. */

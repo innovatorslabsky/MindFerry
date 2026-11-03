@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import type {
   LibraryAnchorRecord,
   LibraryBookInput,
@@ -12,6 +12,7 @@ import type {
   LibraryFolderCreateResult,
   LibraryFolderRecord,
   LibraryFolderRenameResult,
+  LibraryManualBookInput,
   LibraryManualSessionInput,
   LibraryReadingDay,
   LibraryReadingStats,
@@ -253,6 +254,19 @@ export interface LibraryMethods {
   /** What a public token points at, or `null` when no link has that token (any more). */
   findLibraryShareByToken: (token: string) => Promise<LibraryShareTarget | null>;
   /**
+   * Adds books read somewhere else, skipping any whose `externalId` is already there. Nothing the person
+   * has since changed on a book already there is touched.
+   */
+  importLibraryManualBooks: (
+    userId: string,
+    books: LibraryManualBookInput[],
+  ) => Promise<{ created: number; existing: number }>;
+  /** Adds one book to track by hand, and returns it. */
+  createLibraryManualBook: (
+    userId: string,
+    book: LibraryManualBookInput,
+  ) => Promise<LibraryDocumentSummary>;
+  /**
    * Records reading time for a session the reader is keeping. The numbers are totals so far, so a late or
    * repeated report can raise them but never lower them, and they are held to what the clock allows.
    * `null` when the document is not the person's or `sid` is not one the caller may write.
@@ -357,6 +371,7 @@ function toSummary(doc: ILibraryDocument): LibraryDocumentSummary {
     ...(doc.note ? { note: doc.note } : {}),
     ...(doc.summary ? { summary: doc.summary } : {}),
     ...(doc.thumbnailPath ? { thumbnailPath: doc.thumbnailPath } : {}),
+    ...(doc.pages ? { pages: doc.pages } : {}),
     ...(doc.metaEdited ? { metaEdited: true } : {}),
     wordCount: doc.wordCount,
     readingMinutes: doc.readingMinutes,
@@ -1645,6 +1660,79 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     };
   }
 
+  const EMPTY_HASH = createHash('sha256').update('').digest('hex');
+  const MANUAL_BATCH = 500;
+
+  /** The upsert that adds a tracked-by-hand book once, keyed by where it came from or by a fresh name. */
+  function manualBookOp(owner: Types.ObjectId, book: LibraryManualBookInput, now: Date) {
+    const urlKey = createHash('sha256')
+      .update(`manual:${book.externalId ?? randomBytes(SHARE_TOKEN_BYTES).toString('hex')}`)
+      .digest('hex');
+    const finished = book.readingStatus === 'finished';
+    return {
+      urlKey,
+      op: {
+        updateOne: {
+          filter: { userId: owner, urlKey },
+          update: {
+            $setOnInsert: {
+              userId: owner,
+              urlKey,
+              normalizedUrl: `manual://${urlKey.slice(0, 16)}`,
+              kind: 'manual',
+              title: book.title,
+              ...(book.byline ? { byline: book.byline } : {}),
+              ...(book.pages ? { pages: book.pages } : {}),
+              contentHtml: '',
+              text: '',
+              contentHash: EMPTY_HASH,
+              wordCount: 0,
+              readingMinutes: 0,
+              unitCount: 0,
+              toc: [],
+              location: book.location ?? 'inbox',
+              tags: book.tags ?? [],
+              ...(book.readingStatus ? { readingStatus: book.readingStatus } : {}),
+              ...(book.rating ? { rating: book.rating } : {}),
+              ...(finished ? { finishedAt: book.finishedAt ?? now } : {}),
+              fetchedAt: now,
+            },
+          },
+          upsert: true,
+        },
+      },
+    };
+  }
+
+  async function importLibraryManualBooks(
+    userId: string,
+    books: LibraryManualBookInput[],
+  ): Promise<{ created: number; existing: number }> {
+    const owner = toObjectId(userId);
+    const now = new Date();
+    let created = 0;
+    for (let i = 0; i < books.length; i += MANUAL_BATCH) {
+      const ops = books.slice(i, i + MANUAL_BATCH).map((book) => manualBookOp(owner, book, now).op);
+      const result = await tenantSafeBulkWrite(mongoose.models.LibraryDocument, ops);
+      created += result.upsertedCount;
+    }
+    return { created, existing: books.length - created };
+  }
+
+  async function createLibraryManualBook(
+    userId: string,
+    book: LibraryManualBookInput,
+  ): Promise<LibraryDocumentSummary> {
+    const owner = toObjectId(userId);
+    const { urlKey, op } = manualBookOp(owner, book, new Date());
+    await tenantSafeBulkWrite(mongoose.models.LibraryDocument, [op]);
+    const doc = (await mongoose.models.LibraryDocument.findOne(
+      { userId: owner, urlKey },
+      SUMMARY_PROJECTION,
+    ).lean()) as unknown as ILibraryDocument;
+    return toSummary(doc);
+  }
+
   function toSessionRecord(session: ILibrarySession): LibrarySessionRecord {
     return {
       id: session.sid,
@@ -1936,7 +2024,14 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     const owner = toObjectId(userId);
     const doc = toObjectId(documentId);
     // Only a document the person owns can be shared.
-    if (!(await mongoose.models.LibraryDocument.exists({ _id: doc, userId: owner }))) {
+    // Only a document the person owns can be shared, and a book tracked by hand has nothing to show.
+    if (
+      !(await mongoose.models.LibraryDocument.exists({
+        _id: doc,
+        userId: owner,
+        kind: { $ne: 'manual' },
+      }))
+    ) {
       return null;
     }
     const share = (await mongoose.models.LibraryShare.findOneAndUpdate(
@@ -2030,6 +2125,8 @@ export function createLibraryMethods(mongoose: typeof import('mongoose')): Libra
     upsertLibraryShare,
     deleteLibraryShare,
     findLibraryShareByToken,
+    importLibraryManualBooks,
+    createLibraryManualBook,
     saveLibrarySession,
     addLibraryManualSession,
     getLibrarySessions,

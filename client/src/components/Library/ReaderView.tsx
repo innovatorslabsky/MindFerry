@@ -22,6 +22,7 @@ import ReaderBody, { type ReaderBodyHandle } from './ReaderBody';
 import { NotificationSeverity } from '~/common';
 import ReaderShortcuts from './ReaderShortcuts';
 import { useShortcuts } from './useShortcuts';
+import ManualBookView from './ManualBookView';
 import PdfPageView from './PdfPageView';
 import AskButtons from './AskButtons';
 import ReaderMenu from './ReaderMenu';
@@ -167,7 +168,7 @@ export default function ReaderView() {
   const documentQuery = useLibraryDocumentQuery(id);
   const data = documentQuery.data;
   const document = data?.document;
-  const isBook = document != null && document.kind !== 'article';
+  const isBook = document != null && (document.kind === 'pdf' || document.kind === 'epub');
   const units = data?.units;
   const articleHtml = document != null && 'contentHtml' in document ? document.contentHtml : '';
   const outline = useMemo(() => (isBook ? [] : outlineOf(articleHtml)), [isBook, articleHtml]);
@@ -236,6 +237,10 @@ export default function ReaderView() {
         </Button>
       </div>
     );
+  }
+
+  if (document.kind === 'manual') {
+    return <ManualBookView document={document} />;
   }
 
   const unit = isBook ? unitQuery.data?.unit : undefined;
