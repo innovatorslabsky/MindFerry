@@ -234,6 +234,8 @@ export const libraryBooks = () => `${BASE_URL}/api/library/books`;
 
 export const libraryImportGoodreads = () => `${BASE_URL}/api/library/import/goodreads`;
 
+export const libraryImportKindle = () => `${BASE_URL}/api/library/import/kindle`;
+
 export const librarySessions = (id: string) =>
   `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/sessions`;
 

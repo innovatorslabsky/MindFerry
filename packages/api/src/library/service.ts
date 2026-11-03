@@ -42,6 +42,7 @@ import type { InboundEmail } from './inbox';
 import type { ChatSource } from './chat';
 import { EXPORT_MAX_HIGHLIGHTS, highlightsToCsv, highlightsToMarkdown } from './export';
 import { emailKey, generateInboxToken, hashInboxToken, textToHtml } from './inbox';
+import { readingMinutes, sanitizeArticleHtml, totalWords } from './ingest/extract';
 import { DEFAULT_REVIEW_PER_DAY, MAX_REVIEW_EXTRA, startOfDay } from './review';
 import { ASK_LIMITS, MIN_CHARS_PER_DOCUMENT, needsTopic } from './ask';
 import { locationFor, parseGoodreadsCsv } from './import/goodreads';
@@ -49,12 +50,12 @@ import { createAnchor, resolveAnchor } from './anchor/textQuote';
 import { fetchFeed, subscribeToUrl } from './feed/fetchFeed';
 import { saveHtml, saveUrl } from './ingest/saveDocument';
 import { DEFAULT_CHAT_MAX_CHARS, capText } from './chat';
+import { parseKindleClippings } from './import/kindle';
 import { NotReadableError } from './ingest/extract';
 import { fetchThumbnail } from './ingest/image';
 import { urlKey } from './ingest/normalizeUrl';
 import { ingestUpload } from './ingest/upload';
 import { feedItemKey } from './feed/parseFeed';
-import { totalWords } from './ingest/extract';
 import { suggestTags } from './autotag';
 import { uploadToBook } from './book';
 
@@ -343,6 +344,12 @@ export interface LibraryService {
    * `GoodreadsFormatError` for a file that is not one.
    */
   importGoodreads: (userId: string, csv: string) => Promise<GoodreadsResult>;
+  /**
+   * Adds the highlights of a Kindle `My Clippings.txt`: one document per book, holding its highlights, each
+   * highlighted. Doing it again with a longer file adds only what is new. Throws `KindleFormatError` for a
+   * file with no highlights in it.
+   */
+  importKindle: (userId: string, clippings: string) => Promise<KindleResult>;
   /** Records the reading time of a session the reader is keeping; `null` if it is not theirs to write. */
   saveSession: (
     userId: string,
@@ -376,6 +383,15 @@ export interface LibraryService {
   ) => Promise<LibraryProgressRecord | null>;
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 /** What a person types in to add a book by hand. */
 export interface ManualBookDraft {
   title: string;
@@ -384,6 +400,18 @@ export interface ManualBookDraft {
   readingStatus?: LibraryManualBookInput['readingStatus'];
   rating?: number;
   tags?: string[];
+}
+
+export interface KindleResult {
+  /** Books whose highlights were read from the file. */
+  books: number;
+  /** Highlights added; ones that were already there from an earlier import are not counted. */
+  highlights: number;
+  existing: number;
+  /** Highlights that came in with a note. */
+  notes: number;
+  /** Entries with nothing to keep. */
+  skipped: number;
 }
 
 export interface GoodreadsResult {
@@ -882,6 +910,77 @@ export function createLibraryService({
       const { books, skipped } = parseGoodreadsCsv(csv);
       const { created, existing } = await methods.importLibraryManualBooks(userId, books);
       return { created, existing, skipped };
+    },
+
+    async importKindle(userId: string, clippings: string) {
+      const { books, skipped } = parseKindleClippings(clippings);
+      const result: KindleResult = {
+        books: books.length,
+        highlights: 0,
+        existing: 0,
+        notes: 0,
+        skipped,
+      };
+      for (const book of books) {
+        const paragraphs = book.highlights.map((highlight) => highlight.text);
+        // The text is what a browser makes of the markup, so highlights anchored in it line up on screen.
+        const body = paragraphs.join('\n');
+        const normalizedUrl = `kindle://${createHash('sha256')
+          .update(`${book.title}|${book.author ?? ''}`.toLowerCase())
+          .digest('hex')
+          .slice(0, 32)}`;
+        const saved = await persist(
+          userId,
+          {
+            title: book.title,
+            byline: book.author ?? null,
+            excerpt: null,
+            siteName: 'Kindle',
+            lang: null,
+            publishedTime: null,
+            imageUrl: null,
+            canonicalUrl: null,
+            contentHtml: sanitizeArticleHtml(
+              paragraphs.map((text) => `<p>${escapeHtml(text)}</p>`).join('\n'),
+            ),
+            text: body,
+            wordCount: totalWords(body),
+            readingMinutes: readingMinutes(body),
+            contentHash: createHash('sha256').update(body).digest('hex'),
+            sourceUrl: normalizedUrl,
+            normalizedUrl,
+            urlKey: urlKey(normalizedUrl),
+            fetchedAt: new Date().toISOString(),
+          },
+          'archive',
+          ['kindle'],
+          false,
+        );
+        const known = new Set(
+          (await methods.listLibraryHighlights(userId, saved.document.id, 5000)).map(
+            (highlight) => highlight.anchor.exact,
+          ),
+        );
+        let start = 0;
+        for (const highlight of book.highlights) {
+          const end = start + highlight.text.length;
+          const from = start;
+          start = end + 1;
+          if (known.has(highlight.text)) {
+            result.existing++;
+            continue;
+          }
+          await methods.createLibraryHighlight(userId, {
+            documentId: saved.document.id,
+            anchor: createAnchor(body, from, end),
+            contentHash: saved.document.contentHash,
+            ...(highlight.note ? { note: highlight.note.slice(0, 10_000) } : {}),
+          });
+          result.highlights++;
+          if (highlight.note) result.notes++;
+        }
+      }
+      return result;
     },
 
     saveSession(userId: string, documentId: string, sid: string, input: LibrarySessionInput) {

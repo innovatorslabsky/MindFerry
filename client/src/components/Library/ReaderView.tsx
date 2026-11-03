@@ -269,6 +269,7 @@ export default function ReaderView() {
         contentHash={document.contentHash}
         highlights={highlights}
         resumeAt={resumeOffset(data.progress, document.contentHash)}
+        documentLang={document.lang}
         registerHandle={registerHandle}
       />
     );
@@ -293,6 +294,7 @@ export default function ReaderView() {
         highlights={highlights}
         unit={{ kind: 'page', index: unit.index }}
         resumeAt={resumeOffset(data.progress, unit.contentHash, unit.index)}
+        documentLang={document.lang}
         registerHandle={registerHandle}
       />
     );
@@ -308,6 +310,7 @@ export default function ReaderView() {
         unit={{ kind: 'chapter', index: unit.index }}
         unitCount={document.unitCount}
         resumeAt={resumeOffset(data.progress, unit.contentHash, unit.index)}
+        documentLang={document.lang}
         registerHandle={registerHandle}
       />
     );

@@ -9,10 +9,14 @@ import {
   useToastContext,
 } from '@librechat/client';
 import type { TLibraryReadingStatus } from 'librechat-data-provider';
-import { useAddLibraryBookMutation, useImportLibraryGoodreadsMutation } from '~/data-provider';
+import {
+  useAddLibraryBookMutation,
+  useImportLibraryGoodreadsMutation,
+  useImportLibraryKindleMutation,
+} from '~/data-provider';
 import { READING_STATUS_LABEL, READING_STATUSES } from './readingStatus';
+import { libraryErrorCode, libraryErrorKey } from './errors';
 import { NotificationSeverity } from '~/common';
-import { libraryErrorKey } from './errors';
 import { useLocalize } from '~/hooks';
 
 const MAX_PAGES = 20_000;
@@ -112,6 +116,7 @@ export default function BooksTools() {
   const localize = useLocalize();
   const { showToast } = useToastContext();
   const file = useRef<HTMLInputElement>(null);
+  const kindleFile = useRef<HTMLInputElement>(null);
   const [adding, setAdding] = useState(false);
   const importer = useImportLibraryGoodreadsMutation({
     onSuccess: ({ created, existing }) =>
@@ -125,6 +130,34 @@ export default function BooksTools() {
         status: NotificationSeverity.ERROR,
       }),
   });
+
+  const kindle = useImportLibraryKindleMutation({
+    onSuccess: ({ books, highlights, existing }) =>
+      showToast({
+        message: localize('com_library_kindle_done', { 0: highlights, 1: books, 2: existing }),
+        status: NotificationSeverity.SUCCESS,
+      }),
+    onError: (error) =>
+      showToast({
+        message: localize(
+          libraryErrorCode(error) === 'invalid_file'
+            ? 'com_library_kindle_invalid'
+            : 'com_library_kindle_error',
+        ),
+        status: NotificationSeverity.ERROR,
+      }),
+  });
+
+  const onKindleFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const chosen = event.target.files?.[0];
+    event.target.value = '';
+    if (!chosen) {
+      return;
+    }
+    const form = new FormData();
+    form.append('file', chosen);
+    kindle.mutate(form);
+  };
 
   const onFile = (event: React.ChangeEvent<HTMLInputElement>) => {
     const chosen = event.target.files?.[0];
@@ -158,6 +191,29 @@ export default function BooksTools() {
         )}
         {localize('com_library_goodreads_import')}
       </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={kindle.isLoading}
+        title={localize('com_library_kindle_hint')}
+        onClick={() => kindleFile.current?.click()}
+      >
+        {kindle.isLoading ? (
+          <Spinner className="mr-1.5 h-4 w-4" />
+        ) : (
+          <Upload className="mr-1.5 h-4 w-4" aria-hidden="true" />
+        )}
+        {localize('com_library_kindle_import')}
+      </Button>
+      <input
+        ref={kindleFile}
+        type="file"
+        accept=".txt,text/plain"
+        className="hidden"
+        onChange={onKindleFile}
+        data-testid="library-kindle-file"
+      />
       <input
         ref={file}
         type="file"

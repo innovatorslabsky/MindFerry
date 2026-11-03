@@ -19,7 +19,7 @@ const row = (fields: Record<string, string>) => {
 
 describe('parseCsv', () => {
   it('reads commas, doubled quotes and line breaks inside quotes, CRLF, a BOM and a missing last newline', () => {
-    const text = '﻿a,b,c\r\n"x, y","say ""hi""","line\nbreak"\r\n1,2,3';
+    const text = '\uFEFFa,b,c\r\n"x, y","say ""hi""","line\nbreak"\r\n1,2,3';
     expect(parseCsv(text)).toEqual([
       ['a', 'b', 'c'],
       ['x, y', 'say "hi"', 'line\nbreak'],

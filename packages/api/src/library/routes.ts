@@ -32,6 +32,7 @@ import { contextHubRateLimitKey } from '../hub/ratelimit';
 import { isInboxToken, parseInboundEmail } from './inbox';
 import { UnsupportedUploadError } from './ingest/upload';
 import { convertLibraryDocumentToChat } from './chat';
+import { KindleFormatError } from './import/kindle';
 import { NotReadableError } from './ingest/extract';
 import { FeedParseError } from './feed/parseFeed';
 import { MAX_OCR_PAGE_CHARS } from './service';
@@ -382,6 +383,7 @@ export interface LibraryHandlers {
   count: Handler;
   addBook: Handler;
   importGoodreads: Handler;
+  importKindle: Handler;
   saveSession: Handler;
   addSession: Handler;
   getSessions: Handler;
@@ -1112,6 +1114,25 @@ export function createLibraryHandlers({
     }
   };
 
+  /** A Kindle `My Clippings.txt`, sent as a file; its highlights become documents, the file itself is not kept. */
+  const importKindle: Handler = async (req, res) => {
+    const userId = gate(req, res);
+    if (!userId) return;
+    const bytes = (req as UploadedRequest).file?.buffer;
+    if (!bytes || bytes.length === 0) {
+      return fail(res, 400, 'invalid_request', 'A file is required');
+    }
+    try {
+      res.status(200).json(await serviceFor(req).importKindle(userId, bytes.toString('utf8')));
+    } catch (error) {
+      if (error instanceof KindleFormatError) {
+        return fail(res, 422, 'invalid_file', 'This is not a Kindle clippings file');
+      }
+      logger.error('[library] Could not import Kindle clippings:', error);
+      fail(res, 500, 'internal_error', 'Could not import the file');
+    }
+  };
+
   /** The reader keeps this up to date while a document is open; each report carries the totals so far. */
   const saveSession: Handler = async (req, res) => {
     const userId = gate(req, res);
@@ -1363,6 +1384,7 @@ export function createLibraryHandlers({
     summarize,
     addBook,
     importGoodreads,
+    importKindle,
     saveSession,
     addSession,
     getSessions,

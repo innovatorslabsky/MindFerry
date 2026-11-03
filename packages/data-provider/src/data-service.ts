@@ -1118,6 +1118,10 @@ export function importLibraryGoodreads(data: FormData): Promise<t.TLibraryGoodre
   return request.postMultiPart(endpoints.libraryImportGoodreads(), data);
 }
 
+export function importLibraryKindle(data: FormData): Promise<t.TLibraryKindleResult> {
+  return request.postMultiPart(endpoints.libraryImportKindle(), data);
+}
+
 export function saveLibrarySession(
   id: string,
   sid: string,

@@ -94,7 +94,7 @@ export default function ReadingSessions({ documentId }: { documentId: string }) 
           onChange={(event) => setMinutes(event.target.value)}
           placeholder={localize('com_library_session_minutes')}
           aria-label={localize('com_library_session_minutes')}
-          className="w-28"
+          className="w-44"
         />
         <Button type="submit" size="sm" variant="outline" disabled={!valid || add.isLoading}>
           {localize('com_library_session_log')}

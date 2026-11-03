@@ -436,3 +436,14 @@ export type TLibraryGoodreadsResult = {
   /** Rows with no title, or past the limit. */
   skipped: number;
 };
+
+export type TLibraryKindleResult = {
+  /** Books whose highlights were read from the file. */
+  books: number;
+  /** Highlights added; ones already there from an earlier import are not counted. */
+  highlights: number;
+  existing: number;
+  /** Highlights that came in with a note. */
+  notes: number;
+  skipped: number;
+};

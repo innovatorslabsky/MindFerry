@@ -116,14 +116,14 @@ function handleUpload(req, res, next) {
   });
 }
 
-/** A Goodreads export is plain text, so it is read as the text it is and never parsed as a file type. */
-const csvSingle = multer({
+/** A Goodreads export or a Kindle clippings file is plain text: it is read as the text it is, never as a file type. */
+const textSingle = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024, files: 1 },
 }).single('file');
 
-function handleCsvUpload(req, res, next) {
-  csvSingle(req, res, (err) => {
+function handleTextUpload(req, res, next) {
+  textSingle(req, res, (err) => {
     if (err && err.code === 'LIMIT_FILE_SIZE') {
       return res.status(413).json({
         error: {
@@ -230,8 +230,16 @@ router.post(
   requireJwtAuth,
   configMiddleware,
   librarySaveLimiter,
-  handleCsvUpload,
+  handleTextUpload,
   handlers.importGoodreads,
+);
+router.post(
+  '/import/kindle',
+  requireJwtAuth,
+  configMiddleware,
+  librarySaveLimiter,
+  handleTextUpload,
+  handlers.importKindle,
 );
 router.post('/feeds/preview', ...save, handlers.previewFeed);
 router.get('/export', ...browse, handlers.exportHighlights);

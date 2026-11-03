@@ -77,6 +77,20 @@ export const useImportLibraryGoodreadsMutation = (
   });
 };
 
+/** Adds the highlights of a Kindle `My Clippings.txt`. */
+export const useImportLibraryKindleMutation = (
+  options?: t.MutationOptions<t.TLibraryKindleResult, FormData>,
+): UseMutationResult<t.TLibraryKindleResult, unknown, FormData, unknown> => {
+  const refresh = useRefreshLibraryLists();
+  return useMutation((form: FormData) => dataService.importLibraryKindle(form), {
+    ...options,
+    onSuccess: (data, variables, context) => {
+      refresh();
+      options?.onSuccess?.(data, variables, context);
+    },
+  });
+};
+
 export type UpdateLibraryDocumentVariables = {
   id: string;
   patch: t.TLibraryDocumentPatch;

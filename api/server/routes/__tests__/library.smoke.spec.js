@@ -100,12 +100,15 @@ describe('library routes wiring', () => {
     expect(find(path, method)?.stack.length).toBe(4);
   });
 
-  it('registers the Goodreads import behind auth, config, a rate limit and the file reader', () => {
-    const route = find('/import/goodreads', 'post');
-    expect(route).toBeDefined();
-    // requireJwtAuth, configMiddleware, limiter, csv reader, handler
-    expect(route.stack.length).toBe(5);
-  });
+  it.each(['/import/goodreads', '/import/kindle'])(
+    'registers the import %s behind auth, config, a rate limit and the file reader',
+    (path) => {
+      const route = find(path, 'post');
+      expect(route).toBeDefined();
+      // requireJwtAuth, configMiddleware, limiter, text file reader, handler
+      expect(route.stack.length).toBe(5);
+    },
+  );
 
   it('registers the upload behind auth, config, a rate limit and the file parser', () => {
     const route = find('/uploads', 'post');

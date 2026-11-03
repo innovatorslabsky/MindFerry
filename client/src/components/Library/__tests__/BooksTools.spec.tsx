@@ -4,8 +4,13 @@ import { mockClient } from 'test/libraryMocks';
 
 const mockAdd = jest.fn();
 const mockImport = jest.fn();
+const mockKindle = jest.fn();
 const mockToast = jest.fn();
 let addOptions: { onSuccess?: () => void } = {};
+let kindleOptions: {
+  onSuccess?: (data: { books: number; highlights: number; existing: number }) => void;
+  onError?: (error: unknown) => void;
+} = {};
 let importOptions: {
   onSuccess?: (data: { created: number; existing: number; skipped: number }) => void;
   onError?: (error: unknown) => void;
@@ -20,6 +25,10 @@ jest.mock('~/data-provider', () => ({
   useAddLibraryBookMutation: (options: typeof addOptions) => {
     addOptions = options;
     return { mutate: mockAdd, isLoading: false };
+  },
+  useImportLibraryKindleMutation: (options: typeof kindleOptions) => {
+    kindleOptions = options;
+    return { mutate: mockKindle, isLoading: false };
   },
   useImportLibraryGoodreadsMutation: (options: typeof importOptions) => {
     importOptions = options;
@@ -134,6 +143,41 @@ describe('BooksTools: importing from Goodreads', () => {
     expect(screen.getByTestId('library-goodreads-file')).toHaveAttribute(
       'accept',
       expect.stringContaining('.csv'),
+    );
+  });
+});
+
+describe('BooksTools: importing Kindle highlights', () => {
+  it('sends the chosen file, and says how many highlights came in', () => {
+    render(<BooksTools />);
+    const file = new File(['x'], 'My Clippings.txt', { type: 'text/plain' });
+    fireEvent.change(screen.getByTestId('library-kindle-file'), { target: { files: [file] } });
+    const form = mockKindle.mock.calls[0][0] as FormData;
+    expect((form.get('file') as File).name).toBe('My Clippings.txt');
+
+    kindleOptions.onSuccess?.({ books: 4, highlights: 37, existing: 2 });
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'com_library_kindle_done:37,4,2' }),
+    );
+  });
+
+  it('explains a file that is not clippings, and any other failure', () => {
+    render(<BooksTools />);
+    kindleOptions.onError?.({ response: { data: { error: { code: 'invalid_file' } } } });
+    expect(mockToast).toHaveBeenLastCalledWith(
+      expect.objectContaining({ message: 'com_library_kindle_invalid' }),
+    );
+    kindleOptions.onError?.(new Error('network'));
+    expect(mockToast).toHaveBeenLastCalledWith(
+      expect.objectContaining({ message: 'com_library_kindle_error' }),
+    );
+  });
+
+  it('accepts only text files in the picker', () => {
+    render(<BooksTools />);
+    expect(screen.getByTestId('library-kindle-file')).toHaveAttribute(
+      'accept',
+      expect.stringContaining('.txt'),
     );
   });
 });
