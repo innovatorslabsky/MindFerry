@@ -9,6 +9,9 @@ each part. Nothing here touches Railway.
 
 ## Part 1: the status script (safe to do first; changes nothing MindFerry runs)
 
+In the repository these files are under `hostinger/`; the commands below save them on the VPS under
+`/opt/agents/mindferry/scripts/`.
+
 ```bash
 cd /opt/agents/mindferry
 B=https://raw.githubusercontent.com/innovatorslabsky/MindFerry/<commit>/hostinger
@@ -38,12 +41,12 @@ ls -l /home/deploy/tasks/.status/
 
 Expected: `agents.json` (`-rw-r--r--`) and `.cache.json`.
 
-Run it every minute:
+Run it every two minutes (one run takes about 7 seconds, and the page treats a snapshot as current for five minutes):
 
 ```bash
-( crontab -l 2>/dev/null; echo '* * * * * flock -n /tmp/mf-agents-status.lock /usr/bin/python3 /opt/agents/mindferry/scripts/agents-status.py' ) | crontab -
+( crontab -l 2>/dev/null; echo '*/2 * * * * flock -n /tmp/mf-agents-status.lock /usr/bin/python3 /opt/agents/mindferry/scripts/agents-status.py' ) | crontab -
 crontab -l
-sleep 70; ls -l --time-style=full-iso /home/deploy/tasks/.status/agents.json
+sleep 130; ls -l --time-style=full-iso /home/deploy/tasks/.status/agents.json
 ```
 
 To undo: remove that line with `crontab -e`, then `rm -r /home/deploy/tasks/.status`.
@@ -62,6 +65,7 @@ To undo: remove that line with `crontab -e`, then `rm -r /home/deploy/tasks/.sta
          url: http://localhost:9119
        - name: OpenClaw
          url: http://localhost:18789
+     statusStaleSeconds: 300
      tunnelCommand: ssh -L 18789:localhost:18789 -L 9119:localhost:9119 deploy@<vps-address>
    ```
 
