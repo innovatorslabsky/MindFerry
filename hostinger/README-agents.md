@@ -164,14 +164,14 @@ MongoDB and freellmapi must keep their old uptime: only the backend is recreated
 docker compose logs --tail 80 backend | grep -iE 'error|fail|bridge' | head -20
 ./scripts/mf-env.py verify "$BK"
 curl -sS https://mindferry.smartcare.business/health; echo
-curl -sS https://mindferry.smartcare.business/api/config | grep -o '"agentBridgeEnabled":[a-z]*'
+docker compose logs backend 2>&1 | grep -i 'agentBridge' | head -3
 curl -sS -o /dev/null -w 'overview, not signed in (want 401): %{http_code}\n' https://mindferry.smartcare.business/api/bridge/overview
 docker exec mindferry-backend sh -c 'touch /home/deploy/tasks/outbox/.rwtest 2>&1; echo "rc=$?"'
 curl -s -o /dev/null -w 'smartcare: %{http_code}\n' https://smartcare.business
 ```
 
 Wanted: no new errors (the three known warnings about credentials, web search and RAG stay);
-`ENV_VERIFY_OK`; `OK`; `"agentBridgeEnabled":true`; `401`; the `touch` in `outbox` fails with
+`ENV_VERIFY_OK`; `OK`; the start-up log shows the `agentBridge` settings with `enabled: true`; `401`; the `touch` in `outbox` fails with
 "Read-only file system" and `rc=1`; `smartcare: 200`.
 
 Then, in the browser as the admin: see "What the page should show" below.

@@ -183,6 +183,20 @@ describe('GET /api/config', () => {
       expect(response.body).not.toHaveProperty('mcpApps');
     });
 
+    it('does not tell an anonymous caller whether the agent bridge is on', async () => {
+      mockGetAppConfig.mockResolvedValue({
+        ...baseAppConfig,
+        agentBridge: { enabled: true, tasksDir: '/home/deploy/tasks' },
+      });
+      const app = createApp(null);
+
+      const response = await request(app).get('/api/config');
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body).not.toHaveProperty('agentBridgeEnabled');
+      expect(JSON.stringify(response.body)).not.toContain('/home/deploy/tasks');
+    });
+
     it('should strip authenticated-only informational fields from unauthenticated response (#12688)', async () => {
       process.env.ANALYTICS_GTM_ID = 'GTM-XYZ';
       process.env.CUSTOM_FOOTER = 'internal footer text';
@@ -533,6 +547,35 @@ describe('GET /api/config', () => {
       const response = await request(app).get('/api/config');
 
       expect(response.body.contextHubEnabled).toBe(true);
+    });
+
+    it('reports agentBridgeEnabled false unless the operator turned the bridge on', async () => {
+      mockGetAppConfig.mockResolvedValue(baseAppConfig);
+      const off = await request(createApp(mockUser)).get('/api/config');
+      expect(off.body.agentBridgeEnabled).toBe(false);
+
+      mockGetAppConfig.mockResolvedValue({ ...baseAppConfig, agentBridge: { enabled: false } });
+      const disabled = await request(createApp(mockUser)).get('/api/config');
+      expect(disabled.body.agentBridgeEnabled).toBe(false);
+    });
+
+    it('reports agentBridgeEnabled true after login, without exposing the folder or links', async () => {
+      mockGetAppConfig.mockResolvedValue({
+        ...baseAppConfig,
+        agentBridge: {
+          enabled: true,
+          tasksDir: '/home/deploy/tasks',
+          dashboards: [{ name: 'Hermes', url: 'http://localhost:9119' }],
+          tunnelCommand: 'ssh -L 9119:localhost:9119 deploy@host',
+        },
+      });
+      const response = await request(createApp(mockUser)).get('/api/config');
+
+      expect(response.body.agentBridgeEnabled).toBe(true);
+      const text = JSON.stringify(response.body);
+      expect(text).not.toContain('/home/deploy/tasks');
+      expect(text).not.toContain('localhost:9119');
+      expect(text).not.toContain('deploy@host');
     });
 
     it('does not advertise conversation moves unless the effective policy enables them', async () => {
