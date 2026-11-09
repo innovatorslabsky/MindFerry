@@ -51,50 +51,154 @@ sleep 130; ls -l --time-style=full-iso /home/deploy/tasks/.status/agents.json
 
 To undo: remove that line with `crontab -e`, then `rm -r /home/deploy/tasks/.status`.
 
-## Part 2: turn the page on (a change to the running MindFerry: wait for Vincent's go-ahead)
+## Part 2: turn the page on (changes the running MindFerry; backend is away for 1 to 2 minutes)
 
-1. A MindFerry config for this VPS only, so Railway is unaffected. Copy the repo's `librechat.yaml`
-   to `/opt/agents/mindferry/librechat.yaml` and add:
+Do Part 1 first: `/home/deploy/tasks/.status/agents.json` must exist. Run it in `tmux new -As mf-bridge`,
+as `deploy`, from `/opt/agents/mindferry`. Stop and report at the first line that does not match.
 
-   ```yaml
-   agentBridge:
-     enabled: true
-     tasksDir: /home/deploy/tasks
-     dashboards:
-       - name: Hermes
-         url: http://localhost:9119
-       - name: OpenClaw
-         url: http://localhost:18789
-     statusStaleSeconds: 300
-     tunnelCommand: ssh -L 18789:localhost:18789 -L 9119:localhost:9119 deploy@<vps-address>
-   ```
+### 2.0 Before anything
 
-2. In `compose.yaml`, under `backend:`, add mounts. The folder is mounted at the same path the agents
-   see, so the paths written into task files are valid for them. Only `inbox` can be written:
+```bash
+cd /opt/agents/mindferry
+id -un; echo "$HOME"                       # deploy  /home/deploy
+export BK=/home/deploy/backups/mindferry-20261106
+export SHA=<full commit sha Lyra sends>
+for d in inbox processing outbox archive .status; do test -d /home/deploy/tasks/$d && echo "ok $d" || echo "MISSING $d"; done
+ls -l /home/deploy/tasks/.status/agents.json
+docker compose ps
+docker image ls mindferry-backend
+df -h / | tail -1; free -h | sed -n 2p
+```
 
-   ```yaml
-       volumes:
-         - ./librechat.yaml:/app/librechat.yaml:ro
-         - /home/deploy/tasks/inbox:/home/deploy/tasks/inbox
-         - /home/deploy/tasks/processing:/home/deploy/tasks/processing:ro
-         - /home/deploy/tasks/outbox:/home/deploy/tasks/outbox:ro
-         - /home/deploy/tasks/archive:/home/deploy/tasks/archive:ro
-         - /home/deploy/tasks/.status:/home/deploy/tasks/.status:ro
-   ```
+Any `MISSING` means stop: Docker would create the missing folder owned by root.
 
-3. Build the image from the new commit, then replace only the backend:
+### 2.1 Fetch the new source into its own folder (the old `src/` stays for rollback)
 
-   ```bash
-   docker compose build backend
-   docker compose up -d backend
-   ```
+```bash
+cp -p compose.yaml compose.yaml.before-bridge
+mkdir -p ~/incoming && cd ~/incoming
+curl -fsSL -o mindferry-$SHA.tar.gz https://github.com/innovatorslabsky/MindFerry/archive/$SHA.tar.gz
+mkdir -p /opt/agents/mindferry/src-bridge
+tar xzf mindferry-$SHA.tar.gz -C /opt/agents/mindferry/src-bridge --strip-components=1
+cd /opt/agents/mindferry
+sha256sum src-bridge/Dockerfile src-bridge/librechat.yaml src-bridge/api/server/routes/bridge.js src-bridge/packages/api/src/bridge/routes.ts src-bridge/packages/api/src/bridge/store.ts src-bridge/client/src/components/Bridge/BridgeView.tsx
+```
 
-   MongoDB and freellmapi are not touched. The backend is away for about a minute.
+Compare with the hashes Lyra sends. A mismatch means stop.
 
-4. Check: sign in as the admin, the sidebar shows "Agents". Signed out, or as anyone else, the page
-   and `/api/bridge/*` must answer nothing (401, 403, or a redirect home).
+### 2.2 The MindFerry config for this VPS (not in the repository, so Railway is unaffected)
 
-To undo: remove the `agentBridge` block (or set `enabled: false`) and `docker compose up -d backend`.
+```bash
+cp src-bridge/librechat.yaml librechat.yaml
+cat >> librechat.yaml <<'EOF'
+
+# Agent bridge: this VPS only.
+agentBridge:
+  enabled: true
+  tasksDir: /home/deploy/tasks
+  statusStaleSeconds: 300
+  dashboards:
+    - name: Hermes
+      url: http://localhost:9119
+    - name: OpenClaw
+      url: http://localhost:18789
+  tunnelCommand: ssh -L 18789:localhost:18789 -L 9119:localhost:9119 deploy@187.124.141.236
+EOF
+tail -14 librechat.yaml
+```
+
+### 2.3 Edit compose.yaml (a scripted edit that refuses to run if the file is not what is expected)
+
+```bash
+python3 - <<'PY'
+import os
+sha = os.environ["SHA"][:7]
+s = open("compose.yaml", encoding="utf8").read()
+def sub(old, new):
+    global s
+    assert s.count(old) == 1, "unexpected compose.yaml: " + old.strip()
+    s = s.replace(old, new)
+sub("      context: ./src\n", "      context: ./src-bridge\n")
+sub("    image: mindferry-backend:ae40d65\n", "    image: mindferry-backend:bridge-" + sha + "\n")
+sub("    env_file: .env\n", """    env_file: .env
+    volumes:
+      - ./librechat.yaml:/app/librechat.yaml:ro
+      - /home/deploy/tasks/inbox:/home/deploy/tasks/inbox
+      - /home/deploy/tasks/processing:/home/deploy/tasks/processing:ro
+      - /home/deploy/tasks/outbox:/home/deploy/tasks/outbox:ro
+      - /home/deploy/tasks/archive:/home/deploy/tasks/archive:ro
+      - /home/deploy/tasks/.status:/home/deploy/tasks/.status:ro
+""")
+open("compose.yaml", "w", encoding="utf8").write(s)
+PY
+diff compose.yaml.before-bridge compose.yaml
+docker compose -f compose.yaml config -q && echo COMPOSE_OK
+```
+
+Only `inbox` is writable. The diff must show exactly the build folder, the image tag and the six mounts.
+
+### 2.4 Build (about 7 minutes; the running site is not touched)
+
+```bash
+docker compose build backend 2>&1 | tail -15
+docker image ls mindferry-backend
+```
+
+Two tags must be listed: `ae40d65` (the rollback) and `bridge-<sha7>`.
+
+### 2.5 Switch the backend (the only downtime)
+
+```bash
+date -u
+docker compose up -d backend
+for i in $(seq 1 40); do s=$(docker inspect -f '{{.State.Health.Status}}' mindferry-backend); echo "$i $s"; [ "$s" = healthy ] && break; sleep 5; done
+date -u
+docker ps --format '{{.Names}}  {{.Status}}' | grep mindferry
+```
+
+MongoDB and freellmapi must keep their old uptime: only the backend is recreated.
+
+### 2.6 Check
+
+```bash
+docker compose logs --tail 80 backend | grep -iE 'error|fail|bridge' | head -20
+./scripts/mf-env.py verify "$BK"
+curl -sS https://mindferry.smartcare.business/health; echo
+curl -sS https://mindferry.smartcare.business/api/config | grep -o '"agentBridgeEnabled":[a-z]*'
+curl -sS -o /dev/null -w 'overview, not signed in (want 401): %{http_code}\n' https://mindferry.smartcare.business/api/bridge/overview
+docker exec mindferry-backend sh -c 'touch /home/deploy/tasks/outbox/.rwtest 2>&1; echo "rc=$?"'
+curl -s -o /dev/null -w 'smartcare: %{http_code}\n' https://smartcare.business
+```
+
+Wanted: no new errors (the three known warnings about credentials, web search and RAG stay);
+`ENV_VERIFY_OK`; `OK`; `"agentBridgeEnabled":true`; `401`; the `touch` in `outbox` fails with
+"Read-only file system" and `rc=1`; `smartcare: 200`.
+
+Then, in the browser as the admin: see "What the page should show" below.
+
+### Undo
+
+```bash
+cd /opt/agents/mindferry
+cp -p compose.yaml.before-bridge compose.yaml
+docker compose up -d backend
+```
+
+This brings back the old image (`ae40d65`) and drops the mounts and the config file together.
+`src-bridge/`, `librechat.yaml` and the new image can stay or be deleted later.
+
+### What the page should show
+
+1. The sidebar has "Agents". Signed out, `/bridge` goes to the login page.
+2. Two cards, Hermes and OpenClaw: "Running", the version, and "Task poll is working". If the status
+   file is missing or old, the page says so and shows "Unknown" (never "Running").
+3. The tasks the agents already did (for example `readme-summary`) appear as "Done" with "View
+   result"; the result opens as plain text.
+4. New task: Agent Hermes, text "Read /home/deploy/tasks/README.md and write a 3-line summary of it.",
+   output "a 3-line summary". "Preview file" shows `from: kem` and `via: mindferry`; "Create task" adds
+   it to the list as "Waiting" and the file appears in `/home/deploy/tasks/inbox/`.
+5. Within about 11 minutes the task becomes "Running", then "Done", with a result. The page refreshes
+   itself every 20 seconds. Filing the task (moving it to `archive/`) stays a manual step for Kem.
 
 ## What the page can and cannot do
 
