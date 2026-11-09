@@ -1477,3 +1477,4 @@ export type TLangfuseSessionLinkResponse = {
 };
 
 export * from './types/library';
+export * from './types/bridge';

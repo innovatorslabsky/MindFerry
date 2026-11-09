@@ -333,6 +333,7 @@ router.get('/', async function (req, res) {
       compactionEnabled: appConfig?.summarization?.enabled !== false,
       contextHubEnabled: appConfig?.contextHub?.enabled === true,
       libraryEnabled: appConfig?.contextHub?.library?.enabled === true,
+      agentBridgeEnabled: appConfig?.agentBridge?.enabled === true,
       ...(codeEnvironmentDecisionVersion != null ? { codeEnvironmentDecisionVersion } : {}),
       mcpApps: resolveMCPAppsPolicy(
         appConfig?.mcpSettings?.apps,

@@ -8,6 +8,7 @@ import {
   hasActiveFiltersConfig,
   getConfigDefaults,
   contextHubSchema,
+  agentBridgeSchema,
   channelsSchema,
   langfuseConfigSchema,
   skillSyncConfigSchema,
@@ -90,6 +91,23 @@ export function loadContextHubConfig(config: DeepPartial<TCustomConfig>): AppCon
   const parsed = contextHubSchema.safeParse(raw);
   if (!parsed.success) {
     logger.warn('[AppService] Invalid context hub config', parsed.error.flatten());
+    return undefined;
+  }
+
+  return parsed.data;
+}
+
+export function loadAgentBridgeConfig(
+  config: DeepPartial<TCustomConfig>,
+): AppConfig['agentBridge'] {
+  const raw = config.agentBridge;
+  if (!raw || typeof raw !== 'object') {
+    return undefined;
+  }
+
+  const parsed = agentBridgeSchema.safeParse(raw);
+  if (!parsed.success) {
+    logger.warn('[AppService] Invalid agent bridge config', parsed.error.flatten());
     return undefined;
   }
 
@@ -200,6 +218,7 @@ export const AppService = async (params?: {
   const summarization = loadSummarizationConfig(config);
   const skillSync = loadSkillSyncConfig(config);
   const contextHub = loadContextHubConfig(config);
+  const agentBridge = loadAgentBridgeConfig(config);
   const channels = loadChannelsConfig(config);
   const filteredTools = config.filteredTools;
   const includedTools = config.includedTools;
@@ -245,6 +264,7 @@ export const AppService = async (params?: {
     balance,
     skillSync,
     contextHub,
+    agentBridge,
     channels,
     webSearch,
     githubCompare: config.githubCompare,

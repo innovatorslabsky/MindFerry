@@ -777,6 +777,46 @@ export type ContextHubGitTargetConfig = z.infer<typeof contextHubGitTargetSchema
 export type ContextHubSemanticSearchConfig = z.infer<typeof contextHubSemanticSearchSchema>;
 
 /**
+ * The agent bridge: lets an admin see the agents that share a task folder with MindFerry and hand
+ * them work, by writing task files into `<tasksDir>/inbox`. Off by default. The folder is mounted
+ * into the server at the same path the agents see, so the paths written into task files are valid
+ * for them. The server never runs commands and never touches Docker.
+ */
+export const agentBridgeSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    tasksDir: z.string().min(1).max(300).default('/home/deploy/tasks'),
+    /** Longest task text a person can submit, in characters. */
+    maxTaskChars: z.number().int().min(100).max(8000).default(2000),
+    /** Largest result file shown, in bytes; a longer one is cut. */
+    maxResultBytes: z.number().int().min(1024).max(1_048_576).default(131_072),
+    /** How many of the newest tasks the page lists. */
+    listLimit: z.number().int().min(10).max(500).default(100),
+    /** Tasks one person may create per hour. */
+    createPerHour: z.number().int().min(1).max(200).default(10),
+    /** A status snapshot older than this is shown as unknown rather than trusted. */
+    statusStaleSeconds: z.number().int().min(60).max(3600).default(180),
+    /** Links to the agents' own dashboards (they listen on localhost of the host). */
+    dashboards: z
+      .array(
+        z.object({
+          name: z.string().min(1).max(60),
+          url: z
+            .string()
+            .max(300)
+            .regex(/^https?:\/\//i),
+        }),
+      )
+      .max(8)
+      .default([]),
+    /** The command that opens the tunnel to those dashboards, shown as a hint. */
+    tunnelCommand: z.string().max(400).optional(),
+  })
+  .optional();
+
+export type AgentBridgeConfig = z.infer<typeof agentBridgeSchema>;
+
+/**
  * Bridges one Slack workspace's messages to one LibreChat agent, over the
  * existing Remote Agent trigger API — see docs/slack-bridge.md. Off by
  * default; `signingSecret`/`apiKey`/`botToken` are `${ENV_VAR}` references,
@@ -3365,6 +3405,9 @@ export type TStartupConfig = {
   contextHubEnabled?: boolean;
   /** Whether the operator has turned on the reading library (`contextHub.library.enabled`). */
   libraryEnabled?: boolean;
+  /** Whether the operator has turned on the agent bridge (`agentBridge.enabled`). A flag only: the
+   *  page itself is admin-only and answers nothing to anyone else. */
+  agentBridgeEnabled?: boolean;
   /** Conversation-owned code-environment decision protocol supported by the API.
    * Clients must not emit selection-less decisions unless this is advertised. */
   codeEnvironmentDecisionVersion?: typeof CODE_ENVIRONMENT_DECISION_VERSION;
@@ -4084,6 +4127,7 @@ export const configSchema = z.object({
   summarization: summarizationConfigSchema.optional(),
   skillSync: skillSyncConfigSchema,
   contextHub: contextHubSchema,
+  agentBridge: agentBridgeSchema,
   mcpDirectory: mcpDirectorySchema,
   channels: channelsSchema,
   secureImageLinks: z.boolean().optional(),

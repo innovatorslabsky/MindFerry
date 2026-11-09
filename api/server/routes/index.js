@@ -43,6 +43,7 @@ const user = require('./user');
 const mcp = require('./mcp');
 const hub = require('./hub');
 const library = require('./library');
+const bridge = require('./bridge');
 const hubWellKnown = require('./hubWellKnown');
 const rum = require('./rum');
 const insights = require('./insights');
@@ -54,6 +55,7 @@ module.exports = {
   mcp,
   hub,
   library,
+  bridge,
   hubWellKnown,
   slackChannel,
   auth,

@@ -49,6 +49,7 @@ export * from './mcp/directory';
 /* Context Hub */
 export * from './hub';
 export * from './library';
+export * from './bridge';
 export * from './channels';
 /* Utilities */
 export * from './mcp/utils';

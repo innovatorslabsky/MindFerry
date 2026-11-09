@@ -19,6 +19,7 @@ import type {
   SkillSyncConfig,
   FiltersConfig,
   ContextHubConfig,
+  AgentBridgeConfig,
   ChannelsConfig,
 } from 'librechat-data-provider';
 
@@ -80,6 +81,8 @@ export interface AppConfig {
   skillSync?: SkillSyncConfig;
   /** Context hub archive and MCP server configuration */
   contextHub?: ContextHubConfig;
+  /** Task-folder bridge to the agents that run next to the server (admin page) */
+  agentBridge?: AgentBridgeConfig;
   /** External channel bridges (e.g. Slack) into LibreChat's agents */
   channels?: ChannelsConfig;
   /** File storage strategy ('local', 's3', 'firebase', 'azure_blob', 'cloudfront') */
