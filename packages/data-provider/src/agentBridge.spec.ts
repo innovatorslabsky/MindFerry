@@ -15,7 +15,7 @@ describe('agentBridgeSchema', () => {
   });
 
   it('is off by default: an empty block turns nothing on', () => {
-    expect(agentBridgeSchema.parse({}).enabled).toBe(false);
+    expect(agentBridgeSchema.parse({})?.enabled).toBe(false);
     expect(agentBridgeSchema.parse(undefined)).toBeUndefined();
   });
 
