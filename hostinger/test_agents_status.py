@@ -51,7 +51,43 @@ OPENCLAW_JOB = {
 BILLING = "openrouter (anthropic/claude-sonnet-4.6) returned a billing error — check your account's balance"
 
 
+def as_printed(listing):
+    """The listing the way the real CLI printed it on the VPS: a blank first line, the job line
+    indented two spaces and its fields four, which a copy from a chat message loses."""
+    lines = listing.splitlines()
+    return "\n" + "\n".join(("  " + lines[0] if i == 0 else "    " + line.strip()) for i, line in enumerate(lines)) + "\n"
+
+
 class HermesTests(unittest.TestCase):
+    def test_reads_the_listing_as_the_real_cli_prints_it(self):
+        printed = as_printed(HERMES_LIST)
+        self.assertTrue(printed.startswith("\n  a90596dc9e6f [active]\n    Name:"))
+        self.assertEqual(
+            status.parse_hermes_list(printed, "a90596dc9e6f"),
+            {"enabled": True, "lastRunAt": "2026-11-09T13:16:27Z", "lastOk": True},
+        )
+
+    def test_reads_it_with_windows_line_ends_and_a_title_above(self):
+        printed = "Scheduled jobs\r\n" + as_printed(HERMES_LIST).replace("\n", "\r\n")
+        self.assertEqual(status.parse_hermes_list(printed, "a90596dc9e6f")["lastOk"], True)
+
+    def test_each_job_is_read_from_its_own_block(self):
+        other = HERMES_LIST.replace("a90596dc9e6f", "bbbbbbbbbbbb").replace("[active]", "[paused]")
+        other = other.replace("13:16:27.793674+00:00 ok", "12:00:00+00:00 error")
+        both = as_printed(other) + as_printed(HERMES_LIST)
+        self.assertEqual(
+            status.parse_hermes_list(both, "a90596dc9e6f"),
+            {"enabled": True, "lastRunAt": "2026-11-09T13:16:27Z", "lastOk": True},
+        )
+        self.assertEqual(
+            status.parse_hermes_list(both, "bbbbbbbbbbbb"),
+            {"enabled": False, "lastRunAt": "2026-11-09T12:00:00Z", "lastOk": False},
+        )
+
+    def test_a_job_with_no_last_run_yet(self):
+        fresh = "  a90596dc9e6f [active]\n    Name:      tasks-bridge-poll\n    Next run:  2026-11-09T13:26:27+00:00\n"
+        self.assertEqual(status.parse_hermes_list(fresh, "a90596dc9e6f"), {"enabled": True})
+
     def test_reads_an_active_job_whose_last_run_was_ok(self):
         self.assertEqual(
             status.parse_hermes_list(HERMES_LIST, "a90596dc9e6f"),
@@ -177,7 +213,7 @@ class CollectTests(unittest.TestCase):
         "inspect -f {{.State.Status}}|{{.State.StartedAt}} hermes": "running|2026-11-07T01:36:18.5Z\n",
         "inspect -f {{.State.Status}}|{{.State.StartedAt}} openclaw-openclaw-gateway-1": "running|2026-11-07T01:29:39.1Z\n",
         "hermes --version": "Hermes Agent v0.22.7 (2026.9.24)\nPython 3.14.9\n",
-        "hermes cron list": HERMES_LIST,
+        "hermes cron list": as_printed(HERMES_LIST),
         "hermes cron runs": HERMES_RUNS,
         "openclaw --version": "OpenClaw 2026.10.10 (7dc3350)\n",
         "openclaw cron get": json.dumps(OPENCLAW_JOB),

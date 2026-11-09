@@ -16,7 +16,7 @@ curl -fsSL "$B/agents-status.py" -o scripts/agents-status.py
 curl -fsSL "$B/test_agents_status.py" -o scripts/test_agents_status.py
 chmod +x scripts/agents-status.py
 sha256sum scripts/agents-status.py          # compare with the hash Lyra sends
-python3 -m unittest scripts/test_agents_status.py     # 25 tests, no Docker needed
+python3 -m unittest scripts/test_agents_status.py     # 30 tests, no Docker needed
 ```
 
 Look at what it would write, without writing:

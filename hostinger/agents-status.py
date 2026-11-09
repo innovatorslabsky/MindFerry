@@ -81,18 +81,32 @@ def container_info(name):
     return info
 
 
+JOB_HEADER = re.compile(r"^\s*([0-9a-f]{6,})\s+\[([^\]]+)\]\s*$", re.I)
+
+
 def parse_hermes_list(text, job_id):
-    """The block for one job in `hermes cron list`: whether it is active and how its last run went."""
+    """The block for one job in `hermes cron list`: whether it is active and how its last run went.
+
+    A job starts at a line like `  a90596dc9e6f [active]` (indented or not, with blank lines around)
+    and runs to the next such line, so indentation never decides where a block begins.
+    """
     block = None
-    for chunk in re.split(r"\n(?=\S)", text):
-        if chunk.startswith(job_id):
-            block = chunk
-            break
+    state = None
+    for line in text.splitlines():
+        header = JOB_HEADER.match(line)
+        if header:
+            if block is not None:
+                break
+            if header.group(1) == job_id:
+                block, state = [], header.group(2)
+            continue
+        if block is not None:
+            block.append(line)
     if block is None:
         return None
-    head = re.match(r"\S+\s+\[([^\]]+)\]", block)
-    job = {"enabled": bool(head and head.group(1).strip().lower() == "active")}
-    last = re.search(r"^\s*Last run:\s+(\S+)(?:\s+(\S+))?", block, re.M)
+    job = {"enabled": state.strip().lower() == "active"}
+    body = "\n".join(block)
+    last = re.search(r"^\s*Last run:\s+(\S+)(?:\s+(\S+))?", body, re.M)
     if last:
         stamp = iso_text(last.group(1))
         if stamp:
