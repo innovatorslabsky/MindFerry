@@ -6,6 +6,7 @@ import UnifiedSidebar from '../UnifiedSidebar';
 
 /** The library entry reads the startup config, which these tests do not provide; it is covered by its own spec. */
 jest.mock('~/components/Nav/LibraryButton', () => ({ __esModule: true, default: () => null }));
+jest.mock('~/components/Nav/BridgeButton', () => ({ __esModule: true, default: () => null }));
 
 /**
  * A closed drawer is translated off the viewport, which hides it without taking

@@ -25,6 +25,7 @@ import useUnifiedSidebarLinks from '~/hooks/Nav/useUnifiedSidebarLinks';
 import useSidebarToggle from '~/hooks/Nav/useSidebarToggle';
 import LibraryButton from '~/components/Nav/LibraryButton';
 import useSidebarState from '~/hooks/Nav/useSidebarState';
+import BridgeButton from '~/components/Nav/BridgeButton';
 import { useChatHelpers, useLocalize } from '~/hooks';
 import SidePanelNav from '~/components/SidePanel/Nav';
 import Sidebar from './Sidebar';
@@ -280,6 +281,7 @@ function UnifiedSidebar({
           <div className="shrink-0 px-3 pt-2 empty:hidden">
             <AgentMarketplaceButton layout="row" onNavigate={handleCollapse} />
             <LibraryButton layout="row" onNavigate={handleCollapse} />
+            <BridgeButton layout="row" onNavigate={handleCollapse} />
           </div>
           <nav
             id="chat-history-nav"

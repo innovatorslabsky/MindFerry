@@ -245,6 +245,13 @@ export const librarySession = (id: string, sid: string) =>
 export const libraryStats = (days: number, offsetMinutes: number) =>
   `${BASE_URL}/api/library/stats?days=${days}&offset=${offsetMinutes}`;
 
+export const bridgeOverview = () => `${BASE_URL}/api/bridge/overview`;
+
+export const bridgeTasks = () => `${BASE_URL}/api/bridge/tasks`;
+
+export const bridgeResult = (id: string) =>
+  `${BASE_URL}/api/bridge/tasks/${encodeURIComponent(id)}/result`;
+
 export const libraryDocumentShare = (id: string) =>
   `${BASE_URL}/api/library/documents/${encodeURIComponent(id)}/share`;
 

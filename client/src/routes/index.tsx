@@ -63,6 +63,11 @@ const loadLibraryStats = () =>
   importWithRecovery(() => import('~/components/Library')).then((m) => ({
     Component: m.LibraryStatsRoute,
   }));
+const loadBridgeView = () =>
+  importWithRecovery(() => import('~/components/Bridge')).then((m) => ({
+    Component: m.BridgeRoute,
+  }));
+
 const loadLibraryAsk = () =>
   importWithRecovery(() => import('~/components/Library')).then((m) => ({
     Component: m.LibraryAskRoute,
@@ -214,6 +219,10 @@ export const router = createBrowserRouter(
                 {
                   path: 'skills/:skillId/edit',
                   lazy: loadSkillsView,
+                },
+                {
+                  path: 'bridge',
+                  lazy: loadBridgeView,
                 },
                 {
                   path: 'library',

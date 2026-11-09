@@ -1152,6 +1152,18 @@ export function getLibraryStats(
   return request.get(endpoints.libraryStats(days, offsetMinutes));
 }
 
+export function getBridgeOverview(): Promise<t.TBridgeOverview> {
+  return request.get(endpoints.bridgeOverview());
+}
+
+export function getBridgeResult(id: string): Promise<t.TBridgeResult> {
+  return request.get(endpoints.bridgeResult(id));
+}
+
+export function createBridgeTask(body: t.TBridgeCreateRequest): Promise<t.TBridgeCreateResponse> {
+  return request.post(endpoints.bridgeTasks(), body);
+}
+
 export function getLibraryShare(id: string): Promise<t.TLibraryShareResponse> {
   return request.get(endpoints.libraryDocumentShare(id));
 }
