@@ -248,6 +248,10 @@ export const libraryStats = (days: number, offsetMinutes: number) =>
 export const bridgeOverview = () => `${BASE_URL}/api/bridge/overview`;
 
 export const bridgeTasks = () => `${BASE_URL}/api/bridge/tasks`;
+export const bridgeRoles = () => `${BASE_URL}/api/bridge/roles`;
+export const bridgeRole = (id: string) => `${BASE_URL}/api/bridge/roles/${encodeURIComponent(id)}`;
+export const bridgeRoleAssign = (id: string) =>
+  `${BASE_URL}/api/bridge/roles/${encodeURIComponent(id)}/assign`;
 
 export const bridgeResult = (id: string) =>
   `${BASE_URL}/api/bridge/tasks/${encodeURIComponent(id)}/result`;

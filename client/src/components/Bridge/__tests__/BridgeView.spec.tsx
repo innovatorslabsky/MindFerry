@@ -19,6 +19,13 @@ jest.mock('~/hooks', () => ({ useLocalize: () => mockLocalize }));
 jest.mock('~/data-provider', () => ({
   useBridgeOverviewQuery: () => mockOverview,
   useBridgeResultQuery: () => mockResult,
+  /** Roles are off in these tests: the panel answers as the server does and stays hidden. */
+  useBridgeRolesQuery: () => ({
+    data: undefined,
+    isError: true,
+    error: { response: { data: { error: 'BRIDGE_DISABLED' } } },
+    refetch: jest.fn(),
+  }),
   useCreateBridgeTaskMutation: () => ({ mutate: jest.fn(), isLoading: false }),
 }));
 jest.mock('@librechat/client', () => mockBridgeClient);

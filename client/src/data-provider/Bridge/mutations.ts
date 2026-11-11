@@ -19,3 +19,61 @@ export const useCreateBridgeTaskMutation = (
     },
   });
 };
+
+type RoleMutationOptions<TData, TVars> = t.MutationOptions<TData, TVars>;
+
+/** Runs a roles mutation, then refreshes the roles list whether it worked or was refused. */
+function useRolesMutation<TData, TVars>(
+  key: MutationKeys,
+  run: (vars: TVars) => Promise<TData>,
+  options?: RoleMutationOptions<TData, TVars>,
+): UseMutationResult<TData, unknown, TVars, unknown> {
+  const queryClient = useQueryClient();
+  return useMutation(run, {
+    mutationKey: [key],
+    ...options,
+    onSettled: (data, error, variables, context) => {
+      queryClient.invalidateQueries([QueryKeys.bridgeRoles]);
+      options?.onSettled?.(data, error, variables, context);
+    },
+  });
+}
+
+export const useCreateBridgeRoleMutation = (
+  options?: RoleMutationOptions<t.TBridgeRole, t.TBridgeRoleInput>,
+) =>
+  useRolesMutation(
+    MutationKeys.createBridgeRole,
+    (body: t.TBridgeRoleInput) => dataService.createBridgeRole(body),
+    options,
+  );
+
+export const useUpdateBridgeRoleMutation = (
+  options?: RoleMutationOptions<t.TBridgeRole, { id: string; patch: t.TBridgeRolePatch }>,
+) =>
+  useRolesMutation(
+    MutationKeys.updateBridgeRole,
+    ({ id, patch }: { id: string; patch: t.TBridgeRolePatch }) =>
+      dataService.updateBridgeRole(id, patch),
+    options,
+  );
+
+export const useDeleteBridgeRoleMutation = (options?: RoleMutationOptions<void, string>) =>
+  useRolesMutation(
+    MutationKeys.deleteBridgeRole,
+    (id: string) => dataService.deleteBridgeRole(id),
+    options,
+  );
+
+export const useAssignBridgeRoleMutation = (
+  options?: RoleMutationOptions<
+    t.TBridgeAssignResponse,
+    { id: string; body: t.TBridgeAssignRequest }
+  >,
+) =>
+  useRolesMutation(
+    MutationKeys.assignBridgeRole,
+    ({ id, body }: { id: string; body: t.TBridgeAssignRequest }) =>
+      dataService.assignBridgeRole(id, body),
+    options,
+  );

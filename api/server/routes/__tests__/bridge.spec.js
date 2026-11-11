@@ -50,11 +50,20 @@ afterEach(async () => {
 const inboxFiles = () => fs.readdir(path.join(root, 'inbox'));
 
 describe('/api/bridge', () => {
-  it('registers the three routes', () => {
+  it('registers the task and role routes', () => {
     const paths = router.stack
       .filter((layer) => layer.route)
       .map((layer) => `${Object.keys(layer.route.methods)[0]} ${layer.route.path}`);
-    expect(paths).toEqual(['get /overview', 'get /tasks/:id/result', 'post /tasks']);
+    expect(paths).toEqual([
+      'get /overview',
+      'get /tasks/:id/result',
+      'post /tasks',
+      'get /roles',
+      'post /roles',
+      'patch /roles/:id',
+      'delete /roles/:id',
+      'post /roles/:id/assign',
+    ]);
   });
 
   describe('without signing in', () => {

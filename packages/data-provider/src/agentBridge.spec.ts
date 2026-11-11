@@ -11,6 +11,49 @@ describe('agentBridgeSchema', () => {
       createPerHour: 10,
       statusStaleSeconds: 180,
       dashboards: [],
+      roles: {
+        enabled: false,
+        dailyCapPerRole: 6,
+        dailyCapTeam: 25,
+        assignPerHour: 20,
+        maxBriefChars: 4000,
+        maxRoles: 12,
+        fileRolesEnabled: false,
+      },
+    });
+  });
+
+  describe('roles', () => {
+    it('are off, with the agreed daily caps, until the operator turns them on', () => {
+      const roles = agentBridgeSchema.parse({ enabled: true })?.roles;
+      expect(roles).toMatchObject({
+        enabled: false,
+        dailyCapPerRole: 6,
+        dailyCapTeam: 25,
+        fileRolesEnabled: false,
+      });
+    });
+
+    it('take the operator’s own values', () => {
+      const roles = agentBridgeSchema.parse({
+        enabled: true,
+        roles: { enabled: true, dailyCapPerRole: 3, dailyCapTeam: 10, fileRolesEnabled: true },
+      })?.roles;
+      expect(roles).toMatchObject({
+        enabled: true,
+        dailyCapPerRole: 3,
+        dailyCapTeam: 10,
+        fileRolesEnabled: true,
+      });
+    });
+
+    it.each([
+      ['a cap of zero', { dailyCapPerRole: 0 }],
+      ['a fractional cap', { dailyCapTeam: 2.5 }],
+      ['a brief over the hard limit', { maxBriefChars: 16001 }],
+      ['no roles allowed', { maxRoles: 0 }],
+    ])('reject %s', (_label, roles) => {
+      expect(agentBridgeSchema.safeParse({ enabled: true, roles }).success).toBe(false);
     });
   });
 

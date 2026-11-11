@@ -159,7 +159,23 @@ function composeInput(role: BridgeRoleRecord, task: string): string {
   return parts.join('\n\n');
 }
 
-export function createRolesService(deps: RolesDeps) {
+export interface RolesService {
+  createRole: (actor: RolesActor, input: TBridgeRoleInput) => Promise<RolesResult<TBridgeRole>>;
+  updateRole: (
+    actor: RolesActor,
+    id: string,
+    patch: TBridgeRolePatch,
+  ) => Promise<RolesResult<TBridgeRole>>;
+  deleteRole: (userId: string, id: string) => Promise<RolesResult<true>>;
+  overview: (userId: string) => Promise<TBridgeRolesOverview>;
+  assign: (
+    actor: RolesActor,
+    roleId: string,
+    request: { requestId: string; task: string },
+  ) => Promise<RolesResult<TBridgeAssignResponse>>;
+}
+
+export function createRolesService(deps: RolesDeps): RolesService {
   const { methods } = deps;
   const now = () => (deps.now ? deps.now() : new Date());
   const newId = deps.newId ?? randomUUID;
@@ -514,5 +530,3 @@ export function createRolesService(deps: RolesDeps) {
 
   return { createRole, updateRole, deleteRole, overview, assign };
 }
-
-export type RolesService = ReturnType<typeof createRolesService>;

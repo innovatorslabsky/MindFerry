@@ -1164,6 +1164,29 @@ export function createBridgeTask(body: t.TBridgeCreateRequest): Promise<t.TBridg
   return request.post(endpoints.bridgeTasks(), body);
 }
 
+export function getBridgeRoles(): Promise<t.TBridgeRolesOverview> {
+  return request.get(endpoints.bridgeRoles());
+}
+
+export function createBridgeRole(body: t.TBridgeRoleInput): Promise<t.TBridgeRole> {
+  return request.post(endpoints.bridgeRoles(), body);
+}
+
+export function updateBridgeRole(id: string, body: t.TBridgeRolePatch): Promise<t.TBridgeRole> {
+  return request.patch(endpoints.bridgeRole(id), body);
+}
+
+export function deleteBridgeRole(id: string): Promise<void> {
+  return request.delete(endpoints.bridgeRole(id));
+}
+
+export function assignBridgeRole(
+  id: string,
+  body: t.TBridgeAssignRequest,
+): Promise<t.TBridgeAssignResponse> {
+  return request.post(endpoints.bridgeRoleAssign(id), body);
+}
+
 export function getLibraryShare(id: string): Promise<t.TLibraryShareResponse> {
   return request.get(endpoints.libraryDocumentShare(id));
 }

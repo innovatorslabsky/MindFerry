@@ -52,6 +52,7 @@ export enum QueryKeys {
   libraryThumbnail = 'libraryThumbnail',
   bridgeOverview = 'bridgeOverview',
   bridgeResult = 'bridgeResult',
+  bridgeRoles = 'bridgeRoles',
   assistants = 'assistants',
   assistant = 'assistant',
   agents = 'agents',
@@ -149,6 +150,10 @@ export const DynamicQueryKeys = {
 
 export enum MutationKeys {
   createBridgeTask = 'createBridgeTask',
+  createBridgeRole = 'createBridgeRole',
+  updateBridgeRole = 'updateBridgeRole',
+  deleteBridgeRole = 'deleteBridgeRole',
+  assignBridgeRole = 'assignBridgeRole',
   resetToolApprovalGrants = 'resetToolApprovalGrants',
   subagentControl = 'subagentControl',
   cancelBackgroundTasks = 'cancelBackgroundTasks',

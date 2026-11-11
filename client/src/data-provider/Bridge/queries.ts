@@ -46,3 +46,23 @@ export const useBridgeResultQuery = (
     },
   );
 };
+
+/** The person's roles, their runs and today's usage. Polled while the page is open. */
+export const useBridgeRolesQuery = (
+  config?: UseQueryOptions<t.TBridgeRolesOverview>,
+): QueryObserverResult<t.TBridgeRolesOverview> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+  return useQuery<t.TBridgeRolesOverview>(
+    [QueryKeys.bridgeRoles],
+    () => dataService.getBridgeRoles(),
+    {
+      refetchOnWindowFocus: true,
+      refetchInterval: BRIDGE_REFRESH_MS,
+      refetchIntervalInBackground: false,
+      cacheTime: 0,
+      retry: false,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};

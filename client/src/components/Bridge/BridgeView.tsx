@@ -3,6 +3,7 @@ import { Button, Spinner } from '@librechat/client';
 import { useBridgeOverviewQuery } from '~/data-provider';
 import DashboardsPanel from './DashboardsPanel';
 import ResultDialog from './ResultDialog';
+import RolesPanel from './RolesPanel';
 import { bridgeErrorKey } from './errors';
 import NewTaskForm from './NewTaskForm';
 import AgentCards from './AgentCards';
@@ -54,6 +55,7 @@ export default function BridgeView() {
       {data && (
         <>
           <AgentCards status={data.status} />
+          <RolesPanel maxTaskChars={data.limits.maxTaskChars} />
           <NewTaskForm
             maxTaskChars={data.limits.maxTaskChars}
             maxFieldChars={data.limits.maxFieldChars}
