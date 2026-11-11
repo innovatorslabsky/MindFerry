@@ -73,6 +73,50 @@ describe('AgentCards', () => {
     );
   });
 
+  it('for a host cron, says empty polls are normal and shows the last task handed to the agent', () => {
+    render(
+      <AgentCards
+        status={fresh([
+          agent({ agent: 'hermes' }),
+          agent({
+            agent: 'openclaw',
+            job: {
+              state: 'ok',
+              kind: 'host-cron',
+              lastRunAt: '2026-11-09T13:20:00Z',
+              lastCallAt: '2026-11-09T09:00:00Z',
+              intervalMinutes: 10,
+            },
+          }),
+        ])}
+      />,
+    );
+    expect(screen.getByTestId('bridge-job-openclaw')).toHaveTextContent('com_bridge_job_ok');
+    expect(screen.getByTestId('bridge-gated-openclaw')).toHaveTextContent('com_bridge_poll_gated');
+    expect(screen.getByTestId('bridge-call-openclaw')).toHaveTextContent('com_bridge_last_call');
+    expect(screen.queryByTestId('bridge-gated-hermes')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('bridge-call-hermes')).not.toBeInTheDocument();
+  });
+
+  it('shows a host cron that has gone quiet as a problem, with its reason', () => {
+    render(
+      <AgentCards
+        status={fresh([
+          agent({ agent: 'hermes' }),
+          agent({
+            agent: 'openclaw',
+            job: { state: 'error', kind: 'host-cron', errorKind: 'stalled', intervalMinutes: 10 },
+          }),
+        ])}
+      />,
+    );
+    expect(screen.getByTestId('bridge-job-openclaw')).toHaveTextContent('com_bridge_job_error');
+    expect(screen.getByTestId('bridge-reason-openclaw')).toHaveTextContent(
+      'com_bridge_reason_stalled',
+    );
+    expect(screen.queryByTestId('bridge-gated-openclaw')).not.toBeInTheDocument();
+  });
+
   it('does not show a reason for a poll that is fine', () => {
     render(
       <AgentCards status={fresh([agent({ agent: 'hermes' }), agent({ agent: 'openclaw' })])} />,

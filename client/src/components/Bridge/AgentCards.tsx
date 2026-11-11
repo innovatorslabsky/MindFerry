@@ -32,6 +32,7 @@ const REASON: Record<TBridgeErrorKind, TranslationKeys> = {
   billing: 'com_bridge_reason_billing',
   auth: 'com_bridge_reason_auth',
   timeout: 'com_bridge_reason_timeout',
+  stalled: 'com_bridge_reason_stalled',
   other: 'com_bridge_reason_other',
 };
 
@@ -43,6 +44,8 @@ function AgentCard({ agent }: { agent: TBridgeAgentStatus }) {
   const JobIcon = job.icon;
   const started = whenLabel(agent.startedAt);
   const lastRun = whenLabel(agent.job.lastRunAt);
+  const lastCall = whenLabel(agent.job.lastCallAt);
+  const hostCron = agent.job.kind === 'host-cron';
   const problem = agent.job.state === 'error' || agent.job.state === 'disabled';
 
   return (
@@ -88,6 +91,16 @@ function AgentCard({ agent }: { agent: TBridgeAgentStatus }) {
         {lastRun && (
           <span className="text-text-secondary text-xs">
             {localize('com_bridge_last_run', { 0: lastRun })}
+          </span>
+        )}
+        {lastCall && (
+          <span className="text-text-secondary text-xs" data-testid={`bridge-call-${agent.agent}`}>
+            {localize('com_bridge_last_call', { 0: lastCall })}
+          </span>
+        )}
+        {hostCron && agent.job.state === 'ok' && (
+          <span className="text-text-tertiary text-xs" data-testid={`bridge-gated-${agent.agent}`}>
+            {localize('com_bridge_poll_gated')}
           </span>
         )}
       </div>

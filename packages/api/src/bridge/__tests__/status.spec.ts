@@ -44,6 +44,104 @@ const snapshot = (generatedAt = '2026-11-08T06:09:30Z') => ({
   },
 });
 
+describe('a poll run by the host cron', () => {
+  /** The snapshot is written at 06:09:30; the host cron ticks every 10 minutes. */
+  const hostCron = (job: Record<string, unknown>) => {
+    const snap = snapshot();
+    (snap.agents.openclaw as { job: unknown }).job = {
+      kind: 'host-cron',
+      enabled: true,
+      intervalMinutes: 10,
+      ...job,
+    };
+    return snap;
+  };
+  const openclaw = async () => (await readAgentStatus(root, 180, NOW)).agents[1];
+
+  it('is working when it ticked recently, even if it has not called the agent for hours', async () => {
+    await write(
+      hostCron({
+        lastRunAt: '2026-11-08T06:05:00Z',
+        lastCallAt: '2026-11-07T21:00:00Z',
+        lastOk: true,
+      }),
+    );
+    expect((await openclaw()).job).toEqual({
+      state: 'ok',
+      kind: 'host-cron',
+      lastRunAt: '2026-11-08T06:05:00Z',
+      lastCallAt: '2026-11-07T21:00:00Z',
+      intervalMinutes: 10,
+    });
+  });
+
+  it('is stalled when the cron has gone quiet for more than two and a half intervals', async () => {
+    await write(hostCron({ lastRunAt: '2026-11-08T05:40:00Z', lastOk: true }));
+    expect((await openclaw()).job).toMatchObject({ state: 'error', errorKind: 'stalled' });
+  });
+
+  it('is still fine just inside that limit', async () => {
+    await write(hostCron({ lastRunAt: '2026-11-08T05:45:00Z', lastOk: true }));
+    expect((await openclaw()).job.state).toBe('ok');
+  });
+
+  it('judges quiet time by the snapshot clock, not by the server clock', async () => {
+    await write(hostCron({ lastRunAt: '2026-11-08T06:05:00Z', lastOk: true }));
+    const later = new Date('2026-11-08T06:12:00Z');
+    const out = await readAgentStatus(root, 3600, later);
+    expect(out.stale).toBe(false);
+    expect(out.agents[1].job.state).toBe('ok');
+  });
+
+  it('keeps a reason the host gave rather than replacing it with stalled', async () => {
+    await write(
+      hostCron({ lastRunAt: '2026-11-08T05:00:00Z', lastOk: false, errorKind: 'billing' }),
+    );
+    expect((await openclaw()).job).toMatchObject({ state: 'error', errorKind: 'billing' });
+  });
+
+  it('reports a failed tick, a switched-off cron, and one with no tick yet', async () => {
+    await write(
+      hostCron({ lastRunAt: '2026-11-08T06:05:00Z', lastOk: false, consecutiveErrors: 3 }),
+    );
+    expect((await openclaw()).job).toMatchObject({ state: 'error', consecutiveErrors: 3 });
+
+    await write(hostCron({ enabled: false, lastRunAt: '2026-11-08T06:05:00Z' }));
+    expect((await openclaw()).job.state).toBe('disabled');
+
+    await write(hostCron({ lastOk: true }));
+    expect((await openclaw()).job.state).toBe('ok');
+    await write(hostCron({}));
+    expect((await openclaw()).job.state).toBe('unknown');
+  });
+
+  it('does not guess stalled without an interval, and never when the snapshot is old', async () => {
+    await write(
+      hostCron({ intervalMinutes: undefined, lastRunAt: '2026-11-08T01:00:00Z', lastOk: true }),
+    );
+    expect((await openclaw()).job.state).toBe('ok');
+
+    await write(hostCron({ lastRunAt: '2026-11-08T01:00:00Z', lastOk: true }));
+    const old = await readAgentStatus(root, 60, new Date('2026-11-08T07:00:00Z'));
+    expect(old.agents[1].job).toMatchObject({ state: 'unknown' });
+    expect(old.agents[1].job.errorKind).toBeUndefined();
+  });
+
+  it('still reads a snapshot from the older script that has no kind', async () => {
+    await write(snapshot());
+    const status = await readAgentStatus(root, 180, NOW);
+    expect(status.agents[0].job.kind).toBeUndefined();
+    expect(status.agents[0].job.state).toBe('ok');
+  });
+
+  it('rejects an unknown kind or reason instead of passing it on', async () => {
+    await write(hostCron({ kind: 'something-else', lastRunAt: '2026-11-08T06:05:00Z' }));
+    expect((await readAgentStatus(root, 180, NOW)).stale).toBe(true);
+    await write(hostCron({ lastRunAt: '2026-11-08T06:05:00Z', lastOk: false, errorKind: '<b>' }));
+    expect((await readAgentStatus(root, 180, NOW)).stale).toBe(true);
+  });
+});
+
 describe('readAgentStatus', () => {
   it('reports a fresh snapshot, including a poll job the host auto-disabled', async () => {
     await write(snapshot());

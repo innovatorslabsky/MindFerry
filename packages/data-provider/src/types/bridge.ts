@@ -8,8 +8,12 @@ export type TBridgeResultStatus = 'DONE' | 'FAILED' | 'UNKNOWN';
 /** `unknown` is what an agent shows when the status snapshot is missing or too old to trust. */
 export type TBridgeAgentHealth = 'up' | 'down' | 'unknown';
 export type TBridgeJobState = 'ok' | 'error' | 'disabled' | 'unknown';
-/** A stable code for why the poll job failed, so the UI can say it in the user's language. */
-export type TBridgeErrorKind = 'billing' | 'auth' | 'timeout' | 'other';
+/** A stable code for why the poll job failed, so the UI can say it in the user's language.
+ *  `stalled` means a poll that should have run by now has not. */
+export type TBridgeErrorKind = 'billing' | 'auth' | 'timeout' | 'stalled' | 'other';
+/** What runs the poll: a job inside the agent's runtime, or the host's own cron calling the agent
+ *  only when there is a task (an empty poll never calls the model, which is normal). */
+export type TBridgePollKind = 'runtime-job' | 'host-cron';
 
 export type TBridgeAgentStatus = {
   agent: TBridgeAgent;
@@ -18,7 +22,12 @@ export type TBridgeAgentStatus = {
   startedAt?: string;
   job: {
     state: TBridgeJobState;
+    kind?: TBridgePollKind;
+    /** The latest poll (for a host cron, the latest tick, even when it found nothing to do). */
     lastRunAt?: string;
+    /** The latest time a real task was handed to the agent. */
+    lastCallAt?: string;
+    intervalMinutes?: number;
     consecutiveErrors?: number;
     errorKind?: TBridgeErrorKind;
   };

@@ -18,6 +18,8 @@ import { BRIDGE_AGENTS, toOneLine } from './protocol';
 
 const MAX_STATUS_BYTES = 65_536;
 const FUTURE_SKEW_MS = 120_000;
+/** A host cron is stalled when it has been quiet for this many of its own intervals. */
+const STALLED_INTERVALS = 2.5;
 
 const iso = z
   .string()
@@ -25,11 +27,14 @@ const iso = z
   .refine((value) => !Number.isNaN(Date.parse(value)));
 
 const jobSchema = z.object({
+  kind: z.enum(['runtime-job', 'host-cron']).optional(),
   enabled: z.boolean().optional(),
   lastRunAt: iso.optional(),
+  lastCallAt: iso.optional(),
+  intervalMinutes: z.number().int().min(1).max(1440).optional(),
   lastOk: z.boolean().optional(),
   consecutiveErrors: z.number().int().min(0).max(100_000).optional(),
-  errorKind: z.enum(['billing', 'auth', 'timeout', 'other']).optional(),
+  errorKind: z.enum(['billing', 'auth', 'timeout', 'stalled', 'other']).optional(),
 });
 
 const agentSchema = z.object({
@@ -52,17 +57,41 @@ const unknownAgent = (agent: TBridgeAgent): TBridgeAgentStatus => ({
   job: { state: 'unknown' },
 });
 
-function jobState(job: AgentFile['job']): TBridgeJobState {
+/**
+ * A host cron that should tick every few minutes but has not for a while. The reference time is the
+ * snapshot's own clock, so a slow clock on this server cannot make a healthy poll look stalled.
+ */
+function isStalled(job: AgentFile['job'], generatedAt: string): boolean {
+  if (job?.kind !== 'host-cron' || !job.intervalMinutes || !job.lastRunAt) {
+    return false;
+  }
+  const quiet = Date.parse(generatedAt) - Date.parse(job.lastRunAt);
+  return quiet > job.intervalMinutes * 60_000 * STALLED_INTERVALS;
+}
+
+function jobState(job: AgentFile['job'], generatedAt: string): TBridgeJobState {
   if (!job) {
     return 'unknown';
   }
   if (job.enabled === false) {
     return 'disabled';
   }
-  if (job.lastOk === false || (job.consecutiveErrors ?? 0) > 0) {
+  if (job.lastOk === false || (job.consecutiveErrors ?? 0) > 0 || isStalled(job, generatedAt)) {
     return 'error';
   }
   return job.lastOk === true ? 'ok' : 'unknown';
+}
+
+/** Why the poll is not fine: what the host said, or `stalled` when the host cron went quiet. */
+function pollReason(
+  job: AgentFile['job'],
+  fresh: boolean,
+  generatedAt: string,
+): { errorKind?: NonNullable<AgentFile['job']>['errorKind'] } {
+  if (job?.errorKind) {
+    return { errorKind: job.errorKind };
+  }
+  return fresh && isStalled(job, generatedAt) ? { errorKind: 'stalled' } : {};
 }
 
 function healthOf(container: AgentFile['container'], fresh: boolean): TBridgeAgentHealth {
@@ -76,6 +105,7 @@ function describe(
   agent: TBridgeAgent,
   file: AgentFile | undefined,
   fresh: boolean,
+  generatedAt: string,
 ): TBridgeAgentStatus {
   if (!file) {
     return unknownAgent(agent);
@@ -87,10 +117,13 @@ function describe(
     ...(version ? { version } : {}),
     ...(file.container?.startedAt ? { startedAt: file.container.startedAt } : {}),
     job: {
-      state: fresh ? jobState(file.job) : 'unknown',
+      state: fresh ? jobState(file.job, generatedAt) : 'unknown',
+      ...(file.job?.kind ? { kind: file.job.kind } : {}),
       ...(file.job?.lastRunAt ? { lastRunAt: file.job.lastRunAt } : {}),
+      ...(file.job?.lastCallAt ? { lastCallAt: file.job.lastCallAt } : {}),
+      ...(file.job?.intervalMinutes ? { intervalMinutes: file.job.intervalMinutes } : {}),
       ...(file.job?.consecutiveErrors ? { consecutiveErrors: file.job.consecutiveErrors } : {}),
-      ...(file.job?.errorKind ? { errorKind: file.job.errorKind } : {}),
+      ...pollReason(file.job, fresh, generatedAt),
     },
   };
 }
@@ -129,6 +162,8 @@ export async function readAgentStatus(
   return {
     generatedAt: parsed.data.generatedAt,
     stale: !fresh,
-    agents: BRIDGE_AGENTS.map((agent) => describe(agent, parsed.data.agents[agent], fresh)),
+    agents: BRIDGE_AGENTS.map((agent) =>
+      describe(agent, parsed.data.agents[agent], fresh, parsed.data.generatedAt),
+    ),
   };
 }
