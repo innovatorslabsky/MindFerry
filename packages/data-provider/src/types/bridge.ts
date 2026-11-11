@@ -27,6 +27,8 @@ export type TBridgeAgentStatus = {
     lastRunAt?: string;
     /** The latest time a real task was handed to the agent. */
     lastCallAt?: string;
+    /** How the latest finished hand-over went. `false` means that task was left unfinished. */
+    lastCallOk?: boolean;
     intervalMinutes?: number;
     consecutiveErrors?: number;
     errorKind?: TBridgeErrorKind;

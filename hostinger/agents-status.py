@@ -15,6 +15,7 @@ import argparse
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -27,9 +28,16 @@ COMMAND_TIMEOUT = 25
 VERSION_MAX_AGE = 6 * 3600
 SUCCESS_WORDS = ("completed", "ok", "success", "succeeded")
 FAILURE_WORDS = ("failed", "error", "errored", "timeout", "timed_out", "crashed", "cancelled")
+GATED_SCRIPT = "poll-openclaw-gated.sh"
+GATED_LOG = "poll-openclaw-gated.log"
+GATED_TAIL_BYTES = 256 * 1024
+MAX_BLOCK_CHARS = 4000
+# `openclaw agent --timeout 600` plus a minute: a hand-over with no ending line after this long died.
+CALL_HUNG_SECONDS = 660
+# Specific on purpose: this text is an agent's own output, which can mention credit cards or authors.
 ERROR_KINDS = (
-    ("billing", re.compile(r"billing|\b402\b|credit|balance|quota|payment", re.I)),
-    ("auth", re.compile(r"\b40[13]\b|unauthori[sz]ed|forbidden|invalid.{0,12}(key|token)|auth", re.I)),
+    ("billing", re.compile(r"billing error|\b402\b|payment required|insufficient (credit|fund|balance)|out of credit|quota (exceeded|exhausted)", re.I)),
+    ("auth", re.compile(r"\b40[13]\b|unauthori[sz]ed|forbidden|invalid.{0,12}(key|token)|authentication (failed|error)", re.I)),
     ("timeout", re.compile(r"time(d)? ?out", re.I)),
 )
 
@@ -213,6 +221,171 @@ def openclaw_job(spec):
     return job
 
 
+LOG_LINE = re.compile(r"^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) ([^\]\s]{1,8})\] (.*)$")
+EVENT_PATTERNS = (
+    ("empty", re.compile(r"^NO-TASKS\b")),
+    ("start", re.compile(r"^TASK \S+ at \S+ -- calling gateway agent")),
+    ("ok", re.compile(r"^TASK \S+ agent call OK\s*$")),
+    ("fail", re.compile(r"^TASK \S+ AGENT-FAILED rc=\d+")),
+    ("poll_error", re.compile(r"^ERROR\b")),
+)
+
+
+def parse_log_time(stamp, zone):
+    """Epoch seconds of a `date "+%Y-%m-%d %H:%M:%S %Z"` stamp: UTC when it says so, else the host's zone."""
+    try:
+        naive = datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return None
+    if zone.upper() in ("UTC", "GMT", "Z"):
+        return naive.replace(tzinfo=timezone.utc).timestamp()
+    return naive.astimezone().timestamp()
+
+
+def log_events(text):
+    """The poller's own lines as events. Any other line (the agent's output, which the script appends
+    to the same file) belongs to the event before it and is only ever read to classify a failure."""
+    events = []
+    for line in text.splitlines():
+        match = LOG_LINE.match(line)
+        kind = None
+        if match:
+            for name, pattern in EVENT_PATTERNS:
+                if pattern.match(match.group(3)):
+                    kind = name
+                    break
+        stamp = parse_log_time(match.group(1), match.group(2)) if kind else None
+        if kind and stamp is not None:
+            events.append({"kind": kind, "ts": stamp, "text": match.group(3)[:MAX_BLOCK_CHARS]})
+        elif events and len(events[-1]["text"]) < MAX_BLOCK_CHARS:
+            events[-1]["text"] += "\n" + line[:MAX_BLOCK_CHARS]
+    return events
+
+
+def parse_gated_log(text, now):
+    """Health of the host-cron poll from its log: when it last ticked, when it last handed a task to
+    the agent and how that went. An empty tick is normal. A failed hand-over leaves its task unfinished
+    and the ticks after it log NO-TASKS, so the failure is tracked apart from the ticks and only a later
+    successful hand-over clears it."""
+    events = log_events(text)
+    job = {}
+    if not events:
+        return job
+    call_fails = poll_errors = 0
+    last_call_ok = None
+    call_text = poll_text = ""
+    pending = None
+    last_start = None
+    for event in events:
+        kind = event["kind"]
+        if kind == "start":
+            pending = last_start = event
+            poll_errors = 0
+        elif kind == "ok":
+            pending, call_fails, poll_errors, last_call_ok = None, 0, 0, True
+        elif kind == "fail":
+            call_text = (pending["text"] if pending else "") + "\n" + event["text"]
+            pending, last_call_ok = None, False
+            call_fails += 1
+        elif kind == "poll_error":
+            poll_text, poll_errors = event["text"], poll_errors + 1
+        else:
+            poll_errors = 0
+    hung = pending is not None and now - pending["ts"] > CALL_HUNG_SECONDS
+    if hung:
+        call_fails, last_call_ok = call_fails + 1, False
+    errors = call_fails + poll_errors
+    job["lastRunAt"] = iso_ms(events[-1]["ts"] * 1000)
+    if last_start:
+        job["lastCallAt"] = iso_ms(last_start["ts"] * 1000)
+    if last_call_ok is not None:
+        job["lastCallOk"] = last_call_ok
+    job["lastOk"] = errors == 0
+    if errors:
+        job["consecutiveErrors"] = errors
+        if hung and not poll_errors:
+            job["errorKind"] = "timeout"
+        else:
+            job["errorKind"] = error_kind(poll_text if poll_errors else call_text)
+    return job
+
+
+def cron_interval(minute, hour):
+    """Minutes between runs for the simple schedules a poll uses, or None when it is not simple."""
+    if hour != "*":
+        return None
+    if minute == "*":
+        return 1
+    step = re.fullmatch(r"\*/(\d{1,2})", minute)
+    if step and 1 <= int(step.group(1)) <= 59:
+        return int(step.group(1))
+    if re.fullmatch(r"\d{1,2}(,\d{1,2})*", minute):
+        marks = sorted({int(m) for m in minute.split(",")})
+        if all(m < 60 for m in marks):
+            gaps = {(b - a) % 60 or 60 for a, b in zip(marks, marks[1:] + marks[:1])}
+            return gaps.pop() if len(gaps) == 1 else None
+    return None
+
+
+def parse_cron(text, script):
+    """(enabled, interval) from a crontab: the live line that runs `script`, or (False, None) if none."""
+    for line in text.splitlines():
+        raw = line.strip()
+        if not raw or raw.startswith("#") or script not in raw:
+            continue
+        fields = raw.split(None, 5)
+        if len(fields) == 6:
+            return True, cron_interval(fields[0], fields[1])
+    return False, None
+
+
+def read_tail(path, max_bytes):
+    """The last `max_bytes` of a regular file (never through a symlink), without a cut first line."""
+    try:
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError:
+        return None
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            return None
+        start = max(0, info.st_size - max_bytes)
+        os.lseek(fd, start, os.SEEK_SET)
+        with os.fdopen(os.dup(fd), "rb") as handle:
+            data = handle.read(max_bytes)
+    finally:
+        os.close(fd)
+    text = data.decode("utf-8", errors="replace")
+    if start > 0:
+        text = text.split("\n", 1)[1] if "\n" in text else ""
+    return text
+
+
+def openclaw_gated_job(tasks_dir, now):
+    """The poll that replaced OpenClaw's own cron job: the host's cron runs a script that calls the agent
+    only when a task is waiting. None when there is no sign of it, so the old reading can still be used."""
+    text = read_tail(os.path.join(tasks_dir, ".status", GATED_LOG), GATED_TAIL_BYTES)
+    crontab = run(["crontab", "-l"])
+    enabled, interval = parse_cron(crontab, GATED_SCRIPT) if crontab is not None else (None, None)
+    if text is None and enabled is not True:
+        return None
+    job = parse_gated_log(text or "", now)
+    job["kind"] = "host-cron"
+    if enabled is not None:
+        job["enabled"] = enabled
+    if interval:
+        job["intervalMinutes"] = interval
+    return job
+
+
+def hermes_poll(spec, tasks_dir, now):
+    return hermes_job(spec)
+
+
+def openclaw_poll(spec, tasks_dir, now):
+    return openclaw_gated_job(tasks_dir, now) or openclaw_job(spec)
+
+
 def read_cache(path):
     try:
         with open(path, encoding="utf8") as handle:
@@ -239,8 +412,8 @@ def collect(tasks_dir, now):
     cache = read_cache(cache_path)
     agents = {}
     for key, spec, version_cmd, job_reader in (
-        ("hermes", HERMES, ["hermes", "--version"], hermes_job),
-        ("openclaw", OPENCLAW, ["openclaw", "--version"], openclaw_job),
+        ("hermes", HERMES, ["hermes", "--version"], hermes_poll),
+        ("openclaw", OPENCLAW, ["openclaw", "--version"], openclaw_poll),
     ):
         entry = {}
         container = container_info(spec["container"])
@@ -250,7 +423,7 @@ def collect(tasks_dir, now):
                 version = version_of(spec["container"], version_cmd, container.get("startedAt"), cache, now)
                 if version:
                     entry["version"] = version
-                job = job_reader(spec)
+                job = job_reader(spec, tasks_dir, now)
                 if job:
                     entry["job"] = job
         agents[key] = entry

@@ -117,6 +117,34 @@ describe('AgentCards', () => {
     expect(screen.queryByTestId('bridge-gated-openclaw')).not.toBeInTheDocument();
   });
 
+  it('says plainly when the last task handed to the agent failed and was left unfinished', () => {
+    render(
+      <AgentCards
+        status={fresh([
+          agent({ agent: 'hermes' }),
+          agent({
+            agent: 'openclaw',
+            job: {
+              state: 'error',
+              kind: 'host-cron',
+              lastCallOk: false,
+              lastCallAt: '2026-11-09T09:00:00Z',
+              errorKind: 'billing',
+              consecutiveErrors: 1,
+            },
+          }),
+        ])}
+      />,
+    );
+    expect(screen.getByTestId('bridge-callfailed-openclaw')).toHaveTextContent(
+      'com_bridge_call_failed',
+    );
+    expect(screen.getByTestId('bridge-reason-openclaw')).toHaveTextContent(
+      'com_bridge_reason_billing',
+    );
+    expect(screen.queryByTestId('bridge-callfailed-hermes')).not.toBeInTheDocument();
+  });
+
   it('does not show a reason for a poll that is fine', () => {
     render(
       <AgentCards status={fresh([agent({ agent: 'hermes' }), agent({ agent: 'openclaw' })])} />,

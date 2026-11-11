@@ -22,6 +22,14 @@ sha256sum scripts/agents-status.py          # compare with the hash Lyra sends
 python3 -m unittest scripts/test_agents_status.py     # 30 tests, no Docker needed
 ```
 
+### Updating the script later
+
+Fetch the new file the same way (same `curl` lines, new commit and hash) and run `--print` once before
+trusting it. The cron line does not change. The script now reads OpenClaw's host-cron poll
+(`poll-openclaw-gated.sh`) from the user's crontab and from `.status/poll-openclaw-gated.log`; it only
+ever reads the lines the poller writes itself, never the agent's output that the poller appends to the
+same file, and it falls back to the old `openclaw cron get` reading when there is no sign of the new poll.
+
 Look at what it would write, without writing:
 
 ```bash

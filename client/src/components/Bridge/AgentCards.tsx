@@ -98,6 +98,14 @@ function AgentCard({ agent }: { agent: TBridgeAgentStatus }) {
             {localize('com_bridge_last_call', { 0: lastCall })}
           </span>
         )}
+        {hostCron && agent.job.lastCallOk === false && (
+          <span
+            className="text-text-primary text-xs"
+            data-testid={`bridge-callfailed-${agent.agent}`}
+          >
+            {localize('com_bridge_call_failed')}
+          </span>
+        )}
         {hostCron && agent.job.state === 'ok' && (
           <span className="text-text-tertiary text-xs" data-testid={`bridge-gated-${agent.agent}`}>
             {localize('com_bridge_poll_gated')}

@@ -75,6 +75,24 @@ describe('a poll run by the host cron', () => {
     });
   });
 
+  it('passes on how the last hand-over to the agent went', async () => {
+    await write(
+      hostCron({
+        lastRunAt: '2026-11-08T06:05:00Z',
+        lastCallAt: '2026-11-08T05:50:00Z',
+        lastCallOk: false,
+        lastOk: false,
+        consecutiveErrors: 1,
+        errorKind: 'billing',
+      }),
+    );
+    expect((await openclaw()).job).toMatchObject({
+      state: 'error',
+      lastCallOk: false,
+      errorKind: 'billing',
+    });
+  });
+
   it('is stalled when the cron has gone quiet for more than two and a half intervals', async () => {
     await write(hostCron({ lastRunAt: '2026-11-08T05:40:00Z', lastOk: true }));
     expect((await openclaw()).job).toMatchObject({ state: 'error', errorKind: 'stalled' });

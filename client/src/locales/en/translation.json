@@ -3476,6 +3476,7 @@
   "com_ui_tool_approval_background_unavailable": "Background launches cannot teach approval. Approve a successful foreground call to remember this tool.",
   "com_bridge_agents": "Agents",
   "com_bridge_browser_note": "Agents use a throwaway browser profile, so logins are not kept between tasks.",
+  "com_bridge_call_failed": "The last task handed to the agent failed and was left unfinished. Check it before sending another.",
   "com_bridge_create": "Create task",
   "com_bridge_created": "Task created. An agent picks it up on its next poll, within about ten minutes.",
   "com_bridge_dashboards": "Agent dashboards",

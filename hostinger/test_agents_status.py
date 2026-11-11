@@ -316,5 +316,287 @@ class WriteTests(unittest.TestCase):
             self.assertTrue(out.write.called)
 
 
+# The tail of poll-openclaw-gated.log exactly as the VPS printed it (all empty ticks).
+REAL_LOG = """\
+[2026-11-10 21:50:01 UTC] NO-TASKS (no agent call)
+[2026-11-10 22:00:01 UTC] NO-TASKS (no agent call)
+[2026-11-10 22:10:01 UTC] NO-TASKS (no agent call)
+[2026-11-10 22:20:01 UTC] NO-TASKS (no agent call)
+[2026-11-10 22:30:02 UTC] NO-TASKS (no agent call)
+[2026-11-10 22:40:02 UTC] NO-TASKS (no agent call)
+[2026-11-10 22:50:01 UTC] NO-TASKS (no agent call)
+[2026-11-10 23:00:01 UTC] NO-TASKS (no agent call)
+[2026-11-10 23:10:01 UTC] NO-TASKS (no agent call)
+[2026-11-10 23:20:02 UTC] NO-TASKS (no agent call)
+[2026-11-10 23:30:01 UTC] NO-TASKS (no agent call)
+[2026-11-10 23:40:02 UTC] NO-TASKS (no agent call)
+[2026-11-10 23:50:01 UTC] NO-TASKS (no agent call)
+[2026-11-11 00:00:02 UTC] NO-TASKS (no agent call)
+[2026-11-11 00:10:02 UTC] NO-TASKS (no agent call)
+[2026-11-11 00:20:01 UTC] NO-TASKS (no agent call)
+[2026-11-11 00:30:02 UTC] NO-TASKS (no agent call)
+[2026-11-11 00:40:01 UTC] NO-TASKS (no agent call)
+[2026-11-11 00:50:01 UTC] NO-TASKS (no agent call)
+[2026-11-11 01:00:01 UTC] NO-TASKS (no agent call)
+"""
+
+TASK_ID = "2026-11-11-0105-openclaw-readme-summary"
+PATH = f"/home/deploy/tasks/processing/{TASK_ID}.md"
+
+
+def at(text):
+    """Epoch seconds of 'YYYY-MM-DD HH:MM:SS' in UTC."""
+    from datetime import datetime, timezone
+
+    return datetime.strptime(text, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc).timestamp()
+
+
+def line(stamp, message, zone="UTC"):
+    return f"[{stamp} {zone}] {message}\n"
+
+
+def start(stamp, task=TASK_ID):
+    return line(stamp, f"TASK {task} at {PATH} -- calling gateway agent")
+
+
+def ok(stamp, task=TASK_ID):
+    return line(stamp, f"TASK {task} agent call OK")
+
+
+def failed(stamp, rc=1, task=TASK_ID):
+    return line(stamp, f"TASK {task} AGENT-FAILED rc={rc} (task left in processing)")
+
+
+BILLING = "openrouter (anthropic/claude-sonnet-4.6) returned a billing error: check your account's balance\n"
+
+
+class GatedLogTests(unittest.TestCase):
+    NOW = at("2026-11-11 01:03:00")
+
+    def parse(self, text, now=None):
+        return status.parse_gated_log(text, now or self.NOW)
+
+    def test_a_quiet_log_of_empty_ticks_is_healthy(self):
+        job = self.parse(REAL_LOG)
+        self.assertEqual(job, {"lastRunAt": "2026-11-11T01:00:01Z", "lastOk": True})
+
+    def test_a_hand_over_that_worked(self):
+        log = REAL_LOG + start("2026-11-11 01:10:01") + "Wrote the summary.\nAll done.\n" + ok("2026-11-11 01:10:40")
+        job = self.parse(log, at("2026-11-11 01:12:00"))
+        self.assertEqual(
+            job,
+            {
+                "lastRunAt": "2026-11-11T01:10:40Z",
+                "lastCallAt": "2026-11-11T01:10:01Z",
+                "lastCallOk": True,
+                "lastOk": True,
+            },
+        )
+
+    def test_a_failed_hand_over_is_not_hidden_by_the_empty_ticks_after_it(self):
+        log = (
+            REAL_LOG
+            + start("2026-11-11 01:10:01")
+            + BILLING
+            + failed("2026-11-11 01:10:09")
+            + line("2026-11-11 01:20:01", "NO-TASKS (no agent call)")
+            + line("2026-11-11 01:30:01", "NO-TASKS (no agent call)")
+        )
+        job = self.parse(log, at("2026-11-11 01:31:00"))
+        self.assertEqual(job["lastRunAt"], "2026-11-11T01:30:01Z")
+        self.assertEqual(job["lastCallAt"], "2026-11-11T01:10:01Z")
+        self.assertIs(job["lastCallOk"], False)
+        self.assertIs(job["lastOk"], False)
+        self.assertEqual(job["consecutiveErrors"], 1)
+        self.assertEqual(job["errorKind"], "billing")
+
+    def test_only_a_later_successful_hand_over_clears_it_and_failures_are_counted(self):
+        two = REAL_LOG + start("2026-11-11 01:10:01") + failed("2026-11-11 01:10:09") + start("2026-11-11 01:20:01") + failed("2026-11-11 01:20:09")
+        self.assertEqual(self.parse(two, at("2026-11-11 01:21:00"))["consecutiveErrors"], 2)
+        fixed = two + start("2026-11-11 01:30:01") + ok("2026-11-11 01:30:30")
+        job = self.parse(fixed, at("2026-11-11 01:31:00"))
+        self.assertTrue(job["lastOk"])
+        self.assertTrue(job["lastCallOk"])
+        self.assertNotIn("consecutiveErrors", job)
+        self.assertNotIn("errorKind", job)
+
+    def test_a_poll_error_is_cleared_by_the_next_good_poll(self):
+        bad = REAL_LOG + line("2026-11-11 01:10:01", "ERROR unexpected poll output: something odd") + "second line of that output\n"
+        job = self.parse(bad, at("2026-11-11 01:11:00"))
+        self.assertIs(job["lastOk"], False)
+        self.assertEqual(job["consecutiveErrors"], 1)
+        self.assertEqual(job["errorKind"], "other")
+        good = bad + line("2026-11-11 01:20:01", "NO-TASKS (no agent call)")
+        self.assertIs(self.parse(good, at("2026-11-11 01:21:00"))["lastOk"], True)
+
+    def test_a_hand_over_still_running_is_fine_but_one_with_no_ending_is_not(self):
+        running = REAL_LOG + start("2026-11-11 01:10:01") + "thinking...\n"
+        job = self.parse(running, at("2026-11-11 01:15:00"))
+        self.assertIs(job["lastOk"], True)
+        self.assertNotIn("lastCallOk", job)
+
+        died = self.parse(running, at("2026-11-11 01:25:00"))
+        self.assertIs(died["lastOk"], False)
+        self.assertIs(died["lastCallOk"], False)
+        self.assertEqual(died["errorKind"], "timeout")
+
+    def test_what_the_agent_wrote_cannot_be_taken_for_a_failure_reason(self):
+        text = "Updated the author list and the credit card statement. Authentication of users reviewed.\n"
+        log = start("2026-11-11 01:10:01") + text + failed("2026-11-11 01:10:09", rc=2)
+        self.assertEqual(self.parse(log, at("2026-11-11 01:11:00"))["errorKind"], "other")
+
+    def test_other_lines_are_ignored_not_trusted_as_events(self):
+        log = REAL_LOG + "[2026-11-11 01:10:01 UTC] something nobody logs\n[not a stamp] NO-TASKS\n"
+        self.assertEqual(self.parse(log)["lastRunAt"], "2026-11-11T01:00:01Z")
+
+    def test_empty_garbage_and_bad_dates_give_nothing(self):
+        for text in ("", "hello\nworld\n", "[2026-13-45 99:99:99 UTC] NO-TASKS (no agent call)\n"):
+            self.assertEqual(self.parse(text), {})
+
+    def test_a_stamp_in_another_zone_is_read_in_the_hosts_zone(self):
+        import time as _time
+
+        old = os.environ.get("TZ")
+        os.environ["TZ"] = "Asia/Bangkok"
+        _time.tzset()
+        try:
+            job = self.parse(line("2026-11-11 08:00:01", "NO-TASKS (no agent call)", zone="+07"))
+        finally:
+            if old is None:
+                os.environ.pop("TZ", None)
+            else:
+                os.environ["TZ"] = old
+            _time.tzset()
+        self.assertEqual(job["lastRunAt"], "2026-11-11T01:00:01Z")
+
+    def test_none_of_the_agents_output_reaches_what_is_reported(self):
+        log = start("2026-11-11 01:10:01") + "token=SUPER-SECRET-VALUE-123 and a private note\n" + failed("2026-11-11 01:10:09")
+        job = self.parse(log, at("2026-11-11 01:11:00"))
+        self.assertNotIn("SUPER-SECRET", json.dumps(job))
+        self.assertNotIn("private note", json.dumps(job))
+
+
+class CronTests(unittest.TestCase):
+    SCRIPT = "poll-openclaw-gated.sh"
+    REAL = (
+        "*/2 * * * * flock -n /tmp/mf-agents-status.lock /usr/bin/python3 /opt/agents/mindferry/scripts/agents-status.py\n"
+        "*/10 * * * * flock -n /tmp/oc-bridge-poll.lock /home/deploy/tasks/poll-openclaw-gated.sh >> /home/deploy/tasks/.status/poll-openclaw-gated.log 2>&1\n"
+    )
+
+    def test_reads_the_real_crontab(self):
+        self.assertEqual(status.parse_cron(self.REAL, self.SCRIPT), (True, 10))
+
+    def test_a_commented_out_or_missing_line_is_off(self):
+        self.assertEqual(status.parse_cron("# " + self.REAL.splitlines()[1] + "\n", self.SCRIPT), (False, None))
+        self.assertEqual(status.parse_cron(self.REAL.splitlines()[0] + "\n", self.SCRIPT), (False, None))
+        self.assertEqual(status.parse_cron("", self.SCRIPT), (False, None))
+
+    def test_the_interval_of_simple_schedules_only(self):
+        cases = {
+            ("*/10", "*"): 10,
+            ("*", "*"): 1,
+            ("0,15,30,45", "*"): 15,
+            ("0,20,40", "*"): 20,
+            ("7", "*"): 60,
+            ("0,5,30", "*"): None,
+            ("*/10", "8-18"): None,
+            ("*/0", "*"): None,
+            ("*/90", "*"): None,
+            ("61", "*"): None,
+        }
+        for (minute, hour), want in cases.items():
+            self.assertEqual(status.cron_interval(minute, hour), want, (minute, hour))
+
+
+class TailTests(unittest.TestCase):
+    def test_reads_only_the_end_and_drops_the_cut_first_line(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = os.path.join(root, "log")
+            with open(path, "w", encoding="utf8") as handle:
+                handle.write("".join(f"line {n:04d}\n" for n in range(1000)))
+            text = status.read_tail(path, 100)
+            self.assertLessEqual(len(text), 100)
+            self.assertTrue(text.startswith("line "))
+            self.assertTrue(text.endswith("line 0999\n"))
+            self.assertEqual(status.read_tail(path, 10**6).splitlines()[0], "line 0000")
+
+    def test_refuses_a_symlink_a_folder_and_a_missing_file(self):
+        with tempfile.TemporaryDirectory() as root:
+            real = os.path.join(root, "real")
+            open(real, "w").close()
+            link = os.path.join(root, "link")
+            os.symlink(real, link)
+            self.assertIsNone(status.read_tail(link, 100))
+            self.assertIsNone(status.read_tail(root, 100))
+            self.assertIsNone(status.read_tail(os.path.join(root, "nope"), 100))
+
+
+class CollectGatedTests(unittest.TestCase):
+    CRON = CronTests.REAL
+    BASE = {
+        "inspect -f {{.State.Status}}|{{.State.StartedAt}} hermes": "running|2026-11-07T01:36:18Z\n",
+        "inspect -f {{.State.Status}}|{{.State.StartedAt}} openclaw-openclaw-gateway-1": "running|2026-11-07T01:29:39Z\n",
+        "hermes --version": "Hermes Agent v0.22.7\n",
+        "hermes cron list": as_printed(HERMES_LIST),
+        "hermes cron runs": HERMES_RUNS,
+        "openclaw --version": "OpenClaw 2026.10.10 (7dc3350)\n",
+    }
+
+    def collect(self, table, log=None):
+        with tempfile.TemporaryDirectory() as root:
+            if log is not None:
+                os.makedirs(os.path.join(root, ".status"))
+                with open(os.path.join(root, ".status", "poll-openclaw-gated.log"), "w", encoding="utf8") as handle:
+                    handle.write(log)
+            with mock.patch.object(status, "run", fake_run(table)):
+                return status.collect(root, int(at("2026-11-11 01:03:00")))[0]
+
+    def test_reads_the_poll_from_the_log_and_the_crontab_not_from_the_old_cron_job(self):
+        table = dict(self.BASE, **{"crontab -l": self.CRON, "openclaw cron get": json.dumps(dict(OPENCLAW_JOB, enabled=False))})
+        job = self.collect(table, REAL_LOG)["agents"]["openclaw"]["job"]
+        self.assertEqual(
+            job,
+            {
+                "kind": "host-cron",
+                "enabled": True,
+                "intervalMinutes": 10,
+                "lastRunAt": "2026-11-11T01:00:01Z",
+                "lastOk": True,
+            },
+        )
+        self.assertEqual(self.collect(table, REAL_LOG)["agents"]["hermes"]["job"]["lastOk"], True)
+
+    def test_a_removed_cron_line_is_reported_as_off(self):
+        table = dict(self.BASE, **{"crontab -l": self.CRON.splitlines()[0] + "\n"})
+        job = self.collect(table, REAL_LOG)["agents"]["openclaw"]["job"]
+        self.assertIs(job["enabled"], False)
+        self.assertNotIn("intervalMinutes", job)
+
+    def test_an_unreadable_crontab_is_unknown_not_off(self):
+        job = self.collect(dict(self.BASE), REAL_LOG)["agents"]["openclaw"]["job"]
+        self.assertNotIn("enabled", job)
+        self.assertEqual(job["kind"], "host-cron")
+
+    def test_a_cron_line_with_no_log_yet_is_still_the_new_poll(self):
+        job = self.collect(dict(self.BASE, **{"crontab -l": self.CRON}))["agents"]["openclaw"]["job"]
+        self.assertEqual(job, {"kind": "host-cron", "enabled": True, "intervalMinutes": 10})
+
+    def test_without_any_sign_of_the_new_poll_the_old_reading_is_used(self):
+        table = dict(self.BASE, **{"crontab -l": "", "openclaw cron get": json.dumps(OPENCLAW_JOB)})
+        job = self.collect(table)["agents"]["openclaw"]["job"]
+        self.assertNotIn("kind", job)
+        self.assertTrue(job["lastOk"])
+
+    def test_a_failed_hand_over_shows_in_the_snapshot_without_the_agents_words(self):
+        log = REAL_LOG + start("2026-11-11 01:00:30") + "sk-ant-api03-LEAKED-KEY-VALUE\n" + BILLING + failed("2026-11-11 01:00:40")
+        table = dict(self.BASE, **{"crontab -l": self.CRON})
+        out = self.collect(table, log)
+        job = out["agents"]["openclaw"]["job"]
+        self.assertEqual((job["lastCallOk"], job["lastOk"], job["errorKind"]), (False, False, "billing"))
+        text = json.dumps(out)
+        self.assertNotIn("LEAKED", text)
+        self.assertNotIn("check your account", text)
+
+
 if __name__ == "__main__":
     unittest.main()
