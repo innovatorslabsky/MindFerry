@@ -47,6 +47,8 @@ export { default as libraryFolderSchema } from './libraryFolder';
 export { default as libraryViewSchema } from './libraryView';
 export { default as libraryShareSchema } from './libraryShare';
 export { default as librarySessionSchema } from './librarySession';
+export { default as bridgeRoleSchema } from './bridgeRole';
+export { default as bridgeRunSchema } from './bridgeRun';
 export { default as systemGrantSchema } from './systemGrant';
 export { default as auditLogSchema } from './auditLog';
 export { default as configSchema } from './config';

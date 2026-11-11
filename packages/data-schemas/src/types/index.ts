@@ -20,6 +20,7 @@ export * from './agent';
 export * from './agentApiKey';
 export * from './hub';
 export * from './library';
+export * from './bridge';
 export * from './agentCategory';
 export * from './codeEnvironment';
 export * from './role';

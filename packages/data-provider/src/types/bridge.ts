@@ -105,3 +105,110 @@ export type TBridgeErrorCode =
   | 'BRIDGE_UNAVAILABLE';
 
 export type TBridgeError = { error: TBridgeErrorCode; field?: string };
+
+/* ---- Roles (GĐ1): named jobs a person can hand work to. ---- */
+
+export type TBridgeRoleRuntime = 'app' | 'hermes' | 'openclaw';
+/** 0 = read and draft only; 1 = may write inside its own scope. Higher tiers stay locked. */
+export type TBridgeRoleTier = 0 | 1;
+export type TBridgeRunStatus = 'queued' | 'running' | 'done' | 'failed' | 'paused' | 'unknown';
+
+export type TBridgeRole = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  runtime: TBridgeRoleRuntime;
+  /** The in-app agent this role runs as (runtime `app`). */
+  agentId?: string;
+  /** Standing instructions added to every assignment. */
+  brief: string;
+  tier: TBridgeRoleTier;
+  /** Per-role daily cap; absent means the operator's default. */
+  dailyCap?: number;
+  enabled: boolean;
+  templateId?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TBridgeRoleTemplate = {
+  id: string;
+  name: string;
+  description: string;
+  brief: string;
+  tier: TBridgeRoleTier;
+};
+
+export type TBridgeRoleInput = {
+  name: string;
+  description?: string;
+  runtime?: TBridgeRoleRuntime;
+  agentId?: string;
+  brief?: string;
+  tier?: TBridgeRoleTier;
+  dailyCap?: number | null;
+  templateId?: string;
+};
+
+export type TBridgeRolePatch = Partial<TBridgeRoleInput> & { enabled?: boolean };
+
+export type TBridgeRun = {
+  id: string;
+  roleId: string;
+  roleSlug: string;
+  summary: string;
+  status: TBridgeRunStatus;
+  /** Whether this run counts toward the daily caps (a real model call). */
+  counted: boolean;
+  conversationId: string;
+  /** Stable code for why the run failed; never raw provider text. */
+  error?: string;
+  createdAt: string;
+  finishedAt?: string;
+};
+
+export type TBridgeRoleUsage = {
+  day: string;
+  team: { used: number; cap: number };
+  byRole: Record<string, { used: number; cap: number }>;
+};
+
+export type TBridgeRolesOverview = {
+  roles: TBridgeRole[];
+  templates: TBridgeRoleTemplate[];
+  runs: TBridgeRun[];
+  usage: TBridgeRoleUsage;
+  limits: { maxBriefChars: number; maxRoles: number };
+  /** `file` roles open only when the operator has enabled them. */
+  fileRolesEnabled: boolean;
+};
+
+export type TBridgeAssignRequest = {
+  /** Client-made id; the same id never starts a second run. */
+  requestId: string;
+  task: string;
+};
+
+export type TBridgeAssignResponse = { run: TBridgeRun; replayed: boolean };
+
+export type TBridgeRolesErrorCode =
+  | 'ROLE_INVALID'
+  | 'ROLE_SECRET_DETECTED'
+  | 'ROLE_SLUG_TAKEN'
+  | 'ROLE_LIMIT'
+  | 'ROLE_NOT_FOUND'
+  | 'ROLE_DISABLED'
+  | 'ROLE_LOCKED'
+  | 'ROLE_AGENT_UNAVAILABLE'
+  | 'CAP_ROLE'
+  | 'CAP_TEAM'
+  | 'ASSIGN_RATE_LIMITED'
+  | 'ASSIGN_FAILED';
+
+export type TBridgeRolesError = {
+  error: TBridgeRolesErrorCode;
+  field?: string;
+  used?: number;
+  cap?: number;
+};

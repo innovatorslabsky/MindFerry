@@ -811,6 +811,24 @@ export const agentBridgeSchema = z
       .default([]),
     /** The command that opens the tunnel to those dashboards, shown as a hint. */
     tunnelCommand: z.string().max(400).optional(),
+    /** Named roles that run as in-app agents; off until `roles.enabled` is set. */
+    roles: z
+      .object({
+        enabled: z.boolean().default(false),
+        /** Runs one role may start per day, counted only when the model is really called. */
+        dailyCapPerRole: z.number().int().min(1).max(1000).default(6),
+        /** Runs the whole team may start per day. */
+        dailyCapTeam: z.number().int().min(1).max(5000).default(25),
+        /** Assignments one person may start per hour. */
+        assignPerHour: z.number().int().min(1).max(500).default(20),
+        /** Longest standing brief for a role, in characters. */
+        maxBriefChars: z.number().int().min(100).max(16000).default(4000),
+        /** Roles one person may keep. */
+        maxRoles: z.number().int().min(1).max(100).default(12),
+        /** Roles that run on the VPS agents (file protocol) stay locked until this is set. */
+        fileRolesEnabled: z.boolean().default(false),
+      })
+      .default({}),
   })
   .optional();
 
