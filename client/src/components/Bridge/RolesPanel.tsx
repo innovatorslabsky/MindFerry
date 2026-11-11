@@ -8,8 +8,8 @@ import { bridgeErrorCode, bridgeErrorKey } from './errors';
 import { NotificationSeverity } from '~/common';
 import AddRoleDialog from './AddRoleDialog';
 import AssignDialog from './AssignDialog';
-import { whenLabel } from './format';
 import { useLocalize } from '~/hooks';
+import { whenLabel } from './format';
 
 const RUN_LABEL: Record<TBridgeRun['status'], TranslationKeys> = {
   queued: 'com_bridge_run_queued',
