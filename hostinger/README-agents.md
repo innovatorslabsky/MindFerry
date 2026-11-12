@@ -216,3 +216,34 @@ This brings back the old image (`ae40d65`) and drops the mounts and the config f
 - Results are written by the agents, who read the open web. The page draws them as plain Markdown:
   no HTML, no images, only http(s) links.
 - Agents use a throwaway browser profile, so logins are not kept between tasks.
+
+## Part 3: check input files before the agents read them (`scan-inputs.py`)
+
+A file that comes from outside can carry instructions aimed at the agent, hidden characters, a
+spreadsheet formula, or content that is not text. `scan-inputs.py` reads each file once, never runs
+it, and says OK, REVIEW or REJECT. It needs only Python 3 and makes no model calls. It is a first
+filter, not a guarantee: it catches the careless and the obvious, and the agents' tool limits and a
+person reading the result remain the real protection.
+
+```bash
+# Look at a file or a folder (changes nothing):
+python3 scan-inputs.py ~/incoming/gsc-export.csv
+python3 scan-inputs.py /home/deploy/tasks/inputs          # audit what is already there
+
+# Put files where the agents can read them. Only files that passed are copied, byte for byte:
+python3 scan-inputs.py --install /home/deploy/tasks/inputs/sbuddy ~/incoming/*.csv
+# A REVIEW file is copied only after a person has read the findings and agrees:
+python3 scan-inputs.py --install /home/deploy/tasks/inputs/sbuddy --allow-review ~/incoming/notes.md
+```
+
+- Accepted: `.txt .csv .tsv .md .json`, plain UTF-8 text, up to 1 MB (`--max-bytes`), names made of
+  letters, digits, dot, dash and underscore. Anything else (PDF, Office, zip, HTML, scripts) is rejected
+  by its content, not by its name.
+- REJECT: wrong type or content, bad encoding, hidden characters (zero-width, text-direction and tag
+  characters), a symbolic link. Never copied.
+- REVIEW: something to read before using the file: a line that tries to override the agent's rules, a
+  link that carries data or credentials, markup, a long encoded block, something that looks like a key
+  (never shown), a spreadsheet formula. Normal SEO text can occasionally trip it.
+- Exit status: 0 all OK, 1 something to review, 2 something rejected, 3 usage error. `--json` prints a
+  machine-readable report.
+- Tests: `python3 -m unittest hostinger/test_scan_inputs.py`.
