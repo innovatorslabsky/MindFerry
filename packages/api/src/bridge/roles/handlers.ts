@@ -3,12 +3,18 @@ import { logger } from '@librechat/data-schemas';
 import type { TBridgeRolesErrorCode, TBridgeErrorCode } from 'librechat-data-provider';
 import type { Response } from 'express';
 import type { RolesActor, RolesDeps, RolesFailure } from './service';
+import type { BridgeSettings } from '../config';
+import type { BridgeStore } from '../store';
 import type { ServerRequest } from '../../types/http';
 import { areRolesEnabled, getBridgeSettings } from '../config';
 import { getSafeErrorMetadata } from '../../utils/errors';
+import { createBridgeStore } from '../store';
 import { createRolesService } from './service';
 
-export type RolesServiceDeps = Omit<RolesDeps, 'getSettings'>;
+export type RolesServiceDeps = Omit<RolesDeps, 'getSettings' | 'fileTasks'> & {
+  /** Builds the task-folder store for the settings in force. Defaults to the real folder. */
+  createStore?: (settings: BridgeSettings) => BridgeStore;
+};
 
 const STATUS: Record<TBridgeRolesErrorCode, number> = {
   ROLE_INVALID: 400,
@@ -32,6 +38,7 @@ const createSchema = z
     description: z.string().optional(),
     runtime: z.enum(['app', 'hermes', 'openclaw']).optional(),
     agentId: z.string().min(1).max(100).optional(),
+    roleFile: z.string().max(80).optional(),
     brief: z.string().optional(),
     tier: tierSchema.optional(),
     dailyCap: z.number().nullable().optional(),
@@ -82,6 +89,8 @@ export function createRolesHandlers(deps: RolesServiceDeps): RolesHandlers {
       res.status(401).json({ error: 'BRIDGE_UNAVAILABLE' satisfies TBridgeErrorCode });
       return null;
     }
+    const settings = getBridgeSettings(req.config);
+    const store = (deps.createStore ?? createBridgeStore)(settings);
     const who: RolesActor = {
       id: String(actor.id),
       ...(actor.role ? { role: actor.role } : {}),
@@ -89,7 +98,14 @@ export function createRolesHandlers(deps: RolesServiceDeps): RolesHandlers {
     };
     return {
       who,
-      service: createRolesService({ ...deps, getSettings: () => getBridgeSettings(req.config) }),
+      service: createRolesService({
+        ...deps,
+        getSettings: () => settings,
+        fileTasks: {
+          create: (input, at) => store.create(input, at),
+          state: (id) => store.taskState(id),
+        },
+      }),
     };
   }
 

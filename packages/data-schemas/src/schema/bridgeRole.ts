@@ -11,6 +11,8 @@ export interface IBridgeRole extends Document {
   description: string;
   runtime: BridgeRuntimeValue;
   agentId?: string;
+  /** For a role that runs on a host agent: the name of its role file in the tasks folder (no extension). */
+  roleFile?: string;
   brief: string;
   tier: 0 | 1;
   dailyCap?: number;
@@ -29,6 +31,7 @@ const bridgeRoleSchema: Schema<IBridgeRole> = new Schema(
     description: { type: String, default: '', maxlength: 600 },
     runtime: { type: String, enum: ['app', 'hermes', 'openclaw'], required: true },
     agentId: { type: String, maxlength: 200 },
+    roleFile: { type: String, maxlength: 80, match: /^[a-z0-9][a-z0-9-]{0,79}$/ },
     brief: { type: String, default: '', maxlength: BRIDGE_ROLE_MAX_BRIEF },
     tier: { type: Number, enum: [0, 1], default: 0 },
     dailyCap: { type: Number, min: 1, max: 1000 },

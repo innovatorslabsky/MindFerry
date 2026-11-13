@@ -16,6 +16,8 @@ import type {
 } from '@librechat/data-schemas';
 import type { AgentTriggerEnvelope } from '../../agents/triggers/envelope';
 import type { BridgeSettings } from '../config';
+import type { BridgeTaskState } from '../store';
+import type { TaskInput } from '../protocol';
 import {
   AgentTriggerEnvelopeError,
   createAgentTriggerEnvelope,
@@ -23,7 +25,9 @@ import {
 import { AgentTriggerServiceUnavailableError } from '../../agents/triggers/service';
 import { AgentTriggerDeliveryError } from '../../agents/triggers/delivery';
 import { BRIDGE_ROLE_TEMPLATES, getRoleTemplate } from './templates';
+import { STUCK_AFTER_MS } from '../store';
 import { looksLikeSecret } from '../secrets';
+import { toOneLine } from '../protocol';
 
 export type RolesFailure = {
   code: TBridgeRolesErrorCode;
@@ -61,6 +65,11 @@ export interface RolesDeps {
     options?: { orderingKey?: string },
   ) => Promise<unknown>;
   getJobStatus: (conversationId: string) => Promise<JobStatus | null | undefined>;
+  /** The task folder, for roles that run on a host agent. Absent when the bridge folder is not set up. */
+  fileTasks?: {
+    create: (input: TaskInput, now: Date) => Promise<{ id: string }>;
+    state: (id: string) => Promise<BridgeTaskState | null>;
+  };
   now?: () => Date;
   newId?: () => string;
 }
@@ -74,6 +83,7 @@ export interface RolesActor {
 /** Counted runs are only those that reach the paid Anthropic API. */
 export const COUNTED_PROVIDER = 'anthropic';
 const NAME_MAX = 80;
+const ROLE_FILE = /^[a-z0-9][a-z0-9-]{0,79}$/;
 const DESCRIPTION_MAX = 300;
 const SUMMARY_CHARS = 140;
 const SLUG_TRIES = 6;
@@ -113,6 +123,7 @@ export function toRole(record: BridgeRoleRecord): TBridgeRole {
     description: record.description,
     runtime: record.runtime,
     ...(record.agentId ? { agentId: record.agentId } : {}),
+    ...(record.roleFile ? { roleFile: record.roleFile } : {}),
     brief: record.brief,
     tier: record.tier,
     ...(record.dailyCap != null ? { dailyCap: record.dailyCap } : {}),
@@ -123,15 +134,23 @@ export function toRole(record: BridgeRoleRecord): TBridgeRole {
   };
 }
 
-export function toRun(record: BridgeRunRecord): TBridgeRun {
+export function toRun(record: BridgeRunRecord, at?: Date): TBridgeRun {
+  const stuck =
+    at != null &&
+    record.runtime !== 'app' &&
+    record.status === 'running' &&
+    at.getTime() - record.createdAt.getTime() > STUCK_AFTER_MS;
   return {
     id: record.id,
     roleId: record.roleId,
     roleSlug: record.roleSlug,
+    runtime: record.runtime,
     summary: record.summary,
     status: record.status,
     counted: record.counted,
-    conversationId: record.conversationId,
+    ...(record.conversationId ? { conversationId: record.conversationId } : {}),
+    ...(record.taskId ? { taskId: record.taskId } : {}),
+    ...(stuck ? { stuck: true } : {}),
     ...(record.error ? { error: record.error } : {}),
     createdAt: record.createdAt.toISOString(),
     ...(record.finishedAt ? { finishedAt: record.finishedAt.toISOString() } : {}),
@@ -216,8 +235,19 @@ export function createRolesService(deps: RolesDeps): RolesService {
       return fail('ROLE_INVALID', { field: 'name' });
     }
     const runtime = input.runtime ?? 'app';
-    if (runtime !== 'app') {
-      return fail('ROLE_LOCKED');
+    const onHost = runtime !== 'app';
+    if (onHost) {
+      if (!settings.fileRolesEnabled) {
+        return fail('ROLE_LOCKED');
+      }
+      if (!input.roleFile || !ROLE_FILE.test(input.roleFile)) {
+        return fail('ROLE_INVALID', { field: 'roleFile' });
+      }
+      if (input.agentId !== undefined || template) {
+        return fail('ROLE_INVALID', {
+          field: input.agentId !== undefined ? 'agentId' : 'templateId',
+        });
+      }
     }
     if (input.tier !== undefined && input.tier !== 0 && input.tier !== 1) {
       return fail('ROLE_INVALID', { field: 'tier' });
@@ -228,7 +258,7 @@ export function createRolesService(deps: RolesDeps): RolesService {
     ) {
       return fail('ROLE_INVALID', { field: 'dailyCap' });
     }
-    const brief = input.brief ?? template?.brief ?? '';
+    const brief = onHost ? '' : (input.brief ?? template?.brief ?? '');
     const description = input.description ?? template?.description ?? '';
     const invalid =
       validateText(brief, 'brief', settings.maxBriefChars) ??
@@ -236,7 +266,7 @@ export function createRolesService(deps: RolesDeps): RolesService {
     if (invalid) {
       return { ok: false, error: invalid };
     }
-    if (!input.agentId || !(await checkAgent(actor, input.agentId))) {
+    if (!onHost && (!input.agentId || !(await checkAgent(actor, input.agentId)))) {
       return fail('ROLE_AGENT_UNAVAILABLE', { field: 'agentId' });
     }
 
@@ -250,7 +280,7 @@ export function createRolesService(deps: RolesDeps): RolesService {
           name,
           description,
           runtime,
-          agentId: input.agentId,
+          ...(onHost ? { roleFile: input.roleFile } : { agentId: input.agentId }),
           brief,
           tier: input.tier ?? template?.tier ?? 0,
           ...(input.dailyCap != null ? { dailyCap: input.dailyCap } : {}),
@@ -313,6 +343,10 @@ export function createRolesService(deps: RolesDeps): RolesService {
       next.enabled = patch.enabled;
     }
     if (patch.agentId !== undefined) {
+      const current = await methods.getBridgeRole(actor.id, id);
+      if (current && current.runtime !== 'app') {
+        return fail('ROLE_INVALID', { field: 'agentId' });
+      }
       if (!(await checkAgent(actor, patch.agentId))) {
         return fail('ROLE_AGENT_UNAVAILABLE', { field: 'agentId' });
       }
@@ -335,9 +369,12 @@ export function createRolesService(deps: RolesDeps): RolesService {
     if (TERMINAL.has(run.status)) {
       return run;
     }
+    if (run.runtime !== 'app') {
+      return refreshHostRun(userId, run, at);
+    }
     let job: JobStatus | null | undefined;
     try {
-      job = await deps.getJobStatus(run.conversationId);
+      job = await deps.getJobStatus(run.conversationId ?? '');
     } catch {
       return run;
     }
@@ -375,6 +412,50 @@ export function createRolesService(deps: RolesDeps): RolesService {
     return updated ?? run;
   }
 
+  /** A run on a host agent follows its task file: inbox, processing, then a result in outbox. */
+  async function refreshHostRun(
+    userId: string,
+    run: BridgeRunRecord,
+    at: Date,
+  ): Promise<BridgeRunRecord> {
+    let status: BridgeRunStatusValue;
+    let error: string | undefined;
+    if (!run.taskId || !deps.fileTasks) {
+      status = at.getTime() - run.createdAt.getTime() > UNKNOWN_AFTER_MS ? 'unknown' : 'queued';
+    } else {
+      let found: BridgeTaskState | null;
+      try {
+        found = await deps.fileTasks.state(run.taskId);
+      } catch {
+        return run;
+      }
+      if (found == null) {
+        status = 'unknown';
+      } else if (found.state === 'archived') {
+        if (found.resultStatus === 'FAILED') {
+          status = 'failed';
+          error = 'task_failed';
+        } else {
+          status = found.resultStatus ? 'done' : 'unknown';
+        }
+      } else if (found.state === 'failed') {
+        status = 'failed';
+        error = 'task_failed';
+      } else {
+        status = found.state;
+      }
+    }
+    if (status === run.status) {
+      return run;
+    }
+    const updated = await methods.updateBridgeRun(userId, run.id, {
+      status,
+      ...(error ? { error } : {}),
+      ...(TERMINAL.has(status) ? { finishedAt: at } : {}),
+    });
+    return updated ?? run;
+  }
+
   async function overview(userId: string): Promise<TBridgeRolesOverview> {
     const settings = deps.getSettings().roles;
     const at = now();
@@ -394,11 +475,85 @@ export function createRolesService(deps: RolesDeps): RolesService {
     return {
       roles: roles.map(toRole),
       templates: BRIDGE_ROLE_TEMPLATES.map((t) => ({ ...t })),
-      runs: runs.map(toRun),
+      runs: runs.map((run) => toRun(run, at)),
       usage: { day: dayOf(at), team: { used: usage.team, cap: settings.dailyCapTeam }, byRole },
       limits: { maxBriefChars: settings.maxBriefChars, maxRoles: settings.maxRoles },
       fileRolesEnabled: settings.fileRolesEnabled,
     };
+  }
+
+  /**
+   * Hands a task to a role that runs on Hermes or OpenClaw: a task file in the inbox that points the
+   * agent at the role's file. Every task file is a real model call, so it counts against the same
+   * daily caps as an in-app run.
+   */
+  async function assignToHost(
+    role: BridgeRoleRecord,
+    task: string,
+    deliveryId: string,
+    at: Date,
+  ): Promise<RolesResult<TBridgeAssignResponse>> {
+    const settings = deps.getSettings();
+    const files = deps.fileTasks;
+    if (!files || !role.roleFile || (role.runtime !== 'hermes' && role.runtime !== 'openclaw')) {
+      return fail('ROLE_LOCKED');
+    }
+    const line = toOneLine(task);
+    const tasksDir = settings.tasksDir.replace(/\/+$/, '');
+    const text = `Follow the role file ${tasksDir}/roles/${role.roleFile}.md exactly. Task: ${line}`;
+    if (text.length > settings.maxTaskChars) {
+      return fail('ROLE_INVALID', { field: 'task' });
+    }
+    const reserved = await methods.reserveBridgeRun(
+      role.userId,
+      {
+        roleId: role.id,
+        roleSlug: role.slug,
+        agentId: role.runtime,
+        runtime: role.runtime,
+        deliveryId,
+        summary: line.slice(0, SUMMARY_CHARS),
+        counted: true,
+        day: dayOf(at),
+      },
+      {
+        role: role.dailyCap ?? settings.roles.dailyCapPerRole,
+        team: settings.roles.dailyCapTeam,
+      },
+    );
+    if (!reserved.ok) {
+      return fail(reserved.code === 'cap_role' ? 'CAP_ROLE' : 'CAP_TEAM', {
+        used: reserved.used,
+        cap: reserved.cap,
+      });
+    }
+    if (!reserved.created) {
+      return ok({ run: toRun(reserved.run, at), replayed: true });
+    }
+    let taskId: string;
+    try {
+      const built = await files.create(
+        {
+          to: role.runtime,
+          task: text,
+          priority: 'normal',
+          slugSource: `${role.roleFile} ${line}`,
+        },
+        at,
+      );
+      taskId = built.id;
+    } catch {
+      // Nothing was written, so the slot goes back.
+      await methods.updateBridgeRun(role.userId, reserved.run.id, {
+        status: 'failed',
+        error: 'task_not_written',
+        counted: false,
+        finishedAt: now(),
+      });
+      return fail('ASSIGN_FAILED');
+    }
+    const updated = await methods.updateBridgeRun(role.userId, reserved.run.id, { taskId });
+    return ok({ run: toRun(updated ?? { ...reserved.run, taskId }, at), replayed: false });
   }
 
   async function assign(
@@ -415,7 +570,10 @@ export function createRolesService(deps: RolesDeps): RolesService {
     if (!role.enabled) {
       return fail('ROLE_DISABLED');
     }
-    if (role.runtime !== 'app' || !role.agentId) {
+    if (role.runtime === 'app' && !role.agentId) {
+      return fail('ROLE_LOCKED');
+    }
+    if (role.runtime !== 'app' && !settings.roles.fileRolesEnabled) {
       return fail('ROLE_LOCKED');
     }
     const task = request.task?.trim() ?? '';
@@ -438,7 +596,7 @@ export function createRolesService(deps: RolesDeps): RolesService {
     const recent = await methods.listBridgeRuns(userId, { limit: settings.roles.assignPerHour });
     const replay = recent.find((run) => run.deliveryId === deliveryId);
     if (replay) {
-      return ok({ run: toRun(await refreshRun(userId, replay, at)), replayed: true });
+      return ok({ run: toRun(await refreshRun(userId, replay, at), at), replayed: true });
     }
     const windowStart = at.getTime() - HOUR_MS;
     if (
@@ -448,7 +606,10 @@ export function createRolesService(deps: RolesDeps): RolesService {
       return fail('ASSIGN_RATE_LIMITED', { cap: settings.roles.assignPerHour });
     }
 
-    const agent = await deps.resolveAgent(actor, role.agentId);
+    if (role.runtime !== 'app') {
+      return assignToHost(role, task, deliveryId, at);
+    }
+    const agent = await deps.resolveAgent(actor, role.agentId ?? '');
     if (!agent) {
       return fail('ROLE_AGENT_UNAVAILABLE');
     }
@@ -483,7 +644,7 @@ export function createRolesService(deps: RolesDeps): RolesService {
       });
     }
     if (!reserved.created) {
-      return ok({ run: toRun(reserved.run), replayed: true });
+      return ok({ run: toRun(reserved.run, at), replayed: true });
     }
 
     try {

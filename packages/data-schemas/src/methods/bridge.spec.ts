@@ -315,3 +315,104 @@ describe('reading runs', () => {
     expect(await methods.latestBridgeRuns(userA, [])).toEqual({});
   });
 });
+
+describe('roles and runs on a host agent', () => {
+  it('stores a role file name and no agent, and reads it back', async () => {
+    const made = await methods.createBridgeRole(
+      userA,
+      { slug: 'seo-strategist', name: 'SEO', runtime: 'hermes', roleFile: 'seo-strategist-sbuddy' },
+      12,
+    );
+    expect(made.ok && made.role).toMatchObject({
+      runtime: 'hermes',
+      roleFile: 'seo-strategist-sbuddy',
+    });
+    expect(made.ok && made.role.agentId).toBeUndefined();
+  });
+
+  it('refuses a role file name that could point outside the roles folder', async () => {
+    for (const roleFile of ['../x', 'a/b', 'A_B', '-x', '']) {
+      if (roleFile === '') {
+        continue;
+      }
+      await expect(
+        methods.createBridgeRole(
+          userA,
+          {
+            slug: `s-${Math.random().toString(36).slice(2, 8)}`,
+            name: 'x',
+            runtime: 'hermes',
+            roleFile,
+          },
+          50,
+        ),
+      ).rejects.toThrow();
+    }
+  });
+
+  it('reserves a run with no chat, attaches the task id later and reads it back', async () => {
+    const roleId = await makeRole(userA, { slug: 'h', runtime: 'hermes', agentId: undefined });
+    const reserved = await methods.reserveBridgeRun(userA, {
+      roleId,
+      roleSlug: 'h',
+      agentId: 'hermes',
+      runtime: 'hermes',
+      deliveryId: 'bridge:host-1',
+      summary: 'Plan the quarter',
+      counted: true,
+      day: DAY,
+    });
+    expect(reserved.ok && reserved.run).toMatchObject({ runtime: 'hermes', status: 'queued' });
+    expect(reserved.ok && reserved.run.conversationId).toBeUndefined();
+    expect(reserved.ok && reserved.run.taskId).toBeUndefined();
+
+    const runId = reserved.ok ? reserved.run.id : '';
+    const updated = await methods.updateBridgeRun(userA, runId, {
+      taskId: '2026-11-13-0900-hermes-plan-the-quarter',
+    });
+    expect(updated?.taskId).toBe('2026-11-13-0900-hermes-plan-the-quarter');
+    expect((await methods.getBridgeRun(userA, runId))?.taskId).toBe(
+      '2026-11-13-0900-hermes-plan-the-quarter',
+    );
+  });
+
+  it('counts host-agent runs against the same daily caps as in-app runs', async () => {
+    const roleId = await makeRole(userA, { slug: 'h2', runtime: 'hermes', agentId: undefined });
+    const base = {
+      roleId,
+      roleSlug: 'h2',
+      agentId: 'hermes',
+      runtime: 'hermes' as const,
+      summary: 's',
+      counted: true,
+      day: DAY,
+    };
+    await methods.reserveBridgeRun(userA, { ...base, deliveryId: 'bridge:a' }, { role: 1 });
+    const second = await methods.reserveBridgeRun(
+      userA,
+      { ...base, deliveryId: 'bridge:b' },
+      { role: 1 },
+    );
+    expect(second).toMatchObject({ ok: false, code: 'cap_role', cap: 1 });
+  });
+
+  it('reads a run stored before host roles existed as an in-app run', async () => {
+    const roleId = await makeRole();
+    await mongoose.models.BridgeRun.collection.insertOne({
+      userId: new mongoose.Types.ObjectId(userA),
+      roleId: new mongoose.Types.ObjectId(roleId),
+      roleSlug: 'chief-of-staff',
+      agentId: 'agent_abc',
+      deliveryId: 'legacy-1',
+      conversationId: 'convo-legacy',
+      summary: 'old',
+      status: 'done',
+      counted: true,
+      day: DAY,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const [run] = await methods.listBridgeRuns(userA, { roleId });
+    expect(run).toMatchObject({ runtime: 'app', conversationId: 'convo-legacy' });
+  });
+});

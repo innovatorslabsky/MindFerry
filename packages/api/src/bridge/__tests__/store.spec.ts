@@ -218,3 +218,63 @@ describe('create', () => {
     expect(tasks).toMatchObject([{ id: built.id, state: 'queued', priority: 'high' }]);
   });
 });
+
+describe('taskState', () => {
+  it('reads where one task stands, and what its result said once it is archived', async () => {
+    expect(await store().taskState(ID)).toBeNull();
+
+    await put('inbox', `${ID}.md`, taskFile(ID));
+    expect(await store().taskState(ID)).toMatchObject({
+      state: 'queued',
+      created: '2026-11-07T01:43:00Z',
+    });
+
+    await fs.rename(
+      path.join(root, 'inbox', `${ID}.md`),
+      path.join(root, 'processing', `${ID}.md`),
+    );
+    expect(await store().taskState(ID)).toMatchObject({ state: 'running' });
+
+    await put('outbox', `${ID}-result.md`, 'status: FAILED\n\nwhy');
+    expect(await store().taskState(ID)).toMatchObject({ state: 'failed', resultStatus: 'FAILED' });
+
+    await fs.rename(
+      path.join(root, 'processing', `${ID}.md`),
+      path.join(root, 'archive', `${ID}.md`),
+    );
+    expect(await store().taskState(ID)).toMatchObject({
+      state: 'archived',
+      resultStatus: 'FAILED',
+    });
+  });
+
+  it('knows a task that only has a result left', async () => {
+    await put('outbox', `${ID}-result.md`, 'status: DONE\n\nok');
+    expect(await store().taskState(ID)).toMatchObject({ state: 'done', resultStatus: 'DONE' });
+  });
+
+  it('answers nothing, without throwing, for a name that is not a task id', async () => {
+    for (const bad of ['', '../etc/passwd', 'x', `${ID}/../x`]) {
+      expect(await store().taskState(bad)).toBeNull();
+    }
+  });
+});
+
+describe('a task that may be stuck', () => {
+  it('is flagged once it has been running for over an hour with no result, and only then', async () => {
+    await put('processing', `${ID}.md`, taskFile(ID));
+    const at = (minutes: number) => new Date(Date.parse('2026-11-07T01:43:00Z') + minutes * 60_000);
+
+    expect((await store().list(10, at(59))).tasks[0].stuck).toBeUndefined();
+    expect((await store().list(10, at(61))).tasks[0].stuck).toBe(true);
+
+    await put('outbox', `${ID}-result.md`, 'status: DONE\n\nok');
+    expect((await store().list(10, at(61))).tasks[0].stuck).toBeUndefined();
+  });
+
+  it('is never flagged while it is still queued', async () => {
+    await put('inbox', `${ID}.md`, taskFile(ID));
+    const later = new Date(Date.parse('2026-11-07T01:43:00Z') + 5 * 60 * 60_000);
+    expect((await store().list(10, later)).tasks[0].stuck).toBeUndefined();
+  });
+});

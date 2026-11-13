@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
-import type { BridgeRunStatusValue } from '~/types/bridge';
+import type { BridgeRunStatusValue, BridgeRuntimeValue } from '~/types/bridge';
 
 /** How long a run's record is kept. The daily caps only look at today. */
 export const BRIDGE_RUN_RETENTION_SECONDS: number = 90 * 24 * 60 * 60;
@@ -10,7 +10,12 @@ export interface IBridgeRun extends Document {
   roleSlug: string;
   agentId: string;
   deliveryId: string;
-  conversationId: string;
+  /** Where the run executes; runs stored before host roles existed are `app`. */
+  runtime: BridgeRuntimeValue;
+  /** The chat a run of an in-app agent happens in. */
+  conversationId?: string;
+  /** The task file a run on a host agent was handed over as. */
+  taskId?: string;
   summary: string;
   status: BridgeRunStatusValue;
   counted: boolean;
@@ -32,7 +37,9 @@ const bridgeRunSchema: Schema<IBridgeRun> = new Schema(
     roleSlug: { type: String, required: true, maxlength: 60 },
     agentId: { type: String, required: true, maxlength: 200 },
     deliveryId: { type: String, required: true, maxlength: 200 },
-    conversationId: { type: String, required: true, maxlength: 200 },
+    runtime: { type: String, enum: ['app', 'hermes', 'openclaw'], default: 'app' },
+    conversationId: { type: String, maxlength: 200 },
+    taskId: { type: String, maxlength: 200 },
     summary: { type: String, default: '', maxlength: 300 },
     status: {
       type: String,

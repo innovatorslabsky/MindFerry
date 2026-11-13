@@ -53,6 +53,8 @@ export type TBridgeTask = {
   summary: string;
   hasResult: boolean;
   resultStatus?: TBridgeResultStatus;
+  /** Picked up more than an hour ago with no result yet. A hint only: nothing is moved. */
+  stuck?: boolean;
 };
 
 export type TBridgeDashboard = { name: string; url: string };
@@ -121,7 +123,9 @@ export type TBridgeRole = {
   runtime: TBridgeRoleRuntime;
   /** The in-app agent this role runs as (runtime `app`). */
   agentId?: string;
-  /** Standing instructions added to every assignment. */
+  /** The role file on the host (runtime `hermes` or `openclaw`), without `.md`. */
+  roleFile?: string;
+  /** Standing instructions added to every assignment (an in-app role; a host role keeps them in its file). */
   brief: string;
   tier: TBridgeRoleTier;
   /** Per-role daily cap; absent means the operator's default. */
@@ -145,6 +149,7 @@ export type TBridgeRoleInput = {
   description?: string;
   runtime?: TBridgeRoleRuntime;
   agentId?: string;
+  roleFile?: string;
   brief?: string;
   tier?: TBridgeRoleTier;
   dailyCap?: number | null;
@@ -157,11 +162,17 @@ export type TBridgeRun = {
   id: string;
   roleId: string;
   roleSlug: string;
+  runtime: TBridgeRoleRuntime;
   summary: string;
   status: TBridgeRunStatus;
   /** Whether this run counts toward the daily caps (a real model call). */
   counted: boolean;
-  conversationId: string;
+  /** The chat of an in-app run. */
+  conversationId?: string;
+  /** The task file of a host-agent run; its result opens in the result dialog. */
+  taskId?: string;
+  /** A host-agent run picked up more than an hour ago with no result: it may be stuck. */
+  stuck?: boolean;
   /** Stable code for why the run failed; never raw provider text. */
   error?: string;
   createdAt: string;

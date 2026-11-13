@@ -1,10 +1,15 @@
+import os from 'os';
+import path from 'path';
 import mongoose from 'mongoose';
+import { promises as fs } from 'fs';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { createModels, createMethods } from '@librechat/data-schemas';
 import type { AgentTriggerEnvelope } from '../../agents/triggers/envelope';
 import type { RolesActor, RolesDeps, JobStatus } from './service';
 import type { BridgeSettings } from '../config';
 import { AgentTriggerServiceUnavailableError } from '../../agents/triggers/service';
+import type { BridgeStore } from '../store';
+import { createBridgeStore } from '../store';
 import { createRolesService } from './service';
 import { getBridgeSettings } from '../config';
 
@@ -42,12 +47,20 @@ type Overrides = {
   job?: JobStatus | null;
   agents?: Record<string, boolean>;
   now?: Date;
+  store?: BridgeStore;
+  tasksDir?: string;
 };
 
 function setup(over: Overrides = {}) {
   const sent: AgentTriggerEnvelope[] = [];
   let counter = 0;
-  const base = getBridgeSettings({ agentBridge: { enabled: true, roles: {} } } as never);
+  const base = getBridgeSettings({
+    agentBridge: {
+      enabled: true,
+      ...(over.tasksDir ? { tasksDir: over.tasksDir } : {}),
+      roles: {},
+    },
+  } as never);
   const settings: BridgeSettings = {
     ...base,
     roles: { ...base.roles, enabled: true, ...over.settings },
@@ -67,6 +80,14 @@ function setup(over: Overrides = {}) {
         sent.push(envelope);
       }),
     getJobStatus: async () => job,
+    ...(over.store
+      ? {
+          fileTasks: {
+            create: (input, at) => over.store!.create(input, at),
+            state: (id) => over.store!.taskState(id),
+          },
+        }
+      : {}),
     now: () => clock,
     newId: () => `00000000-0000-4000-8000-${String(++counter).padStart(12, '0')}`,
   });
@@ -441,5 +462,234 @@ describe('the overview', () => {
     setJob('error');
     const run = (await service.overview(user)).runs[0];
     expect(run.error).toBe('run_error');
+  });
+});
+
+describe('roles that run on a host agent', () => {
+  let tasks: string;
+  let store: BridgeStore;
+  const FILE_ON = { fileRolesEnabled: true };
+
+  beforeEach(async () => {
+    tasks = await fs.mkdtemp(path.join(os.tmpdir(), 'bridge-host-roles-'));
+    for (const dir of ['inbox', 'processing', 'outbox', 'archive']) {
+      await fs.mkdir(path.join(tasks, dir));
+    }
+    store = createBridgeStore({ tasksDir: tasks, maxResultBytes: 4096 });
+  });
+  afterEach(async () => {
+    await fs.rm(tasks, { recursive: true, force: true });
+  });
+
+  const host = (over: Overrides = {}) =>
+    setup({ settings: FILE_ON, store, tasksDir: tasks, ...over });
+  const makeHostRole = async (service: ReturnType<typeof setup>['service'], over = {}) => {
+    const made = await service.createRole(actor, {
+      name: 'SEO Strategist',
+      runtime: 'hermes',
+      roleFile: 'seo-strategist-sbuddy',
+      ...over,
+    });
+    if (!made.ok) {
+      throw new Error(`could not create role: ${made.error.code}`);
+    }
+    return made.value;
+  };
+  const inbox = () => fs.readdir(path.join(tasks, 'inbox'));
+  const move = (id: string, from: string, to: string) =>
+    fs.rename(path.join(tasks, from, `${id}.md`), path.join(tasks, to, `${id}.md`));
+  const answer = (id: string, text: string) =>
+    fs.writeFile(path.join(tasks, 'outbox', `${id}-result.md`), text);
+
+  it('stay locked until the operator opens them', async () => {
+    const { service } = setup({ store, tasksDir: tasks });
+    const result = await service.createRole(actor, {
+      name: 'X',
+      runtime: 'hermes',
+      roleFile: 'seo-strategist-sbuddy',
+    });
+    expect(!result.ok && result.error.code).toBe('ROLE_LOCKED');
+  });
+
+  it('are created from a role file name, with no agent', async () => {
+    const { service } = host();
+    const role = await makeHostRole(service);
+    expect(role).toMatchObject({ runtime: 'hermes', roleFile: 'seo-strategist-sbuddy', tier: 0 });
+    expect(role.agentId).toBeUndefined();
+    expect(role.brief).toBe('');
+  });
+
+  it.each([
+    ['a path out of the roles folder', { roleFile: '../secrets' }, 'roleFile'],
+    ['a name with capitals', { roleFile: 'Seo' }, 'roleFile'],
+    ['no role file', { roleFile: undefined }, 'roleFile'],
+    ['an agent as well', { agentId: 'agent_one' }, 'agentId'],
+    ['a template', { templateId: 'writer' }, 'templateId'],
+  ])('refuse %s', async (_label, over, field) => {
+    const { service } = host();
+    const result = await service.createRole(actor, {
+      name: 'X',
+      runtime: 'openclaw',
+      roleFile: 'chief-of-staff',
+      ...over,
+    });
+    expect(!result.ok && result.error).toEqual({ code: 'ROLE_INVALID', field });
+  });
+
+  it('write one task file that points the agent at its role file, and send nothing to the chat queue', async () => {
+    const { service, sent } = host();
+    const role = await makeHostRole(service);
+    const result = await service.assign(actor, role.id, {
+      requestId: 'req-00000001',
+      task: 'Plan the next 90 days of local SEO',
+    });
+    expect(result.ok && result.value.replayed).toBe(false);
+    const run = result.ok ? result.value.run : undefined;
+    expect(run).toMatchObject({
+      runtime: 'hermes',
+      status: 'queued',
+      counted: true,
+      summary: 'Plan the next 90 days of local SEO',
+    });
+    expect(run?.conversationId).toBeUndefined();
+    expect(sent).toHaveLength(0);
+
+    const files = await inbox();
+    expect(files).toHaveLength(1);
+    expect(files[0]).toBe(`${run?.taskId}.md`);
+    expect(run?.taskId).toMatch(/-hermes-seo-strategist-sbuddy-plan-the-next/);
+    const text = await fs.readFile(path.join(tasks, 'inbox', files[0]), 'utf8');
+    expect(text).toContain('to: hermes');
+    expect(text).toContain(
+      `Follow the role file ${tasks}/roles/seo-strategist-sbuddy.md exactly. Task: Plan the next 90 days of local SEO.`,
+    );
+    expect(text).toContain('via: mindferry');
+  });
+
+  it('do not write a second file for the same request id', async () => {
+    const { service } = host();
+    const role = await makeHostRole(service);
+    const body = { requestId: 'req-00000001', task: 'Plan' };
+    const first = await service.assign(actor, role.id, body);
+    const again = await service.assign(actor, role.id, body);
+    expect(again.ok && again.value.replayed).toBe(true);
+    expect(again.ok && first.ok && again.value.run.id).toBe(first.ok && first.value.run.id);
+    expect(await inbox()).toHaveLength(1);
+  });
+
+  it('count against the same daily caps and stop before writing a file', async () => {
+    const { service } = host({ settings: { ...FILE_ON, dailyCapPerRole: 1 } });
+    const role = await makeHostRole(service);
+    await service.assign(actor, role.id, { requestId: 'req-00000001', task: 'one' });
+    const second = await service.assign(actor, role.id, { requestId: 'req-00000002', task: 'two' });
+    expect(!second.ok && second.error).toMatchObject({ code: 'CAP_ROLE', cap: 1 });
+    expect(await inbox()).toHaveLength(1);
+    expect((await service.overview(user)).usage.team.used).toBe(1);
+  });
+
+  it('refuse a task a file cannot hold, and a key in the task, before writing', async () => {
+    const { service } = host();
+    const role = await makeHostRole(service);
+    const long = await service.assign(actor, role.id, {
+      requestId: 'req-00000001',
+      task: 'a'.repeat(1990),
+    });
+    expect(!long.ok && long.error).toEqual({ code: 'ROLE_INVALID', field: 'task' });
+    const secret = await service.assign(actor, role.id, {
+      requestId: 'req-00000002',
+      task: 'use sk-ant-api03-abcdefghijklmnopqrstuvwx',
+    });
+    expect(!secret.ok && secret.error.code).toBe('ROLE_SECRET_DETECTED');
+    expect(await inbox()).toHaveLength(0);
+    expect((await service.overview(user)).usage.team.used).toBe(0);
+  });
+
+  it('give the slot back when the task file could not be written', async () => {
+    const broken: BridgeStore = {
+      ...store,
+      create: async () => {
+        throw new Error('inbox is read-only');
+      },
+    };
+    const { service } = host({ store: broken });
+    const role = await makeHostRole(service);
+    const result = await service.assign(actor, role.id, { requestId: 'req-00000001', task: 'x' });
+    expect(!result.ok && result.error.code).toBe('ASSIGN_FAILED');
+    const view = await service.overview(user);
+    expect(view.usage.team.used).toBe(0);
+    expect(view.runs[0]).toMatchObject({
+      status: 'failed',
+      error: 'task_not_written',
+      counted: false,
+    });
+  });
+
+  it('follow the task folder: queued, running, then the result', async () => {
+    const { service } = host();
+    const role = await makeHostRole(service);
+    const made = await service.assign(actor, role.id, { requestId: 'req-00000001', task: 'Plan' });
+    const id = made.ok ? (made.value.run.taskId as string) : '';
+    const status = async () => (await service.overview(user)).runs[0];
+
+    expect((await status()).status).toBe('queued');
+    await move(id, 'inbox', 'processing');
+    expect((await status()).status).toBe('running');
+    await answer(id, 'status: DONE\n\nDone.');
+    const done = await status();
+    expect(done.status).toBe('done');
+    expect(done.finishedAt).toBeDefined();
+    await move(id, 'processing', 'archive');
+    expect((await status()).status).toBe('done');
+  });
+
+  it('show a failed result as failed, with a fixed code and never the agent text', async () => {
+    const { service } = host();
+    const role = await makeHostRole(service);
+    const made = await service.assign(actor, role.id, { requestId: 'req-00000001', task: 'Plan' });
+    const id = made.ok ? (made.value.run.taskId as string) : '';
+    await move(id, 'inbox', 'processing');
+    await answer(id, 'status: FAILED\n\nmongodb://admin:hunter2@db refused');
+    const run = (await service.overview(user)).runs[0];
+    expect(run).toMatchObject({ status: 'failed', error: 'task_failed' });
+    expect(JSON.stringify(run)).not.toContain('hunter2');
+  });
+
+  it('hint that a run may be stuck after an hour with no result, and show a vanished file as unknown', async () => {
+    const { service, setNow } = host();
+    const role = await makeHostRole(service);
+    const made = await service.assign(actor, role.id, { requestId: 'req-00000001', task: 'Plan' });
+    const id = made.ok ? (made.value.run.taskId as string) : '';
+    await move(id, 'inbox', 'processing');
+    expect((await service.overview(user)).runs[0].stuck).toBeUndefined();
+    setNow(new Date(NOW.getTime() + 61 * 60_000));
+    const stuck = (await service.overview(user)).runs[0];
+    expect(stuck).toMatchObject({ status: 'running', stuck: true });
+
+    await fs.rm(path.join(tasks, 'processing', `${id}.md`));
+    expect((await service.overview(user)).runs[0].status).toBe('unknown');
+  });
+
+  it('keep an in-app run and a host run apart in the same list', async () => {
+    const { service } = host();
+    const app = await makeRole(service);
+    const hostRole = await makeHostRole(service);
+    await service.assign(actor, app.id, { requestId: 'req-00000001', task: 'in app' });
+    await service.assign(actor, hostRole.id, { requestId: 'req-00000002', task: 'on host' });
+    const runs = (await service.overview(user)).runs;
+    expect(runs.map((r) => r.runtime).sort()).toEqual(['app', 'hermes']);
+    expect(runs.find((r) => r.runtime === 'app')?.conversationId).toBeDefined();
+    expect(runs.find((r) => r.runtime === 'hermes')?.taskId).toBeDefined();
+  });
+
+  it('refuse to hand a task to a host role while the operator has closed them again', async () => {
+    const open = host();
+    const role = await makeHostRole(open.service);
+    const closed = setup({ store, tasksDir: tasks });
+    const result = await closed.service.assign(actor, role.id, {
+      requestId: 'req-00000001',
+      task: 'x',
+    });
+    expect(!result.ok && result.error.code).toBe('ROLE_LOCKED');
+    expect(await inbox()).toHaveLength(0);
   });
 });

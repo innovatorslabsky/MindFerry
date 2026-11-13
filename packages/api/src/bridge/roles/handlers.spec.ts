@@ -1,4 +1,7 @@
+import os from 'os';
+import path from 'path';
 import express from 'express';
+import { promises as fs } from 'fs';
 import request from 'supertest';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
@@ -232,5 +235,79 @@ describe('roles routes', () => {
       .post(`/roles/${role.id}/assign`)
       .send({ requestId: 'req-00000001', task: 'a' });
     expect(assign.status).toBe(404);
+  });
+});
+
+describe('roles on a host agent over HTTP', () => {
+  let tasks: string;
+
+  beforeEach(async () => {
+    tasks = await fs.mkdtemp(path.join(os.tmpdir(), 'bridge-host-http-'));
+    for (const dir of ['inbox', 'processing', 'outbox', 'archive']) {
+      await fs.mkdir(path.join(tasks, dir));
+    }
+  });
+  afterEach(async () => {
+    await fs.rm(tasks, { recursive: true, force: true });
+  });
+
+  const open = (fileRolesEnabled: boolean) => {
+    config = {
+      agentBridge: { enabled: true, tasksDir: tasks, roles: { enabled: true, fileRolesEnabled } },
+    } as Partial<AppConfig>;
+    return build();
+  };
+  const hostRole = (app: express.Express) =>
+    request(app)
+      .post('/roles')
+      .send({ name: 'SEO', runtime: 'hermes', roleFile: 'seo-strategist-sbuddy' });
+
+  it('answers 403 for a host role while the operator has not opened them', async () => {
+    const res = await hostRole(open(false));
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: 'ROLE_LOCKED' });
+    expect(await mongoose.models.BridgeRole.countDocuments()).toBe(0);
+  });
+
+  it('answers 400 for a role file name that could leave the roles folder', async () => {
+    const res = await request(open(true))
+      .post('/roles')
+      .send({ name: 'SEO', runtime: 'hermes', roleFile: '../x' });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'ROLE_INVALID', field: 'roleFile' });
+  });
+
+  it('creates a host role, hands it a task (202) and writes the task file', async () => {
+    const app = open(true);
+    const created = await hostRole(app);
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({ runtime: 'hermes', roleFile: 'seo-strategist-sbuddy' });
+
+    const assigned = await request(app)
+      .post(`/roles/${created.body.id}/assign`)
+      .send({ requestId: 'req-00000001', task: 'Plan the quarter' });
+    expect(assigned.status).toBe(202);
+    expect(assigned.body.run).toMatchObject({ runtime: 'hermes', status: 'queued', counted: true });
+    expect(sent).toHaveLength(0);
+    const files = await fs.readdir(path.join(tasks, 'inbox'));
+    expect(files).toEqual([`${assigned.body.run.taskId}.md`]);
+
+    const view = await request(app).get('/roles');
+    expect(view.body.runs[0]).toMatchObject({
+      runtime: 'hermes',
+      taskId: assigned.body.run.taskId,
+    });
+  });
+
+  it('answers 502 and keeps the slot free when the inbox cannot be written', async () => {
+    const app = open(true);
+    const created = await hostRole(app);
+    await fs.rm(path.join(tasks, 'inbox'), { recursive: true });
+    const res = await request(app)
+      .post(`/roles/${created.body.id}/assign`)
+      .send({ requestId: 'req-00000001', task: 'Plan' });
+    expect(res.status).toBe(502);
+    expect(JSON.stringify(res.body)).not.toContain(tasks);
+    expect((await request(app).get('/roles')).body.usage.team.used).toBe(0);
   });
 });

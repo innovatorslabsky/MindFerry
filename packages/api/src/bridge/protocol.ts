@@ -84,6 +84,8 @@ export interface TaskInput {
   output?: string;
   constraints?: string;
   priority: TBridgePriority;
+  /** Words the task's id is named from, when they should not be the task line itself. */
+  slugSource?: string;
 }
 
 export interface BuiltTask {
@@ -104,7 +106,7 @@ export function buildTaskFile(
   options: { now: Date; tasksDir: string; attempt?: number },
 ): BuiltTask {
   const attempt = options.attempt ?? 1;
-  const slug = slugify(input.task) + (attempt > 1 ? `-${attempt}` : '');
+  const slug = slugify(input.slugSource ?? input.task) + (attempt > 1 ? `-${attempt}` : '');
   const id = `${stampOf(options.now)}-${input.to}-${slug}`;
   const resultPath = `${options.tasksDir.replace(/\/+$/, '')}/outbox/${id}-result.md`;
 

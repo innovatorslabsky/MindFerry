@@ -1,7 +1,12 @@
 import path from 'path';
 import { randomBytes } from 'crypto';
 import { constants, promises as fs } from 'fs';
-import type { TBridgePriority, TBridgeResult, TBridgeTask } from 'librechat-data-provider';
+import type {
+  TBridgePriority,
+  TBridgeResult,
+  TBridgeTask,
+  TBridgeResultStatus,
+} from 'librechat-data-provider';
 import type { BuiltTask, TaskInput } from './protocol';
 import {
   BRIDGE_PRIORITIES,
@@ -48,6 +53,8 @@ const RESULT_FILE =
 const HEAD_BYTES = 4096;
 const RESULT_HEAD_BYTES = 512;
 const SUMMARY_CHARS = 160;
+/** A task that has been running this long with no result is probably stuck. */
+export const STUCK_AFTER_MS = 60 * 60 * 1000;
 const MAX_ATTEMPTS = 6;
 
 const OPEN_READ = constants.O_RDONLY | constants.O_NOFOLLOW;
@@ -88,10 +95,32 @@ async function readUpTo(
   }
 }
 
+/** Where one task stands, read from the folders. `archived` keeps what the result said. */
+export interface BridgeTaskState {
+  state: TBridgeTask['state'];
+  resultStatus?: TBridgeResultStatus;
+  /** The task file's own `created` time, when it can still be read. */
+  created?: string;
+}
+
 export interface BridgeStore {
-  list(limit: number): Promise<BridgeListing>;
+  list(limit: number, now?: Date): Promise<BridgeListing>;
+  taskState(id: string): Promise<BridgeTaskState | null>;
   readResult(id: string): Promise<TBridgeResult | null>;
   create(input: TaskInput, now: Date): Promise<CreatedTask>;
+}
+
+/** True for a task picked up more than an hour ago that has still not produced a result. */
+export function isStuck(
+  state: TBridgeTask['state'],
+  created: string | undefined,
+  now: Date,
+): boolean {
+  if (state !== 'running' || !created) {
+    return false;
+  }
+  const at = Date.parse(created);
+  return Number.isFinite(at) && now.getTime() - at > STUCK_AFTER_MS;
 }
 
 export function createBridgeStore({ tasksDir, maxResultBytes }: BridgeStoreOptions): BridgeStore {
@@ -133,7 +162,7 @@ export function createBridgeStore({ tasksDir, maxResultBytes }: BridgeStoreOptio
     }
   }
 
-  async function list(limit: number): Promise<BridgeListing> {
+  async function list(limit: number, now: Date = new Date()): Promise<BridgeListing> {
     const [inbox, processing, archive, outbox] = await Promise.all([
       names('inbox'),
       names('processing'),
@@ -202,6 +231,7 @@ export function createBridgeStore({ tasksDir, maxResultBytes }: BridgeStoreOptio
           summary: toOneLine(front.task ?? '').slice(0, SUMMARY_CHARS),
           hasResult: result != null,
           ...(resultStatus ? { resultStatus } : {}),
+          ...(isStuck(state, front.created, now) ? { stuck: true } : {}),
         };
       }),
     );
@@ -300,5 +330,42 @@ export function createBridgeStore({ tasksDir, maxResultBytes }: BridgeStoreOptio
     throw new BridgeConflictError();
   }
 
-  return { list, readResult, create };
+  async function taskState(id: string): Promise<BridgeTaskState | null> {
+    if (!isTaskId(id)) {
+      return null;
+    }
+    await requireDir('outbox');
+    const file = `${id}.md`;
+    let location: Location | undefined;
+    for (const candidate of ['inbox', 'processing', 'archive'] as const) {
+      if (await exists(candidate, file).catch(() => false)) {
+        location = candidate;
+        break;
+      }
+    }
+    const result = await readUpTo(path.join(dirOf('outbox'), `${id}-result.md`), RESULT_HEAD_BYTES);
+    if (!location && !result) {
+      return null;
+    }
+    const head = location ? await readUpTo(path.join(dirOf(location), file), HEAD_BYTES) : null;
+    const created = head ? parseFrontmatter(head.text).created : undefined;
+    const resultStatus = result ? parseResultStatus(result.text) : undefined;
+    let state: TBridgeTask['state'];
+    if (location === 'archive') {
+      state = 'archived';
+    } else if (location === 'inbox') {
+      state = 'queued';
+    } else if (result) {
+      state = resultStatus === 'FAILED' ? 'failed' : 'done';
+    } else {
+      state = location === 'processing' ? 'running' : 'queued';
+    }
+    return {
+      state,
+      ...(resultStatus ? { resultStatus } : {}),
+      ...(created ? { created: created.slice(0, 40) } : {}),
+    };
+  }
+
+  return { list, taskState, readResult, create };
 }

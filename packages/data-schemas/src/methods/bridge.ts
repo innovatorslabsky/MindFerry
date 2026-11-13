@@ -36,7 +36,7 @@ type RoleDoc = Pick<
   | 'createdAt'
   | 'updatedAt'
 > &
-  Partial<Pick<IBridgeRole, 'agentId' | 'dailyCap' | 'templateId'>> & {
+  Partial<Pick<IBridgeRole, 'agentId' | 'roleFile' | 'dailyCap' | 'templateId'>> & {
     _id: Types.ObjectId;
     userId: Types.ObjectId;
   };
@@ -50,6 +50,7 @@ function toRole(doc: RoleDoc): BridgeRoleRecord {
     description: doc.description ?? '',
     runtime: doc.runtime,
     ...(doc.agentId ? { agentId: doc.agentId } : {}),
+    ...(doc.roleFile ? { roleFile: doc.roleFile } : {}),
     brief: doc.brief ?? '',
     tier: doc.tier === 1 ? 1 : 0,
     ...(doc.dailyCap != null ? { dailyCap: doc.dailyCap } : {}),
@@ -65,7 +66,6 @@ type RunDoc = Pick<
   | 'roleSlug'
   | 'agentId'
   | 'deliveryId'
-  | 'conversationId'
   | 'summary'
   | 'status'
   | 'counted'
@@ -73,7 +73,12 @@ type RunDoc = Pick<
   | 'createdAt'
   | 'updatedAt'
 > &
-  Partial<Pick<IBridgeRun, 'provider' | 'modelName' | 'error' | 'finishedAt'>> & {
+  Partial<
+    Pick<
+      IBridgeRun,
+      'provider' | 'modelName' | 'error' | 'finishedAt' | 'runtime' | 'conversationId' | 'taskId'
+    >
+  > & {
     _id: Types.ObjectId;
     userId: Types.ObjectId;
     roleId: Types.ObjectId;
@@ -87,7 +92,9 @@ function toRun(doc: RunDoc): BridgeRunRecord {
     roleSlug: doc.roleSlug,
     agentId: doc.agentId,
     deliveryId: doc.deliveryId,
-    conversationId: doc.conversationId,
+    runtime: doc.runtime ?? 'app',
+    ...(doc.conversationId ? { conversationId: doc.conversationId } : {}),
+    ...(doc.taskId ? { taskId: doc.taskId } : {}),
     summary: doc.summary ?? '',
     status: doc.status,
     counted: doc.counted === true,
@@ -160,6 +167,7 @@ export function createBridgeMethods(mongoose: typeof import('mongoose')): Bridge
         description: input.description ?? '',
         runtime: input.runtime,
         ...(input.agentId ? { agentId: input.agentId } : {}),
+        ...(input.roleFile ? { roleFile: input.roleFile } : {}),
         brief: input.brief ?? '',
         tier: input.tier ?? 0,
         ...(input.dailyCap != null ? { dailyCap: input.dailyCap } : {}),
@@ -260,7 +268,8 @@ export function createBridgeMethods(mongoose: typeof import('mongoose')): Bridge
         roleSlug: input.roleSlug,
         agentId: input.agentId,
         deliveryId: input.deliveryId,
-        conversationId: input.conversationId,
+        runtime: input.runtime ?? 'app',
+        ...(input.conversationId ? { conversationId: input.conversationId } : {}),
         summary: input.summary,
         status: 'queued',
         counted: input.counted,
