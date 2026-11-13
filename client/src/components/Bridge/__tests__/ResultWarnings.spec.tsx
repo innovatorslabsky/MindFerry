@@ -32,9 +32,7 @@ describe('ResultWarnings', () => {
     const box = screen.getByTestId('bridge-result-warnings');
     expect(within(box).getByText('com_bridge_warn_title')).toBeInTheDocument();
     expect(within(box).getAllByRole('listitem')).toHaveLength(2);
-    expect(screen.getByTestId('bridge-warning-secret')).toHaveTextContent(
-      'com_bridge_warn_lines:2',
-    );
+    expect(screen.getByTestId('bridge-warning-secret')).toHaveTextContent('com_bridge_warn_line:2');
     expect(screen.getByTestId('bridge-warning-placeholder_example')).toHaveTextContent(
       'com_bridge_warn_lines:9, 11',
     );

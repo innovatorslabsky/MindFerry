@@ -52,7 +52,7 @@ export default function ResultWarnings({
             {lines.length > 0 && (
               <>
                 {' '}
-                {localize('com_bridge_warn_lines', {
+                {localize(lines.length === 1 ? 'com_bridge_warn_line' : 'com_bridge_warn_lines', {
                   0: `${lines.slice(0, LINES_SHOWN).join(', ')}${lines.length > LINES_SHOWN ? '…' : ''}`,
                 })}
               </>

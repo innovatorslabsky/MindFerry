@@ -3609,6 +3609,7 @@
   "com_bridge_warn_banned_claim": "The draft uses words the owner did not supply: {{0}}.",
   "com_bridge_warn_claim_phrase": "The draft says how the work is done or what is offered, which the owner did not supply: {{0}}.",
   "com_bridge_warn_hidden_char": "Invisible characters were found. They are shown as ⟦U+…⟧.",
+  "com_bridge_warn_line": "Line {{0}}.",
   "com_bridge_warn_lines": "Lines {{0}}.",
   "com_bridge_warn_link_credentials": "A link contains a user name or password.",
   "com_bridge_warn_link_data": "A link carries data or a key in its address: {{0}}.",
