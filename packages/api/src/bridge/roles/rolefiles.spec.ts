@@ -57,10 +57,23 @@ describe('the PetVee role file', () => {
     expect(text).toContain('/home/deploy/tasks/inputs/petvee/');
   });
 
-  it('keeps private details out: the reviewer’s name and the reason iOS was refused', () => {
-    expect(text).not.toMatch(/Lê Chi/i);
+  it('keeps private details out: the reason iOS was refused and the owner’s name', () => {
     expect(text).not.toMatch(/Guideline|4\.8|từ chối .*Apple|Apple .*từ chối/i);
     expect(text).not.toMatch(/Vincent/);
+  });
+
+  it('does not say anyone with veterinary training reviews the content, and names the owner as the reviewer', () => {
+    expect(text).not.toMatch(/có người có chuyên môn rà soát/);
+    expect(text).toContain('cũng là người duyệt mọi bản nháp');
+    expect(text).toContain('Hiện chưa có chuyên gia thú y rà soát nội dung');
+    expect(text).toContain('người duyệt mọi bản nháp là chủ sản phẩm');
+  });
+
+  it('keeps the medical-review marker and the placeholder for expert content, and asks for confirmation before publishing', () => {
+    expect(text).toContain('CẦN DUYỆT Y KHOA');
+    expect(text).toContain('[INSERT: nội dung do người có chuyên môn thú y cung cấp]');
+    expect(text).toContain('cần người có chuyên môn thú y xác nhận trước khi đăng');
+    expect(text).toMatch(/không nêu rằng có chuyên gia rà soát nội dung/);
   });
 
   it('forbids veterinary diagnosis and treatment advice and asks for a medical review', () => {
