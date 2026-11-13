@@ -55,7 +55,7 @@ export default function BridgeView() {
       {data && (
         <>
           <AgentCards status={data.status} />
-          <RolesPanel maxTaskChars={data.limits.maxTaskChars} />
+          <RolesPanel maxTaskChars={data.limits.maxTaskChars} onOpenResult={setOpenId} />
           <NewTaskForm
             maxTaskChars={data.limits.maxTaskChars}
             maxFieldChars={data.limits.maxFieldChars}

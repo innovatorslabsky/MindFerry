@@ -20,8 +20,15 @@ const RUN_LABEL: Record<TBridgeRun['status'], TranslationKeys> = {
   unknown: 'com_bridge_run_unknown',
 };
 
-function RunRow({ run }: { run: TBridgeRun }) {
+function RunRow({
+  run,
+  onOpenResult,
+}: {
+  run: TBridgeRun;
+  onOpenResult?: (taskId: string) => void;
+}) {
   const localize = useLocalize();
+  const hasResult = run.status === 'done' || run.status === 'failed';
   return (
     <li
       className="border-border-light flex flex-col gap-1 border-b py-2 last:border-b-0"
@@ -46,25 +53,50 @@ function RunRow({ run }: { run: TBridgeRun }) {
             {localize('com_bridge_run_needs_approval')}
           </span>
         )}
+        {run.stuck && (
+          <span className="text-text-primary" data-testid="bridge-run-stuck">
+            {localize('com_bridge_run_stuck')}
+          </span>
+        )}
         {run.error && <span>{localize('com_bridge_run_error', { 0: run.error })}</span>}
-        <Link
-          to={`/c/${encodeURIComponent(run.conversationId)}`}
-          className="text-text-primary underline"
-        >
-          {localize('com_bridge_run_open')}
-        </Link>
+        {run.conversationId && (
+          <Link
+            to={`/c/${encodeURIComponent(run.conversationId)}`}
+            className="text-text-primary underline"
+          >
+            {localize('com_bridge_run_open')}
+          </Link>
+        )}
+        {run.taskId && hasResult && onOpenResult && (
+          <button
+            type="button"
+            className="text-text-primary underline"
+            onClick={() => onOpenResult(run.taskId as string)}
+            data-testid="bridge-run-result"
+          >
+            {localize('com_bridge_view_result')}
+          </button>
+        )}
       </div>
     </li>
   );
 }
 
+const RUNTIME_LABEL: Record<TBridgeRole['runtime'], TranslationKeys> = {
+  app: 'com_bridge_roles_runtime_app',
+  hermes: 'com_bridge_roles_runtime_hermes',
+  openclaw: 'com_bridge_roles_runtime_openclaw',
+};
+
 function RoleCard({
   role,
   usage,
+  fileRolesEnabled,
   onAssign,
 }: {
   role: TBridgeRole;
   usage?: { used: number; cap: number };
+  fileRolesEnabled: boolean;
   onAssign: (role: TBridgeRole) => void;
 }) {
   const localize = useLocalize();
@@ -76,7 +108,7 @@ function RoleCard({
         status: NotificationSeverity.ERROR,
       }),
   });
-  const locked = role.runtime !== 'app';
+  const locked = role.runtime !== 'app' && !fileRolesEnabled;
 
   return (
     <li
@@ -93,6 +125,7 @@ function RoleCard({
       </div>
       {role.description && <p className="text-text-secondary text-sm">{role.description}</p>}
       <div className="text-text-tertiary flex flex-wrap gap-x-3 text-xs">
+        <span data-testid="bridge-role-runtime">{localize(RUNTIME_LABEL[role.runtime])}</span>
         {!role.enabled && <span>{localize('com_bridge_roles_off')}</span>}
         {locked && <span>{localize('com_bridge_roles_locked')}</span>}
         {usage && (
@@ -126,7 +159,15 @@ function RoleCard({
   );
 }
 
-function Loaded({ data, maxTaskChars }: { data: TBridgeRolesOverview; maxTaskChars: number }) {
+function Loaded({
+  data,
+  maxTaskChars,
+  onOpenResult,
+}: {
+  data: TBridgeRolesOverview;
+  maxTaskChars: number;
+  onOpenResult?: (taskId: string) => void;
+}) {
   const localize = useLocalize();
   const [adding, setAdding] = useState(false);
   const [assigning, setAssigning] = useState<TBridgeRole | null>(null);
@@ -167,6 +208,7 @@ function Loaded({ data, maxTaskChars }: { data: TBridgeRolesOverview; maxTaskCha
               key={role.id}
               role={role}
               usage={data.usage.byRole[role.id]}
+              fileRolesEnabled={data.fileRolesEnabled}
               onAssign={setAssigning}
             />
           ))}
@@ -180,7 +222,7 @@ function Loaded({ data, maxTaskChars }: { data: TBridgeRolesOverview; maxTaskCha
           </h3>
           <ul>
             {data.runs.map((run) => (
-              <RunRow key={run.id} run={run} />
+              <RunRow key={run.id} run={run} onOpenResult={onOpenResult} />
             ))}
           </ul>
         </div>
@@ -191,6 +233,7 @@ function Loaded({ data, maxTaskChars }: { data: TBridgeRolesOverview; maxTaskCha
         onClose={() => setAdding(false)}
         templates={data.templates}
         maxBriefChars={data.limits.maxBriefChars}
+        fileRolesEnabled={data.fileRolesEnabled}
       />
       <AssignDialog
         role={assigning}
@@ -202,10 +245,16 @@ function Loaded({ data, maxTaskChars }: { data: TBridgeRolesOverview; maxTaskCha
 }
 
 /**
- * Named roles that run as in-app agents. The section stays out of sight when the operator has not
+ * Named roles that run as in-app agents or on Hermes and OpenClaw. The section stays out of sight when the operator has not
  * turned roles on; any other failure is said, with a way to try again.
  */
-export default function RolesPanel({ maxTaskChars }: { maxTaskChars: number }) {
+export default function RolesPanel({
+  maxTaskChars,
+  onOpenResult,
+}: {
+  maxTaskChars: number;
+  onOpenResult?: (taskId: string) => void;
+}) {
   const localize = useLocalize();
   const { data, isError, error, refetch } = useBridgeRolesQuery();
 
@@ -224,7 +273,7 @@ export default function RolesPanel({ maxTaskChars }: { maxTaskChars: number }) {
           </Button>
         </div>
       )}
-      {data && <Loaded data={data} maxTaskChars={maxTaskChars} />}
+      {data && <Loaded data={data} maxTaskChars={maxTaskChars} onOpenResult={onOpenResult} />}
     </section>
   );
 }

@@ -25,8 +25,8 @@ import {
 import { AgentTriggerServiceUnavailableError } from '../../agents/triggers/service';
 import { AgentTriggerDeliveryError } from '../../agents/triggers/delivery';
 import { BRIDGE_ROLE_TEMPLATES, getRoleTemplate } from './templates';
-import { STUCK_AFTER_MS } from '../store';
 import { looksLikeSecret } from '../secrets';
+import { STUCK_AFTER_MS } from '../store';
 import { toOneLine } from '../protocol';
 
 export type RolesFailure = {

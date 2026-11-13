@@ -28,7 +28,7 @@ export default function AssignDialog({
     key: TranslationKeys;
     values?: Record<string, number>;
   }>();
-  const [started, setStarted] = useState<string | null>(null);
+  const [started, setStarted] = useState<{ chat?: string } | null>(null);
   const requestId = useRef(newRequestId());
 
   useEffect(() => {
@@ -40,7 +40,7 @@ export default function AssignDialog({
 
   const mutation = useAssignBridgeRoleMutation({
     onSuccess: (data) => {
-      setStarted(data.run.conversationId);
+      setStarted(data.run.conversationId ? { chat: data.run.conversationId } : {});
       setTask('');
       requestId.current = newRequestId();
     },
@@ -101,7 +101,13 @@ export default function AssignDialog({
             >
               {localize('com_bridge_roles_chars_left', { 0: left })}
             </p>
-            <p className="text-text-tertiary text-xs">{localize('com_bridge_roles_assign_note')}</p>
+            <p className="text-text-tertiary text-xs">
+              {localize(
+                role != null && role.runtime !== 'app'
+                  ? 'com_bridge_roles_assign_note_host'
+                  : 'com_bridge_roles_assign_note',
+              )}
+            </p>
             {problem && (
               <p role="alert" className="text-text-primary text-sm" data-testid="assign-error">
                 {localize(problem.key, problem.values)}
@@ -109,10 +115,17 @@ export default function AssignDialog({
             )}
             {started && (
               <p role="status" className="text-text-primary text-sm" data-testid="assign-started">
-                {localize('com_bridge_roles_started')}{' '}
-                <Link to={`/c/${encodeURIComponent(started)}`} className="underline">
-                  {localize('com_bridge_run_open')}
-                </Link>
+                {localize(
+                  started.chat ? 'com_bridge_roles_started' : 'com_bridge_roles_started_host',
+                )}
+                {started.chat && (
+                  <>
+                    {' '}
+                    <Link to={`/c/${encodeURIComponent(started.chat)}`} className="underline">
+                      {localize('com_bridge_run_open')}
+                    </Link>
+                  </>
+                )}
               </p>
             )}
             <div className="flex justify-end">

@@ -7,11 +7,11 @@ import { createModels, createMethods } from '@librechat/data-schemas';
 import type { AgentTriggerEnvelope } from '../../agents/triggers/envelope';
 import type { RolesActor, RolesDeps, JobStatus } from './service';
 import type { BridgeSettings } from '../config';
-import { AgentTriggerServiceUnavailableError } from '../../agents/triggers/service';
 import type { BridgeStore } from '../store';
-import { createBridgeStore } from '../store';
+import { AgentTriggerServiceUnavailableError } from '../../agents/triggers/service';
 import { createRolesService } from './service';
 import { getBridgeSettings } from '../config';
+import { createBridgeStore } from '../store';
 
 let mongo: MongoMemoryServer;
 let methods: ReturnType<typeof createMethods>;

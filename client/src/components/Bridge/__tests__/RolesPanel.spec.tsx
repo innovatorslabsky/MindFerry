@@ -56,6 +56,7 @@ const run = (over: Partial<TBridgeRun> = {}): TBridgeRun => ({
   id: 'run-1',
   roleId: 'role-1',
   roleSlug: 'researcher',
+  runtime: 'app',
   summary: 'Compare two vendors',
   status: 'running',
   counted: true,
@@ -80,10 +81,10 @@ const overview = (over: Partial<TBridgeRolesOverview> = {}): TBridgeRolesOvervie
   ...over,
 });
 
-const draw = () =>
+const draw = (onOpenResult?: (id: string) => void) =>
   render(
     <MemoryRouter>
-      <RolesPanel maxTaskChars={2000} />
+      <RolesPanel maxTaskChars={2000} onOpenResult={onOpenResult} />
     </MemoryRouter>,
   );
 
@@ -290,6 +291,149 @@ describe('RolesPanel', () => {
       expect(screen.getByTestId('add-role-error')).toHaveTextContent(
         'com_bridge_roles_error_name_taken',
       );
+    });
+  });
+
+  describe('roles on Hermes or OpenClaw', () => {
+    const hostRole = (over: Partial<TBridgeRole> = {}) =>
+      role({
+        id: 'role-h',
+        name: 'SEO Strategist',
+        runtime: 'hermes',
+        agentId: undefined,
+        roleFile: 'seo-strategist-sbuddy',
+        ...over,
+      });
+    const hostRun = (over: Partial<TBridgeRun> = {}) =>
+      run({
+        id: 'run-h',
+        roleId: 'role-h',
+        roleSlug: 'seo-strategist',
+        runtime: 'hermes',
+        conversationId: undefined,
+        taskId: '2026-11-13-0900-hermes-seo-strategist-sbuddy-plan',
+        status: 'done',
+        ...over,
+      });
+
+    it('says where each role runs, and keeps a host role locked until the operator opens them', () => {
+      mockRoles = {
+        data: overview({ roles: [role(), hostRole()], fileRolesEnabled: false }),
+        isError: false,
+      };
+      draw();
+      const [app, host] = screen.getAllByTestId('bridge-role');
+      expect(within(app).getByTestId('bridge-role-runtime')).toHaveTextContent(
+        'com_bridge_roles_runtime_app',
+      );
+      expect(within(host).getByTestId('bridge-role-runtime')).toHaveTextContent(
+        'com_bridge_roles_runtime_hermes',
+      );
+      expect(within(host).getByText('com_bridge_roles_locked')).toBeInTheDocument();
+      expect(within(host).getByText('com_bridge_roles_assign')).toBeDisabled();
+    });
+
+    it('lets a host role be given a task once the operator has opened them', () => {
+      mockRoles = {
+        data: overview({ roles: [hostRole()], fileRolesEnabled: true }),
+        isError: false,
+      };
+      draw();
+      expect(screen.queryByText('com_bridge_roles_locked')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByText('com_bridge_roles_assign'));
+      expect(screen.getByText('com_bridge_roles_assign_note_host')).toBeInTheDocument();
+    });
+
+    it('opens the result of a finished host run, and links to no chat', () => {
+      const open = jest.fn();
+      mockRoles = { data: overview({ runs: [hostRun()] }), isError: false };
+      draw(open);
+      const row = screen.getByTestId('bridge-run');
+      expect(within(row).queryByText('com_bridge_run_open')).not.toBeInTheDocument();
+      fireEvent.click(within(row).getByTestId('bridge-run-result'));
+      expect(open).toHaveBeenCalledWith('2026-11-13-0900-hermes-seo-strategist-sbuddy-plan');
+    });
+
+    it('offers no result until the run has one', () => {
+      mockRoles = { data: overview({ runs: [hostRun({ status: 'running' })] }), isError: false };
+      draw(jest.fn());
+      expect(screen.queryByTestId('bridge-run-result')).not.toBeInTheDocument();
+    });
+
+    it('says a run may be stuck', () => {
+      mockRoles = {
+        data: overview({ runs: [hostRun({ status: 'running', stuck: true })] }),
+        isError: false,
+      };
+      draw(jest.fn());
+      expect(screen.getByTestId('bridge-run-stuck')).toHaveTextContent('com_bridge_run_stuck');
+    });
+
+    it('says the task was written, with no chat link, after a host task is started', () => {
+      mockRoles = {
+        data: overview({ roles: [hostRole()], fileRolesEnabled: true }),
+        isError: false,
+      };
+      draw();
+      fireEvent.click(screen.getByText('com_bridge_roles_assign'));
+      fireEvent.change(screen.getByLabelText('com_bridge_roles_task'), {
+        target: { value: 'Plan the quarter' },
+      });
+      fireEvent.click(screen.getByText('com_bridge_roles_send'));
+      act(() => assignOptions.onSuccess?.({ run: hostRun({ status: 'queued' }), replayed: false }));
+      expect(screen.getByTestId('assign-started')).toHaveTextContent(
+        'com_bridge_roles_started_host',
+      );
+      expect(within(screen.getByTestId('assign-started')).queryByRole('link')).toBeNull();
+    });
+
+    describe('adding one', () => {
+      const open = (fileRolesEnabled: boolean) => {
+        mockRoles = { data: overview({ fileRolesEnabled }), isError: false };
+        draw();
+        fireEvent.click(screen.getByText('com_bridge_roles_add'));
+      };
+
+      it('offers a choice of where it runs only when host roles are open', () => {
+        open(false);
+        expect(screen.queryByLabelText('com_bridge_roles_runtime')).not.toBeInTheDocument();
+      });
+
+      it('asks for a role file, not an agent, template or brief', () => {
+        open(true);
+        fireEvent.change(screen.getByLabelText('com_bridge_roles_runtime'), {
+          target: { value: 'hermes' },
+        });
+        expect(screen.getByLabelText('com_bridge_roles_role_file')).toBeInTheDocument();
+        expect(screen.queryByLabelText('com_bridge_roles_agent')).not.toBeInTheDocument();
+        expect(screen.queryByLabelText('com_bridge_roles_template')).not.toBeInTheDocument();
+        expect(screen.queryByLabelText('com_bridge_roles_brief')).not.toBeInTheDocument();
+      });
+
+      it('creates the role from a valid role file name only', () => {
+        open(true);
+        fireEvent.change(screen.getByLabelText('com_bridge_roles_runtime'), {
+          target: { value: 'openclaw' },
+        });
+        fireEvent.change(screen.getByLabelText('com_bridge_roles_name'), {
+          target: { value: 'Chief of Staff' },
+        });
+        for (const bad of ['', '../x', 'Chief_Of_Staff', '-x']) {
+          fireEvent.change(screen.getByLabelText('com_bridge_roles_role_file'), {
+            target: { value: bad },
+          });
+          expect(screen.getByText('com_bridge_roles_create')).toBeDisabled();
+        }
+        fireEvent.change(screen.getByLabelText('com_bridge_roles_role_file'), {
+          target: { value: 'chief-of-staff' },
+        });
+        fireEvent.click(screen.getByText('com_bridge_roles_create'));
+        expect(mockCreate).toHaveBeenCalledWith({
+          name: 'Chief of Staff',
+          runtime: 'openclaw',
+          roleFile: 'chief-of-staff',
+        });
+      });
     });
   });
 });

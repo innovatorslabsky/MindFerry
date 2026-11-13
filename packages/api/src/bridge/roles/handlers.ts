@@ -3,13 +3,13 @@ import { logger } from '@librechat/data-schemas';
 import type { TBridgeRolesErrorCode, TBridgeErrorCode } from 'librechat-data-provider';
 import type { Response } from 'express';
 import type { RolesActor, RolesDeps, RolesFailure } from './service';
+import type { ServerRequest } from '../../types/http';
 import type { BridgeSettings } from '../config';
 import type { BridgeStore } from '../store';
-import type { ServerRequest } from '../../types/http';
 import { areRolesEnabled, getBridgeSettings } from '../config';
 import { getSafeErrorMetadata } from '../../utils/errors';
-import { createBridgeStore } from '../store';
 import { createRolesService } from './service';
+import { createBridgeStore } from '../store';
 
 export type RolesServiceDeps = Omit<RolesDeps, 'getSettings' | 'fileTasks'> & {
   /** Builds the task-folder store for the settings in force. Defaults to the real folder. */

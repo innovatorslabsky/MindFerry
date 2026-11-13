@@ -45,6 +45,11 @@ function TaskRow({ task, onOpen }: { task: TBridgeTask; onOpen: (id: string) => 
           <span>{localize('com_bridge_for', { 0: AGENT_NAMES[task.to] })}</span>
           {task.priority && <span>{localize(PRIORITY[task.priority])}</span>}
           {created && <span>{created}</span>}
+          {task.stuck && (
+            <span className="text-text-primary" data-testid="bridge-task-stuck">
+              {localize('com_bridge_task_stuck')}
+            </span>
+          )}
         </p>
       </div>
       {task.hasResult ? (

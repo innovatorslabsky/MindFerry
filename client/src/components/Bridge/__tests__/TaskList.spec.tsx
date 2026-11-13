@@ -67,6 +67,37 @@ describe('TaskList', () => {
     expect(screen.getByText('com_bridge_no_result')).toBeInTheDocument();
   });
 
+  it('says a task that has been running for an hour with no result may be stuck, and moves nothing', () => {
+    const onOpen = jest.fn();
+    render(
+      <TaskList
+        tasks={[
+          task({
+            state: 'running',
+            hasResult: false,
+            resultStatus: undefined,
+            stuck: true,
+          }),
+        ]}
+        truncated={false}
+        onOpen={onOpen}
+      />,
+    );
+    expect(screen.getByTestId('bridge-task-stuck')).toHaveTextContent('com_bridge_task_stuck');
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('shows no stuck hint for a task that is not marked', () => {
+    render(
+      <TaskList
+        tasks={[task({ state: 'running', hasResult: false })]}
+        truncated={false}
+        onOpen={jest.fn()}
+      />,
+    );
+    expect(screen.queryByTestId('bridge-task-stuck')).not.toBeInTheDocument();
+  });
+
   it('says what to do when there are no tasks', () => {
     render(<TaskList tasks={[]} truncated={false} onOpen={jest.fn()} />);
     expect(screen.getByTestId('empty-state')).toHaveTextContent('com_bridge_tasks_empty');

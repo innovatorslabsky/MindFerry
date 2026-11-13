@@ -54,7 +54,7 @@ const HEAD_BYTES = 4096;
 const RESULT_HEAD_BYTES = 512;
 const SUMMARY_CHARS = 160;
 /** A task that has been running this long with no result is probably stuck. */
-export const STUCK_AFTER_MS = 60 * 60 * 1000;
+export const STUCK_AFTER_MS: number = 60 * 60 * 1000;
 const MAX_ATTEMPTS = 6;
 
 const OPEN_READ = constants.O_RDONLY | constants.O_NOFOLLOW;
