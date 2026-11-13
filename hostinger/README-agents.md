@@ -247,3 +247,23 @@ python3 scan-inputs.py --install /home/deploy/tasks/inputs/sbuddy --allow-review
 - Exit status: 0 all OK, 1 something to review, 2 something rejected, 3 usage error. `--json` prints a
   machine-readable report.
 - Tests: `python3 -m unittest hostinger/test_scan_inputs.py`.
+
+## Part 4: limit what OpenClaw's agent can do (`openclaw-tool-policy.js`)
+
+OpenClaw's tool policy decides which tools an agent is offered at all. `openclaw-tool-policy.js` adds
+a policy to `openclaw.json` and writes it as `openclaw.json.new`; it never changes the original. Stage 1
+uses the `minimal` profile plus `read`, `write` and `ls`, and denies command running, web, the interface
+tools, automation, messaging, nodes, media, sessions and plugins ("deny wins"). Stage 2 adds
+`tools.fs.workspaceOnly`, which confines the file tools to the workspace folder; do it only after
+stage 1 passes and the path the poll script hands to the agent is known.
+
+```bash
+docker cp openclaw-tool-policy.js <gateway>:/tmp/
+docker exec <gateway> node /tmp/openclaw-tool-policy.js "$CFG"          # writes "$CFG.new"
+docker exec <gateway> sh -c "diff $CFG $CFG.new"                          # only a tools block is added
+# after the backup: move it into place, then check it before restarting
+docker exec <gateway> sh -c "mv $CFG.new $CFG" && docker exec <gateway> openclaw config validate
+```
+
+If `validate` fails, put the backup back before anything else. Tests:
+`docker exec <gateway> node --test /tmp/test-openclaw-tool-policy.js`.
