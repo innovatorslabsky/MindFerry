@@ -15,7 +15,11 @@ export const MAX_WARNINGS = 30;
 const MAX_PER_CODE = 5;
 const MAX_LINE = 20_000;
 
-/** Words a draft must not use unless the owner supplied them (the role file's list). */
+/** A whole-word match that understands accented letters, which `\b` does not. */
+const word = (pattern: string): RegExp =>
+  new RegExp(`(?<![\\p{L}\\p{N}])(?:${pattern})(?![\\p{L}\\p{N}])`, 'iu');
+
+/** Words a draft must not use unless the owner supplied them (the role files' lists). */
 export const BANNED_CLAIMS: ReadonlyArray<readonly [string, RegExp]> = [
   ['free', /\bfree\b/i],
   ['complimentary', /\bcomplimentary\b/i],
@@ -30,6 +34,30 @@ export const BANNED_CLAIMS: ReadonlyArray<readonly [string, RegExp]> = [
   ['best', /\bbest\b/i],
   ['cheapest', /\bcheapest\b/i],
   ['lowest price', /\blowest[- ]price\b/i],
+  ['cure', /\b(?:cures?|cured)\b/i],
+  ['diagnose', /\bdiagnos(?:e|es|ed|is|ing)\b/i],
+  // Vietnamese, for the PetVee role: offers, guarantees, medical claims and credentials.
+  ['miễn phí', word('miễn phí')],
+  ['tặng', word('tặng|quà tặng')],
+  ['đảm bảo', word('đảm bảo|bảo đảm')],
+  ['cam kết', word('cam kết')],
+  ['chữa khỏi', word('chữa khỏi|khỏi hẳn|chữa hết')],
+  ['chữa bệnh', word('chữa bệnh|chữa trị')],
+  ['điều trị', word('điều trị')],
+  ['chẩn đoán', word('chẩn đoán')],
+  ['an toàn tuyệt đối', word('an toàn tuyệt đối')],
+  ['hiệu quả 100%', word('hiệu quả 100\\s?%')],
+  ['được chứng nhận', word('(?:được )?chứng nhận')],
+  ['có giấy phép', word('(?:có )?giấy phép|được cấp phép')],
+  ['giải thưởng', word('giải thưởng|đạt giải')],
+  ['năm kinh nghiệm', word('(?:\\d+\\s*)?năm kinh nghiệm')],
+  ['tốt nhất', word('tốt nhất')],
+  ['số 1', word('số 1|số một|hàng đầu')],
+  ['rẻ nhất', word('rẻ nhất|giá thấp nhất|giá rẻ nhất')],
+  [
+    'bác sĩ xác nhận',
+    word('(?:được )?bác sĩ (?:thú y )?(?:xác nhận|chứng nhận|khuyên dùng|kiểm duyệt)'),
+  ],
 ];
 
 /** Statements about how the work is done or who does it, which a draft only makes if told to. */
@@ -44,19 +72,33 @@ export const CLAIM_PHRASES: ReadonlyArray<readonly [string, RegExp]> = [
   ['number one', /(?:#1\b|\bnumber one\b)/i],
   ['satisfaction', /\bsatisfaction\b/i],
   ['no hidden fees', /\bno hidden (?:fees|costs|charges)\b/i],
+  [
+    'đội ngũ chuyên nghiệp',
+    word('đội ngũ (?:của chúng tôi )?(?:chuyên nghiệp|tận tâm|giàu kinh nghiệm)'),
+  ],
+  ['trọn gói', word('trọn gói|từ đầu đến cuối')],
+  ['uy tín', word('uy tín|được tin dùng|đáng tin cậy nhất')],
+  [
+    'hàng nghìn người dùng',
+    word('hàng (?:nghìn|ngàn|triệu|chục nghìn) (?:người|chủ|lượt|thú cưng|khách)'),
+  ],
+  ['ưu đãi có hạn', word('(?:ưu đãi|khuyến mãi|số lượng|thời gian) có hạn|trong thời gian ngắn')],
+  ['sự hài lòng', word('hài lòng|sự hài lòng')],
 ];
 
 /** A line that tells the owner what to avoid mentions a banned word without claiming it. */
 const NEGATION =
-  /\b(?:do not|don['’]t|never|avoid|without|unless|must not|should not|shouldn['’]t|excluded|not claim)\b/i;
+  /\b(?:do not|don['’]t|never|avoid|without|unless|must not|should not|shouldn['’]t|excluded|not claim)\b|(?<![\p{L}\p{N}])(?:không (?:được|nên|dùng|viết|khẳng định|hứa|nói|đưa)|đừng|tránh|trừ khi|cấm|chưa được)(?![\p{L}\p{N}])/iu;
 
 const KNOWN_HEADING =
-  /^\s{0,3}(?:#{1,6}\s*)?(?:\*\*)?\s*(?:\d+[.)]\s*)?(summary|key findings|actions|drafts?|sources|open questions|next steps)\b/i;
-const DRAFTS_HEADING = /^\s{0,3}(?:#{1,6}\s*)?(?:\*\*)?\s*(?:\d+[.)]\s*)?drafts?\b/i;
-const OWNER_NOTES = /^\W*notes?\s+(?:for|to)\s+(?:the\s+)?owner/i;
+  /^\s{0,3}(?:#{1,6}\s*)?(?:\*\*)?\s*(?:\d+[.)]\s*)?(?:summary|key findings|actions|drafts?|sources|open questions|next steps|tóm tắt|hành động|bản nháp|nguồn|câu hỏi mở|bước tiếp theo)(?![\p{L}\p{N}])/iu;
+const DRAFTS_HEADING =
+  /^\s{0,3}(?:#{1,6}\s*)?(?:\*\*)?\s*(?:\d+[.)]\s*)?(?:drafts?|bản nháp)(?![\p{L}\p{N}])/iu;
+const OWNER_NOTES = /^\W*(?:notes?\s+(?:for|to)\s+(?:the\s+)?owner|ghi chú (?:cho|gửi) chủ)/iu;
 
 const PLACEHOLDER_EXAMPLE = [
   /\[INSERT[^\]\n]*\b(?:e\.g\.?|eg|for example|such as)\b[^\]\n]*\]/i,
+  /\[INSERT[^\]\n]*(?<![\p{L}\p{N}])(?:ví dụ|vd\.|chẳng hạn|ví như)(?![\p{L}\p{N}])[^\]\n]*\]/iu,
   /\[INSERT[^\]\n]*["“”][^\]\n]*\]/i,
 ];
 
@@ -163,7 +205,7 @@ export function scanResult(raw: string): ScannedResult {
 
   lines.forEach((full, index) => {
     const number = index + 1;
-    const line = full.slice(0, MAX_LINE);
+    const line = full.slice(0, MAX_LINE).normalize('NFC');
 
     if (looksLikeSecret(line)) {
       found.add('secret', number);

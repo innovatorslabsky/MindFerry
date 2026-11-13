@@ -304,3 +304,89 @@ describe('the report', () => {
     expect(scanResult('')).toEqual({ text: '', warnings: [], omitted: 0 });
   });
 });
+
+describe('Vietnamese drafts', () => {
+  const draft = (line: string) =>
+    `status: DONE\n\n3. Drafts (Bản nháp)\nDRAFT\n${line}\n\n4. Sources (Nguồn)\nkhông có\n`;
+
+  it.each([
+    ['miễn phí', 'Dùng thử miễn phí ngay hôm nay'],
+    ['tặng', 'Tặng bạn một tháng sử dụng'],
+    ['đảm bảo', 'Chúng tôi đảm bảo kết quả'],
+    ['đảm bảo', 'Bảo đảm chất lượng'],
+    ['cam kết', 'Cam kết hoàn tiền'],
+    ['chữa khỏi', 'Giúp chữa khỏi bệnh da'],
+    ['chữa bệnh', 'Ứng dụng chữa bệnh cho mèo'],
+    ['điều trị', 'Hướng dẫn điều trị tại nhà'],
+    ['chẩn đoán', 'AI chẩn đoán bệnh chính xác'],
+    ['an toàn tuyệt đối', 'An toàn tuyệt đối cho thú cưng'],
+    ['hiệu quả 100%', 'Hiệu quả 100% cho chó mèo'],
+    ['được chứng nhận', 'Được chứng nhận bởi hiệp hội'],
+    ['có giấy phép', 'Phòng khám có giấy phép hoạt động'],
+    ['giải thưởng', 'Đạt giải thưởng ứng dụng của năm'],
+    ['năm kinh nghiệm', 'Hơn 10 năm kinh nghiệm chăm sóc'],
+    ['tốt nhất', 'Ứng dụng tốt nhất cho chủ nuôi'],
+    ['số 1', 'PetVee là số 1 Việt Nam'],
+    ['số 1', 'Ứng dụng hàng đầu về thú cưng'],
+    ['rẻ nhất', 'Giá rẻ nhất thị trường'],
+    ['bác sĩ xác nhận', 'Được bác sĩ thú y xác nhận'],
+    ['bác sĩ xác nhận', 'Bác sĩ khuyên dùng'],
+  ])('flags %s in "%s"', (term, line) => {
+    expect(terms(draft(line))).toContain(`banned_claim:${term}`);
+  });
+
+  it('flags the same word written with decomposed accents', () => {
+    const decomposed = 'miễn phí'; // miễn phí
+    expect(terms(draft(`Dùng ${decomposed} nhé`))).toContain('banned_claim:miễn phí');
+  });
+
+  it.each([
+    ['đội ngũ chuyên nghiệp', 'Đội ngũ chuyên nghiệp của chúng tôi'],
+    ['trọn gói', 'Dịch vụ trọn gói cho thú cưng'],
+    ['uy tín', 'Ứng dụng uy tín'],
+    ['hàng nghìn người dùng', 'Được hàng nghìn người dùng yêu thích'],
+    ['ưu đãi có hạn', 'Ưu đãi có hạn, nhanh tay'],
+    ['sự hài lòng', 'Khách hàng hài lòng'],
+  ])('flags the claim "%s" in "%s"', (term, line) => {
+    expect(terms(draft(line))).toContain(`claim_phrase:${term}`);
+  });
+
+  it('does not flag a line that tells the writer what to avoid', () => {
+    for (const line of [
+      'Không được viết chữa khỏi bệnh hoặc đảm bảo kết quả.',
+      'Đừng dùng từ tốt nhất hay số 1.',
+      'Tránh nói miễn phí nếu chủ chưa cho phép.',
+      'Trừ khi chủ cung cấp, không khẳng định giải thưởng.',
+    ]) {
+      expect(codes(draft(line))).toEqual([]);
+    }
+  });
+
+  it('accepts ordinary app copy and a plain medical disclaimer', () => {
+    const copy =
+      'Theo dõi đi dạo, tạo hồ sơ nhiều thú cưng và lưu album ảnh sức khỏe cùng PetVee. PetVee không thay thế bác sĩ thú y. Tải PetVee trên Google Play.';
+    expect(codes(draft(copy))).toEqual([]);
+  });
+
+  it('looks only inside the Drafts section, whichever language its heading is in', () => {
+    const outside = `1. Summary (Tóm tắt)\nỨng dụng tốt nhất, miễn phí.\n\n3. Bản nháp\nDRAFT: Tải PetVee trên Google Play.\n\n5. Open questions (Câu hỏi mở)\nCó giấy phép không?\n`;
+    expect(codes(outside)).toEqual([]);
+    const inside = `1. Tóm tắt\nổn.\n\n3. Bản nháp\nDRAFT: tốt nhất cho chủ nuôi.\n\n4. Nguồn\nkhông có\n`;
+    expect(terms(inside)).toEqual(['banned_claim:tốt nhất']);
+  });
+
+  it('stops at the notes to the owner', () => {
+    const text = `Bản nháp\nDRAFT: Tải PetVee trên Google Play.\nGhi chú cho chủ: đây là cách tốt nhất để đăng.\n`;
+    expect(codes(text)).toEqual([]);
+  });
+
+  it('flags an example inside a Vietnamese placeholder, and accepts a plain one', () => {
+    expect(codes('Bản nháp\n[INSERT: số điện thoại, ví dụ 0901 234 567]\n')).toContain(
+      'placeholder_example',
+    );
+    expect(codes('Bản nháp\n[INSERT: số điện thoại, vd. 0901 234 567]\n')).toContain(
+      'placeholder_example',
+    );
+    expect(codes('Bản nháp\n[INSERT: số điện thoại]\n')).toEqual([]);
+  });
+});
