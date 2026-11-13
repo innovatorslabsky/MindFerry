@@ -69,12 +69,36 @@ export type TBridgeOverview = {
   limits: { maxTaskChars: number; maxFieldChars: number };
 };
 
+/** What a scan of an agent's result found. A hint for the reader, never a verdict. */
+export type TBridgeResultWarningCode =
+  | 'secret'
+  | 'banned_claim'
+  | 'placeholder_example'
+  | 'claim_phrase'
+  | 'link_data'
+  | 'link_credentials'
+  | 'link_scheme'
+  | 'link_host'
+  | 'hidden_char';
+
+export type TBridgeResultWarning = {
+  code: TBridgeResultWarningCode;
+  /** The line it was found on; absent when it spans lines. */
+  line?: number;
+  /** For a claim word or phrase: which one, taken from a fixed list. Never text from the result. */
+  term?: string;
+};
+
 export type TBridgeResult = {
   id: string;
   status: TBridgeResultStatus;
   /** Written by an agent: untrusted text, to be rendered as sanitized Markdown only. */
   text: string;
   truncated: boolean;
+  /** Present only when the scan found something. */
+  warnings?: TBridgeResultWarning[];
+  /** How many more findings were left out of `warnings`. */
+  warningsOmitted?: number;
 };
 
 export type TBridgeCreateRequest = {

@@ -811,6 +811,9 @@ export const agentBridgeSchema = z
       .default([]),
     /** The command that opens the tunnel to those dashboards, shown as a hint. */
     tunnelCommand: z.string().max(400).optional(),
+    /** Read each agent result before it is shown: hide anything that looks like a secret and flag
+     *  claims, links and hidden characters worth a second look. Costs no model call. */
+    scanResults: z.boolean().default(true),
     /** Named roles that run as in-app agents; off until `roles.enabled` is set. */
     roles: z
       .object({

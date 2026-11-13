@@ -7,6 +7,7 @@ import type {
   TBridgeErrorCode,
   TBridgeOverview,
   TBridgePriority,
+  TBridgeResult,
 } from 'librechat-data-provider';
 import type { Response } from 'express';
 import type { ServerRequest } from '../types/http';
@@ -16,6 +17,7 @@ import { BRIDGE_MAX_FIELD_CHARS, getBridgeSettings } from './config';
 import { getSafeErrorMetadata } from '../utils/errors';
 import { looksLikeSecret } from './secrets';
 import { readAgentStatus } from './status';
+import { scanResult } from './scan/result';
 
 /**
  * HTTP surface of the agent bridge, for MindFerry's own admin page. The routes that mount these run
@@ -156,7 +158,18 @@ export function createBridgeHandlers(deps: BridgeDeps = {}): BridgeHandlers {
         fail(res, 404, 'BRIDGE_NOT_FOUND');
         return;
       }
-      res.json(result);
+      if (!settings.scanResults) {
+        res.json(result);
+        return;
+      }
+      const scanned = scanResult(result.text);
+      const body: TBridgeResult = {
+        ...result,
+        text: scanned.text,
+        ...(scanned.warnings.length > 0 ? { warnings: scanned.warnings } : {}),
+        ...(scanned.omitted > 0 ? { warningsOmitted: scanned.omitted } : {}),
+      };
+      res.json(body);
     } catch (error) {
       failure(res, error);
     }

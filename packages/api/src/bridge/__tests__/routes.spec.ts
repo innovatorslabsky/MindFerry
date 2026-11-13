@@ -174,6 +174,56 @@ describe('getResult', () => {
   });
 });
 
+describe('getResult scan', () => {
+  const put = (text: string) => fs.writeFile(path.join(root, 'outbox', `${ID}-result.md`), text);
+  const key = 'sk-ant-api03-' + 'A1b2C3d4E5'.repeat(4);
+
+  it('adds no warnings to a clean result and leaves its text alone', async () => {
+    await put('status: DONE\n\nA short summary.\n');
+    const out = await call(setup().getResult, request({ params: { id: ID } }));
+    expect(out.status).toBe(200);
+    expect(out.body).toEqual({
+      id: ID,
+      status: 'DONE',
+      text: 'status: DONE\n\nA short summary.\n',
+      truncated: false,
+    });
+  });
+
+  it('hides a secret in what is returned, and says which line', async () => {
+    await put(`status: DONE\n\nthe key is ${key}\n`);
+    const out = await call(setup().getResult, request({ params: { id: ID } }));
+    const body = out.body as { text: string; warnings: unknown[] };
+    expect(body.text).not.toContain(key);
+    expect(body.text).toContain('[hidden: looks like a secret]');
+    expect(body.warnings).toEqual([{ code: 'secret', line: 3 }]);
+    expect(JSON.stringify(out.body)).not.toContain(key);
+  });
+
+  it('flags a claim in the drafts of a result', async () => {
+    await put('status: DONE\n\n3. Drafts\nBook your free consultation.\n\n4. Sources\nnone\n');
+    const out = await call(setup().getResult, request({ params: { id: ID } }));
+    expect((out.body as { warnings: unknown[] }).warnings).toEqual([
+      { code: 'banned_claim', line: 4, term: 'free' },
+    ]);
+  });
+
+  it('returns the text as the agent wrote it when the operator turns the scan off', async () => {
+    await put(`status: DONE\n\nthe key is ${key}\n`);
+    const out = await call(
+      setup().getResult,
+      request({ params: { id: ID }, config: config({ scanResults: false }) }),
+    );
+    expect(out.body).toMatchObject({ text: expect.stringContaining(key) });
+    expect(out.body).not.toHaveProperty('warnings');
+  });
+
+  it('still answers 404 for a result that is not there', async () => {
+    const out = await call(setup().getResult, request({ params: { id: ID } }));
+    expect(out.status).toBe(404);
+  });
+});
+
 describe('createTask', () => {
   const body = { to: 'hermes', task: 'Read the README and write a summary' };
 

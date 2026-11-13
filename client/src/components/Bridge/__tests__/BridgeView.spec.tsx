@@ -119,6 +119,34 @@ describe('BridgeView', () => {
     expect(screen.getByText('com_bridge_result_untrusted')).toBeInTheDocument();
   });
 
+  it('shows what the scan found above a result, and nothing when it found nothing', () => {
+    mockResult = {
+      isLoading: false,
+      isError: false,
+      data: {
+        id: 'x',
+        status: 'DONE',
+        text: 'status: DONE\n\nthe key is [hidden: looks like a secret]',
+        truncated: false,
+        warnings: [{ code: 'secret', line: 3 }],
+      },
+    };
+    const { unmount } = render(<BridgeView />);
+    fireEvent.click(screen.getByTestId('bridge-open-2026-11-07-0143-hermes-readme-summary'));
+    expect(screen.getByTestId('bridge-warning-secret')).toBeInTheDocument();
+    expect(screen.getByTestId('bridge-result-text')).toHaveTextContent('hidden');
+    unmount();
+
+    mockResult = {
+      isLoading: false,
+      isError: false,
+      data: { id: 'x', status: 'DONE', text: 'status: DONE\n\nfine', truncated: false },
+    };
+    render(<BridgeView />);
+    fireEvent.click(screen.getByTestId('bridge-open-2026-11-07-0143-hermes-readme-summary'));
+    expect(screen.queryByTestId('bridge-result-warnings')).not.toBeInTheDocument();
+  });
+
   it('says a long result was cut, and a failed load of one', () => {
     mockResult = {
       isLoading: false,

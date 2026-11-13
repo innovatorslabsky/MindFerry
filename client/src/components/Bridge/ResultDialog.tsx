@@ -1,6 +1,7 @@
 import { OGDialog, OGDialogTemplate, Spinner } from '@librechat/client';
 import { useBridgeResultQuery } from '~/data-provider';
 import ResultMarkdown from './ResultMarkdown';
+import ResultWarnings from './ResultWarnings';
 import { bridgeErrorKey } from './errors';
 import { useLocalize } from '~/hooks';
 
@@ -34,6 +35,9 @@ export default function ResultDialog({ id, onClose }: { id: string | null; onClo
                   {data.status === 'FAILED' && localize('com_bridge_result_failed')}
                   {data.status === 'UNKNOWN' && localize('com_bridge_result_unknown')}
                 </p>
+                {data.warnings && (
+                  <ResultWarnings warnings={data.warnings} omitted={data.warningsOmitted} />
+                )}
                 <ResultMarkdown text={data.text} />
                 {data.truncated && (
                   <p className="text-text-tertiary text-xs">{localize('com_bridge_result_cut')}</p>

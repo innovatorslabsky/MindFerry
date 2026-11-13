@@ -11,6 +11,7 @@ describe('agentBridgeSchema', () => {
       createPerHour: 10,
       statusStaleSeconds: 180,
       dashboards: [],
+      scanResults: true,
       roles: {
         enabled: false,
         dailyCapPerRole: 6,

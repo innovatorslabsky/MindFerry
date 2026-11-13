@@ -25,6 +25,7 @@ export interface BridgeSettings {
   statusStaleSeconds: number;
   dashboards: TBridgeDashboard[];
   tunnelCommand?: string;
+  scanResults: boolean;
 }
 
 const ROLE_DEFAULTS: BridgeRoleSettings = {
@@ -47,6 +48,7 @@ const DEFAULTS: BridgeSettings = {
   createPerHour: 10,
   statusStaleSeconds: 180,
   dashboards: [],
+  scanResults: true,
 };
 
 /** The agent bridge settings in force: the operator's, with anything unset filled in. */
@@ -71,6 +73,7 @@ export function getBridgeSettings(config: AppConfig | undefined): BridgeSettings
     createPerHour: set?.createPerHour ?? DEFAULTS.createPerHour,
     statusStaleSeconds: set?.statusStaleSeconds ?? DEFAULTS.statusStaleSeconds,
     dashboards: set?.dashboards ?? DEFAULTS.dashboards,
+    scanResults: set?.scanResults !== false,
     ...(set?.tunnelCommand ? { tunnelCommand: set.tunnelCommand } : {}),
   };
 }

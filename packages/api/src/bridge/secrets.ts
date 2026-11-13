@@ -26,3 +26,20 @@ export function looksLikeSecret(text: string): boolean {
   }
   return PHRASE_HINT.test(text) && WORD_RUN.test(text);
 }
+
+const MASK = '[hidden: looks like a secret]';
+
+/**
+ * The same text with anything that looks like a secret replaced, for showing an agent's result. It
+ * uses the shapes `looksLikeSecret` checks, so what is flagged is what is hidden.
+ */
+export function maskSecrets(text: string): string {
+  let masked = text;
+  for (const shape of SECRET_SHAPES) {
+    masked = masked.replace(new RegExp(shape.source, `${shape.flags.replace('g', '')}g`), MASK);
+  }
+  if (PHRASE_HINT.test(masked) && WORD_RUN.test(masked)) {
+    masked = masked.replace(new RegExp(WORD_RUN.source, 'gi'), MASK);
+  }
+  return masked;
+}
