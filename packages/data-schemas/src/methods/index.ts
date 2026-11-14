@@ -49,6 +49,7 @@ import { createAgentApiKeyMethods, type AgentApiKeyMethods } from './agentApiKey
 import { createHubMethods, type HubMethods } from './hub';
 import { createLibraryMethods, type LibraryMethods } from './library';
 import { createBridgeMethods, type BridgeMethods } from './bridge';
+import { createBridgeApprovalMethods, type BridgeApprovalMethods } from './bridgeApproval';
 /* MCP Servers */
 import { createMCPServerMethods, type MCPServerMethods } from './mcpServer';
 import { createCodeEnvironmentMethods, type CodeEnvironmentMethods } from './codeEnvironment';
@@ -297,6 +298,7 @@ export type AllMethods = ToolApprovalGrantStorage &
   HubMethods &
   LibraryMethods &
   BridgeMethods &
+  BridgeApprovalMethods &
   ScheduleMCPConsentStorage &
   ScheduleMethods &
   AgentMethods &
@@ -510,6 +512,7 @@ export function createMethods(
     ...createHubMethods(mongoose),
     ...createLibraryMethods(mongoose),
     ...createBridgeMethods(mongoose),
+    ...createBridgeApprovalMethods(mongoose),
     ...createMCPServerMethods(mongoose),
     ...createCodeEnvironmentMethods(mongoose),
     ...createAccessRoleMethods(mongoose),
@@ -584,6 +587,7 @@ export type {
   HubMethods,
   LibraryMethods,
   BridgeMethods,
+  BridgeApprovalMethods,
   MCPServerMethods,
   CodeEnvironmentMethods,
   UserGroupMethods,

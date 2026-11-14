@@ -127,3 +127,90 @@ export interface BridgeUsageRecord {
   team: number;
   byRole: Record<string, number>;
 }
+
+export type BridgeProposalStatusValue = 'pending' | 'approved' | 'denied' | 'expired';
+/** Where a proposal came from: a person typed it, or it was read out of an agent's result. */
+export type BridgeProposalSourceValue = 'person' | 'result';
+
+export interface BridgeProposalRecord {
+  id: string;
+  userId: string;
+  source: BridgeProposalSourceValue;
+  roleId: string;
+  roleSlug: string;
+  runtime: BridgeRuntimeValue;
+  /** A short line for lists. */
+  title: string;
+  /** The exact task text that runs if this is approved. It never changes after creation. */
+  content: string;
+  /** SHA-256 of what was shown to the person; an approval must name it. */
+  hash: string;
+  status: BridgeProposalStatusValue;
+  /** Stable for one proposed item, so reading the same result twice adds it once. */
+  dedupeKey?: string;
+  /** The task whose result suggested this, for a proposal read from a result. */
+  originTaskId?: string;
+  /** The run that was started when this was approved. */
+  runId?: string;
+  expiresAt: Date;
+  decidedAt?: Date;
+  decidedBy?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface BridgeProposalInput {
+  source: BridgeProposalSourceValue;
+  roleId: string;
+  roleSlug: string;
+  runtime: BridgeRuntimeValue;
+  title: string;
+  content: string;
+  hash: string;
+  dedupeKey?: string;
+  originTaskId?: string;
+  expiresAt: Date;
+}
+
+export type BridgeProposalCreateResult =
+  | { ok: true; proposal: BridgeProposalRecord; created: boolean }
+  | { ok: false; code: 'limit'; pending: number; cap: number };
+
+export type BridgeProposalDecision = 'approve' | 'deny';
+
+/** `changed: false` means the proposal already had this decision, so a repeat does nothing. */
+export type BridgeProposalDecideResult =
+  | { ok: true; proposal: BridgeProposalRecord; changed: boolean }
+  | { ok: false; code: 'not_found' | 'not_pending' | 'expired' | 'hash_mismatch' };
+
+export type BridgeAuditActionValue =
+  | 'proposal_created'
+  | 'proposal_approved'
+  | 'proposal_denied'
+  | 'proposal_expired'
+  | 'handed_over'
+  | 'handover_failed';
+
+export interface BridgeAuditRecord {
+  id: string;
+  userId: string;
+  action: BridgeAuditActionValue;
+  proposalId?: string;
+  /** Who did it: `user:<id>` or `system`. */
+  actor: string;
+  roleSlug?: string;
+  /** The proposal's content hash, so the ledger shows what was approved. */
+  hash?: string;
+  /** A short, safe code or note. Never free text from an agent. */
+  detail?: string;
+  createdAt: Date;
+}
+
+export interface BridgeAuditInput {
+  action: BridgeAuditActionValue;
+  proposalId?: string;
+  actor: string;
+  roleSlug?: string;
+  hash?: string;
+  detail?: string;
+}

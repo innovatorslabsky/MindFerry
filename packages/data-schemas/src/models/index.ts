@@ -17,6 +17,7 @@ import { createLibraryProgressModel } from './libraryProgress';
 import { createLibraryResourceModel } from './libraryResource';
 import { createHubOAuthClientModel } from './hubOAuthClient';
 import { createLibrarySessionModel } from './librarySession';
+import { createBridgeProposalModel } from './bridgeProposal';
 import { createAgentCategoryModel } from './agentCategory';
 import { createLibrarySourceModel } from './librarySource';
 import { createLibraryFolderModel } from './libraryFolder';
@@ -30,6 +31,7 @@ import { createPromptGroupModel } from './promptGroup';
 import { createSystemGrantModel } from './systemGrant';
 import { createLibraryUnitModel } from './libraryUnit';
 import { createLibraryFeedModel } from './libraryFeed';
+import { createBridgeAuditModel } from './bridgeAudit';
 import { createBridgeRoleModel } from './bridgeRole';
 import { createPluginAuthModel } from './pluginAuth';
 import { createSharedLinkModel } from './sharedLink';
@@ -98,6 +100,8 @@ export function createModels(mongoose: typeof import('mongoose')): {
   LibrarySession: ReturnType<typeof createLibrarySessionModel>;
   BridgeRole: ReturnType<typeof createBridgeRoleModel>;
   BridgeRun: ReturnType<typeof createBridgeRunModel>;
+  BridgeProposal: ReturnType<typeof createBridgeProposalModel>;
+  BridgeAudit: ReturnType<typeof createBridgeAuditModel>;
   AgentCategory: ReturnType<typeof createAgentCategoryModel>;
   MCPServer: ReturnType<typeof createMCPServerModel>;
   Role: ReturnType<typeof createRoleModel>;
@@ -166,6 +170,8 @@ export function createModels(mongoose: typeof import('mongoose')): {
     LibrarySession: createLibrarySessionModel(mongoose),
     BridgeRole: createBridgeRoleModel(mongoose),
     BridgeRun: createBridgeRunModel(mongoose),
+    BridgeProposal: createBridgeProposalModel(mongoose),
+    BridgeAudit: createBridgeAuditModel(mongoose),
     AgentCategory: createAgentCategoryModel(mongoose),
     MCPServer: createMCPServerModel(mongoose),
     Role: createRoleModel(mongoose),
