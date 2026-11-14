@@ -4,14 +4,15 @@
  * the result next to it as <file>.new. It never changes the original: a person compares the two with
  * diff, moves the new file into place, validates and restarts (see README-agents.md, Part 4).
  *
- *   node openclaw-tool-policy.js <openclaw.json> [--stage 2 [--workspace <dir>]]
+ *   node openclaw-tool-policy.js <openclaw.json> [--stage 2 [--workspace <dir> [--skip-bootstrap]]]
  *
  * Stage 1 (default): the "minimal" profile plus read, write and ls, and an explicit deny of command
  *   running, web, the interface tools, automation, messaging, nodes, media, sessions and plugins, so a
  *   tool added later is not available by accident. "Deny wins" in OpenClaw's tool policy.
  * Stage 2: also confine the file tools to the workspace folder (tools.fs.workspaceOnly). With
  *   --workspace <dir> it also names that folder (agents.defaults.workspace), for a setup where the
- *   agent should work inside the task folder and nowhere else.
+ *   agent should work inside the task folder and nowhere else. --skip-bootstrap also sets
+ *   agents.defaults.skipBootstrap, so the agent does not try to create its own files there.
  *
  * Exits 0 when it wrote the file, 2 when the config already sets one of these keys (nothing written),
  * 3 on a usage error. No secret is read or printed.
@@ -52,12 +53,15 @@ class Conflict extends Error {
 /** The config with the policy added. Throws Conflict instead of replacing something already set. */
 const WORKSPACE = /^\/[A-Za-z0-9_./-]{1,200}$/;
 
-function apply(config, stage = 1, workspace = undefined) {
+function apply(config, stage = 1, workspace = undefined, skipBootstrap = false) {
   if (config === null || typeof config !== 'object' || Array.isArray(config)) {
     throw new Conflict('the config is not a JSON object');
   }
   if (workspace !== undefined && stage !== 2) {
     throw new Conflict('--workspace goes with --stage 2');
+  }
+  if (skipBootstrap && workspace === undefined) {
+    throw new Conflict('--skip-bootstrap goes with --workspace');
   }
   const out = JSON.parse(JSON.stringify(config));
   const tools = out.tools === undefined ? {} : out.tools;
@@ -97,6 +101,12 @@ function apply(config, stage = 1, workspace = undefined) {
         throw new Conflict('agents.defaults.workspace is already set');
       }
       defaults.workspace = workspace;
+      if (skipBootstrap) {
+        if ('skipBootstrap' in defaults) {
+          throw new Conflict('agents.defaults.skipBootstrap is already set');
+        }
+        defaults.skipBootstrap = true;
+      }
       agents.defaults = defaults;
       out.agents = agents;
     }
@@ -117,6 +127,10 @@ function main(argv, log = console.log, err = console.error) {
     stage = Number(args[at + 1]);
     args.splice(at, 2);
   }
+  const skipBootstrap = args.includes('--skip-bootstrap');
+  if (skipBootstrap) {
+    args.splice(args.indexOf('--skip-bootstrap'), 1);
+  }
   let workspace;
   const wat = args.indexOf('--workspace');
   if (wat !== -1) {
@@ -128,7 +142,9 @@ function main(argv, log = console.log, err = console.error) {
     !(stage === 1 || stage === 2) ||
     (wat !== -1 && workspace === undefined)
   ) {
-    err('usage: node openclaw-tool-policy.js <openclaw.json> [--stage 2 [--workspace <dir>]]');
+    err(
+      'usage: node openclaw-tool-policy.js <openclaw.json> [--stage 2 [--workspace <dir> [--skip-bootstrap]]]',
+    );
     return 3;
   }
   const file = args[0];
@@ -141,7 +157,7 @@ function main(argv, log = console.log, err = console.error) {
   }
   let next;
   try {
-    next = apply(config, stage, workspace);
+    next = apply(config, stage, workspace, skipBootstrap);
   } catch (error) {
     if (error instanceof Conflict) {
       err(`nothing written: ${error.message}`);

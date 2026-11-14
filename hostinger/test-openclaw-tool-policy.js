@@ -189,3 +189,28 @@ test('the command takes --workspace with --stage 2 only', () => {
     assert.equal(main([file, '--stage', '2', '--workspace'], quiet.log, quiet.err), 3);
   });
 });
+
+test('--skip-bootstrap sets agents.defaults.skipBootstrap and needs a workspace', () => {
+  const out = apply(BASE, 2, '/home/deploy/tasks', true);
+  assert.equal(out.agents.defaults.skipBootstrap, true);
+  assert.equal(out.agents.defaults.workspace, '/home/deploy/tasks');
+  assert.equal(apply(BASE, 2, '/w').agents.defaults.skipBootstrap, undefined);
+  assert.throws(() => apply(BASE, 2, undefined, true), Conflict);
+  assert.throws(
+    () => apply({ agents: { defaults: { skipBootstrap: false } } }, 2, '/w', true),
+    Conflict,
+  );
+});
+
+test('the command takes --skip-bootstrap with --workspace', () => {
+  withFile(JSON.stringify(apply(BASE)), (file) => {
+    const argv = [file, '--stage', '2', '--workspace', '/home/deploy/tasks', '--skip-bootstrap'];
+    assert.equal(main(argv, quiet.log, quiet.err), 0);
+    const written = JSON.parse(fs.readFileSync(`${file}.new`, 'utf8'));
+    assert.equal(written.agents.defaults.skipBootstrap, true);
+  });
+  withFile(JSON.stringify(BASE), (file) => {
+    assert.equal(main([file, '--stage', '2', '--skip-bootstrap'], quiet.log, quiet.err), 2);
+    assert.equal(fs.existsSync(`${file}.new`), false);
+  });
+});
