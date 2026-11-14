@@ -83,6 +83,16 @@ describe('the PetVee role file', () => {
     expect(text).toMatch(/KHÔNG trả lời nội dung y khoa/);
   });
 
+  it('keeps a placeholder to the missing item’s name, with no sample sentence or tail', () => {
+    expect(text).toContain('không kèm câu mẫu hay đuôi mô tả');
+    expect(text).toContain('giữ nguyên từng chữ');
+    const tailed =
+      '[INSERT: nội dung do người có chuyên môn thú y cung cấp — ghi "Hãy liên hệ bác sĩ"]';
+    expect(scanResult(`Bản nháp\n${tailed}`).warnings.map((w) => w.code)).toContain(
+      'placeholder_example',
+    );
+  });
+
   it('refuses a task that asks for a forbidden step, like the SBuddy role', () => {
     expect(text).toMatch(/đừng làm bất cứ phần nào của nó\. Ghi `status: FAILED`/);
   });
