@@ -261,6 +261,8 @@ agent works inside the task folder only; the task folder is then mounted read-on
 `oc-workspace.sh` does the whole change on the VPS (backup, hash checks, config check, restart, a start-up
 probe) and puts the old config back by itself if the config is refused or the agent cannot start;
 `test-oc-workspace.sh` runs it against a stand-in for docker.
+`patch-gated-session.sh` gives each OpenClaw task its own session (`--session-id`), because runs without one
+share a single conversation and one task's data stays in the next task's context.
 
 ```bash
 docker cp openclaw-tool-policy.js <gateway>:/tmp/
