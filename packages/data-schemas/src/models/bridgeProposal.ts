@@ -1,6 +1,6 @@
 import { Model } from 'mongoose';
-import { applyTenantIsolation } from '~/models/plugins/tenantIsolation';
 import bridgeProposalSchema, { IBridgeProposal } from '~/schema/bridgeProposal';
+import { applyTenantIsolation } from '~/models/plugins/tenantIsolation';
 
 export function createBridgeProposalModel(
   mongoose: typeof import('mongoose'),

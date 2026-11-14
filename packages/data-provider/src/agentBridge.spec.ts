@@ -21,6 +21,35 @@ describe('agentBridgeSchema', () => {
         maxRoles: 12,
         fileRolesEnabled: false,
       },
+      approvals: { enabled: false, expiryHours: 72, maxPending: 20 },
+    });
+  });
+
+  describe('approvals', () => {
+    it('are off, with a three-day wait and twenty waiting, until the operator turns them on', () => {
+      expect(agentBridgeSchema.parse({ enabled: true })?.approvals).toEqual({
+        enabled: false,
+        expiryHours: 72,
+        maxPending: 20,
+      });
+    });
+
+    it('take the operator’s own values', () => {
+      const approvals = agentBridgeSchema.parse({
+        enabled: true,
+        approvals: { enabled: true, expiryHours: 24, maxPending: 5 },
+      })?.approvals;
+      expect(approvals).toEqual({ enabled: true, expiryHours: 24, maxPending: 5 });
+    });
+
+    it.each([
+      ['no hours', { expiryHours: 0 }],
+      ['more than thirty days', { expiryHours: 721 }],
+      ['a fractional wait', { expiryHours: 1.5 }],
+      ['none waiting', { maxPending: 0 }],
+      ['too many waiting', { maxPending: 201 }],
+    ])('reject %s', (_name, approvals) => {
+      expect(agentBridgeSchema.safeParse({ enabled: true, approvals }).success).toBe(false);
     });
   });
 

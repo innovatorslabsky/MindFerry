@@ -832,6 +832,17 @@ export const agentBridgeSchema = z
         fileRolesEnabled: z.boolean().default(false),
       })
       .default({}),
+    /** A queue where work waits for a person to approve it before it is handed to a role. It
+     *  needs `roles.enabled`, because an approval hands the work over as an assignment. */
+    approvals: z
+      .object({
+        enabled: z.boolean().default(false),
+        /** Hours a proposal waits before it expires unapproved. */
+        expiryHours: z.number().int().min(1).max(720).default(72),
+        /** Proposals one person may have waiting at once. */
+        maxPending: z.number().int().min(1).max(200).default(20),
+      })
+      .default({}),
   })
   .optional();
 

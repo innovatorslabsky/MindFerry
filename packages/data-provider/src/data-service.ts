@@ -1180,6 +1180,25 @@ export function deleteBridgeRole(id: string): Promise<void> {
   return request.delete(endpoints.bridgeRole(id));
 }
 
+export function getBridgeApprovals(): Promise<t.TBridgeApprovalsOverview> {
+  return request.get(endpoints.bridgeApprovals());
+}
+
+export function createBridgeProposal(body: t.TBridgeProposalInput): Promise<t.TBridgeProposal> {
+  return request.post(endpoints.bridgeApprovals(), body);
+}
+
+export function decideBridgeProposal(
+  id: string,
+  body: t.TBridgeDecision,
+): Promise<t.TBridgeDecideResponse> {
+  return request.post(endpoints.bridgeApprovalDecide(id), body);
+}
+
+export function getBridgeAudit(proposalId?: string): Promise<{ lines: t.TBridgeAuditLine[] }> {
+  return request.get(endpoints.bridgeAudit(proposalId));
+}
+
 export function assignBridgeRole(
   id: string,
   body: t.TBridgeAssignRequest,

@@ -14,8 +14,15 @@ export interface BridgeRoleSettings {
   fileRolesEnabled: boolean;
 }
 
+export interface BridgeApprovalSettings {
+  enabled: boolean;
+  expiryHours: number;
+  maxPending: number;
+}
+
 export interface BridgeSettings {
   roles: BridgeRoleSettings;
+  approvals: BridgeApprovalSettings;
   enabled: boolean;
   tasksDir: string;
   maxTaskChars: number;
@@ -38,8 +45,15 @@ const ROLE_DEFAULTS: BridgeRoleSettings = {
   fileRolesEnabled: false,
 };
 
+const APPROVAL_DEFAULTS: BridgeApprovalSettings = {
+  enabled: false,
+  expiryHours: 72,
+  maxPending: 20,
+};
+
 const DEFAULTS: BridgeSettings = {
   roles: ROLE_DEFAULTS,
+  approvals: APPROVAL_DEFAULTS,
   enabled: false,
   tasksDir: '/home/deploy/tasks',
   maxTaskChars: 2000,
@@ -65,6 +79,11 @@ export function getBridgeSettings(config: AppConfig | undefined): BridgeSettings
       maxRoles: roles?.maxRoles ?? ROLE_DEFAULTS.maxRoles,
       fileRolesEnabled: roles?.fileRolesEnabled === true,
     },
+    approvals: {
+      enabled: set?.approvals?.enabled === true,
+      expiryHours: set?.approvals?.expiryHours ?? APPROVAL_DEFAULTS.expiryHours,
+      maxPending: set?.approvals?.maxPending ?? APPROVAL_DEFAULTS.maxPending,
+    },
     enabled: set?.enabled === true,
     tasksDir: set?.tasksDir ?? DEFAULTS.tasksDir,
     maxTaskChars: set?.maxTaskChars ?? DEFAULTS.maxTaskChars,
@@ -85,4 +104,9 @@ export function isBridgeEnabled(config: AppConfig | undefined): boolean {
 /** Roles need both the bridge and the roles switch. */
 export function areRolesEnabled(config: AppConfig | undefined): boolean {
   return config?.agentBridge?.enabled === true && config.agentBridge.roles?.enabled === true;
+}
+
+/** The approval queue hands work over as role assignments, so it needs the bridge, roles and its own switch. */
+export function areApprovalsEnabled(config: AppConfig | undefined): boolean {
+  return areRolesEnabled(config) && config?.agentBridge?.approvals?.enabled === true;
 }

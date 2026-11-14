@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { logger } from '@librechat/data-schemas';
 import type { TBridgeRolesErrorCode, TBridgeErrorCode } from 'librechat-data-provider';
 import type { Response } from 'express';
-import type { RolesActor, RolesDeps, RolesFailure } from './service';
+import type { RolesActor, RolesDeps, RolesFailure, RolesService } from './service';
 import type { ServerRequest } from '../../types/http';
 import type { BridgeSettings } from '../config';
 import type { BridgeStore } from '../store';
@@ -76,6 +76,19 @@ function reject(res: Response, failure: RolesFailure): void {
   res.status(STATUS[code]).json({ error: code, ...rest });
 }
 
+/** The roles service for the settings in force, with the task folder behind host roles. */
+export function buildRolesService(deps: RolesServiceDeps, settings: BridgeSettings): RolesService {
+  const store = (deps.createStore ?? createBridgeStore)(settings);
+  return createRolesService({
+    ...deps,
+    getSettings: () => settings,
+    fileTasks: {
+      create: (input, at) => store.create(input, at),
+      state: (id) => store.taskState(id),
+    },
+  });
+}
+
 /** HTTP surface for roles. Mounted behind sign-in and the admin check; 404 unless roles are on. */
 export function createRolesHandlers(deps: RolesServiceDeps): RolesHandlers {
   function open(req: ServerRequest, res: Response) {
@@ -90,7 +103,6 @@ export function createRolesHandlers(deps: RolesServiceDeps): RolesHandlers {
       return null;
     }
     const settings = getBridgeSettings(req.config);
-    const store = (deps.createStore ?? createBridgeStore)(settings);
     const who: RolesActor = {
       id: String(actor.id),
       ...(actor.role ? { role: actor.role } : {}),
@@ -98,14 +110,7 @@ export function createRolesHandlers(deps: RolesServiceDeps): RolesHandlers {
     };
     return {
       who,
-      service: createRolesService({
-        ...deps,
-        getSettings: () => settings,
-        fileTasks: {
-          create: (input, at) => store.create(input, at),
-          state: (id) => store.taskState(id),
-        },
-      }),
+      service: buildRolesService(deps, settings),
     };
   }
 

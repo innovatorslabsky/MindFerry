@@ -7,4 +7,6 @@ export { createBridgeHandlers, logBridgeAudit } from './routes';
 export type { BridgeAudit, BridgeAuditEntry, BridgeDeps, BridgeHandlers } from './routes';
 export { createRolesHandlers, createRolesService, BRIDGE_ROLE_TEMPLATES } from './roles';
 export type { RolesHandlers, RolesServiceDeps, RolesActor, RolesService } from './roles';
+export { createApprovalsHandlers, createApprovalsService } from './approvals';
+export type { ApprovalsHandlers, ApprovalsService } from './approvals';
 export { scanResult } from './scan/result';

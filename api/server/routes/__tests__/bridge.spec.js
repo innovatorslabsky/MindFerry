@@ -50,7 +50,7 @@ afterEach(async () => {
 const inboxFiles = () => fs.readdir(path.join(root, 'inbox'));
 
 describe('/api/bridge', () => {
-  it('registers the task and role routes', () => {
+  it('registers the task, role and approval routes', () => {
     const paths = router.stack
       .filter((layer) => layer.route)
       .map((layer) => `${Object.keys(layer.route.methods)[0]} ${layer.route.path}`);
@@ -63,6 +63,10 @@ describe('/api/bridge', () => {
       'patch /roles/:id',
       'delete /roles/:id',
       'post /roles/:id/assign',
+      'get /approvals',
+      'post /approvals',
+      'post /approvals/:id/decide',
+      'get /audit',
     ]);
   });
 
@@ -71,6 +75,10 @@ describe('/api/bridge', () => {
       ['get', '/api/bridge/overview'],
       ['get', `/api/bridge/tasks/${ID}/result`],
       ['post', '/api/bridge/tasks'],
+      ['get', '/api/bridge/approvals'],
+      ['post', '/api/bridge/approvals'],
+      ['post', '/api/bridge/approvals/abc/decide'],
+      ['get', '/api/bridge/audit'],
     ])('answers 401 to %s %s and reveals nothing', async (method, url) => {
       const res = await request(app)[method](url).send(body);
       expect(res.status).toBe(401);
@@ -91,6 +99,10 @@ describe('/api/bridge', () => {
       ['get', '/api/bridge/overview'],
       ['get', `/api/bridge/tasks/${ID}/result`],
       ['post', '/api/bridge/tasks'],
+      ['get', '/api/bridge/approvals'],
+      ['post', '/api/bridge/approvals'],
+      ['post', '/api/bridge/approvals/abc/decide'],
+      ['get', '/api/bridge/audit'],
     ])('answers 403 to %s %s', async (method, url) => {
       const res = await request(app)[method](url).set(as('USER')).send(body);
       expect(res.status).toBe(403);

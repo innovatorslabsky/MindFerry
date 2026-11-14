@@ -247,3 +247,90 @@ export type TBridgeRolesError = {
   used?: number;
   cap?: number;
 };
+
+/* ---- Approvals (GĐ2): work waits here for a person before it is handed to a role. ---- */
+
+export type TBridgeProposalStatus = 'pending' | 'approved' | 'denied' | 'expired';
+export type TBridgeProposalSource = 'person' | 'result';
+
+export type TBridgeProposal = {
+  id: string;
+  source: TBridgeProposalSource;
+  roleId: string;
+  roleSlug: string;
+  runtime: TBridgeRoleRuntime;
+  title: string;
+  /** The exact task text that runs if this is approved. */
+  content: string;
+  /** What an approval must name: it ties the click to the text that was shown. */
+  hash: string;
+  status: TBridgeProposalStatus;
+  originTaskId?: string;
+  /** The run an approval started. */
+  runId?: string;
+  expiresAt: string;
+  decidedAt?: string;
+  createdAt: string;
+};
+
+export type TBridgeApprovalsOverview = {
+  proposals: TBridgeProposal[];
+  pending: number;
+  maxPending: number;
+  expiryHours: number;
+};
+
+export type TBridgeProposalInput = {
+  /** Client-made id; the same id never adds a second proposal. */
+  requestId: string;
+  roleId: string;
+  task: string;
+};
+
+export type TBridgeDecision = {
+  decision: 'approve' | 'deny';
+  /** Required to approve: the `hash` of the proposal as it was shown. */
+  hash?: string;
+};
+
+export type TBridgeDecideResponse = { proposal: TBridgeProposal; run?: TBridgeRun };
+
+export type TBridgeAuditAction =
+  | 'proposal_created'
+  | 'proposal_approved'
+  | 'proposal_denied'
+  | 'proposal_expired'
+  | 'handed_over'
+  | 'handover_failed';
+
+export type TBridgeAuditLine = {
+  id: string;
+  action: TBridgeAuditAction;
+  proposalId?: string;
+  actor: string;
+  roleSlug?: string;
+  hash?: string;
+  detail?: string;
+  createdAt: string;
+};
+
+export type TBridgeApprovalsErrorCode =
+  | 'APPROVAL_INVALID'
+  | 'APPROVAL_SECRET_DETECTED'
+  | 'APPROVAL_NOT_FOUND'
+  | 'APPROVAL_NOT_PENDING'
+  | 'APPROVAL_EXPIRED'
+  | 'APPROVAL_HASH_MISMATCH'
+  | 'APPROVAL_LIMIT'
+  | 'APPROVAL_ROLE_UNAVAILABLE'
+  | 'APPROVAL_HANDOVER_FAILED';
+
+export type TBridgeApprovalsError = {
+  error: TBridgeApprovalsErrorCode;
+  field?: string;
+  cap?: number;
+  /** For a failed hand-over: the role error that stopped it. */
+  cause?: TBridgeRolesErrorCode;
+  /** For a failed hand-over the proposal stays approved and can be approved again to retry. */
+  proposal?: TBridgeProposal;
+};
