@@ -4,12 +4,14 @@
  * the result next to it as <file>.new. It never changes the original: a person compares the two with
  * diff, moves the new file into place, validates and restarts (see README-agents.md, Part 4).
  *
- *   node openclaw-tool-policy.js <openclaw.json> [--stage 2]
+ *   node openclaw-tool-policy.js <openclaw.json> [--stage 2 [--workspace <dir>]]
  *
  * Stage 1 (default): the "minimal" profile plus read, write and ls, and an explicit deny of command
  *   running, web, the interface tools, automation, messaging, nodes, media, sessions and plugins, so a
  *   tool added later is not available by accident. "Deny wins" in OpenClaw's tool policy.
- * Stage 2: also confine the file tools to the workspace folder (tools.fs.workspaceOnly).
+ * Stage 2: also confine the file tools to the workspace folder (tools.fs.workspaceOnly). With
+ *   --workspace <dir> it also names that folder (agents.defaults.workspace), for a setup where the
+ *   agent should work inside the task folder and nowhere else.
  *
  * Exits 0 when it wrote the file, 2 when the config already sets one of these keys (nothing written),
  * 3 on a usage error. No secret is read or printed.
@@ -48,9 +50,14 @@ class Conflict extends Error {
 }
 
 /** The config with the policy added. Throws Conflict instead of replacing something already set. */
-function apply(config, stage = 1) {
+const WORKSPACE = /^\/[A-Za-z0-9_./-]{1,200}$/;
+
+function apply(config, stage = 1, workspace = undefined) {
   if (config === null || typeof config !== 'object' || Array.isArray(config)) {
     throw new Conflict('the config is not a JSON object');
+  }
+  if (workspace !== undefined && stage !== 2) {
+    throw new Conflict('--workspace goes with --stage 2');
   }
   const out = JSON.parse(JSON.stringify(config));
   const tools = out.tools === undefined ? {} : out.tools;
@@ -76,6 +83,23 @@ function apply(config, stage = 1) {
     }
     fsPolicy.workspaceOnly = true;
     tools.fs = fsPolicy;
+    if (workspace !== undefined) {
+      if (!WORKSPACE.test(workspace) || workspace.includes('..')) {
+        throw new Conflict('the workspace must be an absolute path of plain characters');
+      }
+      const agents = out.agents === undefined ? {} : out.agents;
+      const defaults =
+        agents === null || typeof agents !== 'object' ? null : (agents.defaults ?? {});
+      if (defaults === null || typeof defaults !== 'object' || Array.isArray(defaults)) {
+        throw new Conflict('agents or agents.defaults is not an object');
+      }
+      if ('workspace' in defaults) {
+        throw new Conflict('agents.defaults.workspace is already set');
+      }
+      defaults.workspace = workspace;
+      agents.defaults = defaults;
+      out.agents = agents;
+    }
   } else {
     throw new Conflict(`unknown stage ${stage}`);
   }
@@ -93,8 +117,18 @@ function main(argv, log = console.log, err = console.error) {
     stage = Number(args[at + 1]);
     args.splice(at, 2);
   }
-  if (args.length !== 1 || !(stage === 1 || stage === 2)) {
-    err('usage: node openclaw-tool-policy.js <openclaw.json> [--stage 2]');
+  let workspace;
+  const wat = args.indexOf('--workspace');
+  if (wat !== -1) {
+    workspace = args[wat + 1];
+    args.splice(wat, 2);
+  }
+  if (
+    args.length !== 1 ||
+    !(stage === 1 || stage === 2) ||
+    (wat !== -1 && workspace === undefined)
+  ) {
+    err('usage: node openclaw-tool-policy.js <openclaw.json> [--stage 2 [--workspace <dir>]]');
     return 3;
   }
   const file = args[0];
@@ -107,7 +141,7 @@ function main(argv, log = console.log, err = console.error) {
   }
   let next;
   try {
-    next = apply(config, stage);
+    next = apply(config, stage, workspace);
   } catch (error) {
     if (error instanceof Conflict) {
       err(`nothing written: ${error.message}`);
@@ -118,7 +152,9 @@ function main(argv, log = console.log, err = console.error) {
   try {
     fs.writeFileSync(`${file}.new`, serialize(next), { flag: 'wx', mode: 0o600 });
   } catch (error) {
-    err(`nothing written: ${file}.new ${error.code === 'EEXIST' ? 'already exists, remove it first' : 'cannot be created'}`);
+    err(
+      `nothing written: ${file}.new ${error.code === 'EEXIST' ? 'already exists, remove it first' : 'cannot be created'}`,
+    );
     return 3;
   }
   log(`wrote ${file}.new (stage ${stage}); ${file} is unchanged`);

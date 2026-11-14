@@ -23,7 +23,7 @@ test('stage 1 adds the minimal profile, three allowed tools and the deny list', 
 
 test('everything else in the config is left exactly as it was', () => {
   const out = apply(BASE);
-  const { tools, ...rest } = out;
+  const { tools: _tools, ...rest } = out;
   assert.deepEqual(rest, BASE);
 });
 
@@ -34,7 +34,10 @@ test('the input object is never modified', () => {
 });
 
 test('it keeps the exec settings an earlier preset wrote under tools', () => {
-  const withExec = { ...BASE, tools: { exec: { security: 'allowlist', ask: 'on-miss', askFallback: 'deny' } } };
+  const withExec = {
+    ...BASE,
+    tools: { exec: { security: 'allowlist', ask: 'on-miss', askFallback: 'deny' } },
+  };
   const out = apply(withExec);
   assert.deepEqual(out.tools.exec, withExec.tools.exec);
   assert.equal(out.tools.profile, 'minimal');
@@ -42,7 +45,11 @@ test('it keeps the exec settings an earlier preset wrote under tools', () => {
 
 test('it refuses to replace a policy that is already set', () => {
   for (const key of ['profile', 'allow', 'alsoAllow', 'deny']) {
-    assert.throws(() => apply({ tools: { [key]: key === 'profile' ? 'coding' : [] } }), Conflict, key);
+    assert.throws(
+      () => apply({ tools: { [key]: key === 'profile' ? 'coding' : [] } }),
+      Conflict,
+      key,
+    );
   }
 });
 
@@ -144,5 +151,41 @@ test('stage 2 through the command', () => {
   withFile(JSON.stringify(apply(BASE)), (file) => {
     assert.equal(main([file, '--stage', '2'], quiet.log, quiet.err), 0);
     assert.equal(JSON.parse(fs.readFileSync(`${file}.new`, 'utf8')).tools.fs.workspaceOnly, true);
+  });
+});
+
+test('stage 2 with a workspace names it under agents.defaults and keeps the rest', () => {
+  const stage1 = apply(BASE);
+  const out = apply(stage1, 2, '/home/deploy/tasks');
+  assert.equal(out.agents.defaults.workspace, '/home/deploy/tasks');
+  assert.deepEqual(out.agents.entries, BASE.agents.entries);
+  assert.equal(out.tools.fs.workspaceOnly, true);
+  const withDefaults = apply({ agents: { defaults: { model: 'x' } } }, 2, '/w');
+  assert.deepEqual(withDefaults.agents.defaults, { model: 'x', workspace: '/w' });
+});
+
+test('a workspace is refused when already set, when odd, or when the stage is not 2', () => {
+  assert.throws(() => apply({ agents: { defaults: { workspace: '/a' } } }, 2, '/b'), Conflict);
+  for (const bad of ['relative/dir', '/a/../b', '/a b', '/a;rm', '']) {
+    assert.throws(() => apply(BASE, 2, bad), Conflict, bad);
+  }
+  assert.throws(() => apply(BASE, 1, '/home/deploy/tasks'), Conflict);
+  assert.throws(() => apply({ agents: 5 }, 2, '/w'), Conflict);
+});
+
+test('the command takes --workspace with --stage 2 only', () => {
+  withFile(JSON.stringify(apply(BASE)), (file) => {
+    assert.equal(
+      main([file, '--stage', '2', '--workspace', '/home/deploy/tasks'], quiet.log, quiet.err),
+      0,
+    );
+    const written = JSON.parse(fs.readFileSync(`${file}.new`, 'utf8'));
+    assert.equal(written.agents.defaults.workspace, '/home/deploy/tasks');
+    assert.equal(written.tools.fs.workspaceOnly, true);
+  });
+  withFile(JSON.stringify(BASE), (file) => {
+    assert.equal(main([file, '--workspace', '/w'], quiet.log, quiet.err), 2);
+    assert.equal(fs.existsSync(`${file}.new`), false);
+    assert.equal(main([file, '--stage', '2', '--workspace'], quiet.log, quiet.err), 3);
   });
 });

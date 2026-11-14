@@ -256,6 +256,8 @@ uses the `minimal` profile plus `read`, `write` and `ls`, and denies command run
 tools, automation, messaging, nodes, media, sessions and plugins ("deny wins"). Stage 2 adds
 `tools.fs.workspaceOnly`, which confines the file tools to the workspace folder; do it only after
 stage 1 passes and the path the poll script hands to the agent is known.
+`--stage 2 --workspace <dir>` also names that folder (`agents.defaults.workspace`), for a setup where the
+agent works inside the task folder only; the task folder is then mounted read-only except `outbox/`.
 
 ```bash
 docker cp openclaw-tool-policy.js <gateway>:/tmp/
