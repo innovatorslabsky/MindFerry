@@ -258,6 +258,9 @@ tools, automation, messaging, nodes, media, sessions and plugins ("deny wins"). 
 stage 1 passes and the path the poll script hands to the agent is known.
 `--stage 2 --workspace <dir>` also names that folder (`agents.defaults.workspace`), for a setup where the
 agent works inside the task folder only; the task folder is then mounted read-only except `outbox/`.
+`oc-workspace.sh` does the whole change on the VPS (backup, hash checks, config check, restart, a start-up
+probe) and puts the old config back by itself if the config is refused or the agent cannot start;
+`test-oc-workspace.sh` runs it against a stand-in for docker.
 
 ```bash
 docker cp openclaw-tool-policy.js <gateway>:/tmp/
