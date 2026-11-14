@@ -100,6 +100,8 @@ const PLACEHOLDER_EXAMPLE = [
   /\[INSERT[^\]\n]*\b(?:e\.g\.?|eg|for example|such as)\b[^\]\n]*\]/i,
   /\[INSERT[^\]\n]*(?<![\p{L}\p{N}])(?:ví dụ|vd\.|chẳng hạn|ví như)(?![\p{L}\p{N}])[^\]\n]*\]/iu,
   /\[INSERT[^\]\n]*["“”][^\]\n]*\]/i,
+  // A fixed expert-content placeholder followed by a dash and a description of what to write.
+  /\[INSERT:\s*(?:nội dung do người có chuyên môn thú y cung cấp|câu lưu ý y tế do người có chuyên môn thú y duyệt)\s*[—–-][^\]\n]*\]/iu,
 ];
 
 const URL = /https?:\/\/[^\s<>"')\]]+/gi;

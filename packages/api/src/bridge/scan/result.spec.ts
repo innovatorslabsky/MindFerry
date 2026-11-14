@@ -155,6 +155,8 @@ describe('placeholders', () => {
     '[INSERT: one detail, for example a turnaround time]',
     '[INSERT: tagline "Built right"]',
     '[INSERT: tagline “Built right”]',
+    '[INSERT: nội dung do người có chuyên môn thú y cung cấp — danh sách triệu chứng nguy hiểm]',
+    '[INSERT: câu lưu ý y tế do người có chuyên môn thú y duyệt – gợi ý câu]',
   ])('flags an example inside %s', (placeholder) => {
     expect(codes(`Drafts\n${placeholder}\n`)).toContain('placeholder_example');
   });
@@ -163,6 +165,8 @@ describe('placeholders', () => {
     '[INSERT: offer period]',
     '[INSERT: phone number]',
     "[INSERT: the owner's website URL]",
+    '[INSERT: nội dung do người có chuyên môn thú y cung cấp]',
+    '[INSERT: câu lưu ý y tế do người có chuyên môn thú y duyệt]',
   ])('accepts %s', (placeholder) => {
     expect(codes(`Drafts\n${placeholder}\n`)).toEqual([]);
   });
