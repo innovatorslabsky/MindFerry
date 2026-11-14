@@ -51,6 +51,7 @@ describe('the PetVee role file', () => {
       '09/11/2026',
       'iOS: chưa có',
       '16 mục',
+      'tìm phòng khám gần nhất theo vị trí',
     ]) {
       expect(text).toContain(fact);
     }
