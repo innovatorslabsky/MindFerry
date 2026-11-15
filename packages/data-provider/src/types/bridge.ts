@@ -314,6 +314,24 @@ export type TBridgeAuditLine = {
   createdAt: string;
 };
 
+export type TBridgeImportSkipReason =
+  | 'role_unknown'
+  | 'role_unavailable'
+  | 'too_long'
+  | 'secret'
+  | 'hidden'
+  | 'limit';
+
+export type TBridgeImportResponse = {
+  /** Every proposal that now exists for this result, new or from an earlier import. */
+  proposals: TBridgeProposal[];
+  /** How many of them this import added. */
+  added: number;
+  skipped: Array<{ index: number; role: string; reason: TBridgeImportSkipReason }>;
+  /** Lines in the section that were not items, and items past the limit of five. */
+  ignored: number;
+};
+
 export type TBridgeApprovalsErrorCode =
   | 'APPROVAL_INVALID'
   | 'APPROVAL_SECRET_DETECTED'

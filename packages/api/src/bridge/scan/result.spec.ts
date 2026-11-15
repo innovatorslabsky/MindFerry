@@ -146,6 +146,16 @@ Notes for owner: this is the best time to post and a free photo helps.
 `;
     expect(codes(text)).toEqual([]);
   });
+
+  it('treats the proposed follow-ups as outside the drafts, so a suggestion is not read as a claim', () => {
+    const text = `Drafts
+DRAFT: Tải PetVee trên Google Play.
+
+Proposed follow-ups
+- role: seo-strategist-petvee | task: Write a free offer page and the best price list.
+`;
+    expect(codes(text)).toEqual([]);
+  });
 });
 
 describe('placeholders', () => {

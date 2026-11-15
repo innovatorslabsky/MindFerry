@@ -61,6 +61,7 @@ function build() {
   app.get('/approvals', route(handlers.overview));
   app.post('/approvals', route(handlers.create));
   app.post('/approvals/:id/decide', route(handlers.decide));
+  app.post('/tasks/:id/proposals', route(handlers.importResult));
   app.get('/audit', route(handlers.audit));
   return app;
 }
@@ -357,5 +358,70 @@ describe('denying and the ledger', () => {
     ]);
     expect(JSON.stringify(all)).not.toContain('private listing');
     expect((await request(app).get('/audit?proposalId=nope')).body.lines).toEqual([]);
+  });
+});
+
+describe('importing follow-ups', () => {
+  const TASK = '2026-11-14-0921-hermes-seo-strategist-petvee';
+  const writeResult = (text: string) =>
+    fs.writeFile(path.join(tasksDir, 'outbox', `${TASK}-result.md`), text, 'utf8');
+  const block = (lines: string[]) =>
+    `status: DONE\n\n1. Summary\nok\n\n## Proposed follow-ups\n${lines.join('\n')}\n`;
+
+  it('answers 404 when approvals are off', async () => {
+    config = { agentBridge: { enabled: true, tasksDir, roles: { enabled: true } } } as never;
+    const res = await request(build()).post(`/tasks/${TASK}/proposals`).send({});
+    expect(res.status).toBe(404);
+  });
+
+  it('creates proposals from the result file, then adds nothing on a second call', async () => {
+    const app = build();
+    await role('hermes');
+    await writeResult(
+      block([
+        '- role: role-hermes | task: Draft the store listing.',
+        '- role: nobody | task: Not a role.',
+        'a stray line',
+      ]),
+    );
+    const first = await request(app).post(`/tasks/${TASK}/proposals`).send({});
+    expect(first.status).toBe(201);
+    expect(first.body.added).toBe(1);
+    expect(first.body.ignored).toBe(1);
+    expect(first.body.skipped).toEqual([{ index: 1, role: 'nobody', reason: 'role_unknown' }]);
+    expect(first.body.proposals[0]).toMatchObject({
+      source: 'result',
+      status: 'pending',
+      originTaskId: TASK,
+      content: 'Draft the store listing.',
+    });
+    const second = await request(app).post(`/tasks/${TASK}/proposals`).send({});
+    expect(second.status).toBe(200);
+    expect(second.body.added).toBe(0);
+    const listed = (await request(app).get('/approvals')).body;
+    expect(listed.pending).toBe(1);
+  });
+
+  it('starts nothing by itself: no run and no task file until a person approves', async () => {
+    const app = build();
+    await role('hermes');
+    await writeResult(block(['- role: role-hermes | task: Draft the store listing.']));
+    await request(app).post(`/tasks/${TASK}/proposals`).send({});
+    expect(await mongoose.models.BridgeRun.countDocuments({})).toBe(0);
+    expect(await fs.readdir(path.join(tasksDir, 'inbox'))).toEqual([]);
+  });
+
+  it('answers 404 for a result that does not exist and 400 for an id that is not one', async () => {
+    const app = build();
+    expect((await request(app).post(`/tasks/${TASK}/proposals`).send({})).status).toBe(404);
+    expect((await request(app).post('/tasks/..%2Fetc/proposals').send({})).status).toBe(400);
+  });
+
+  it('answers 400 for a result that did not finish', async () => {
+    const app = build();
+    await writeResult(`status: FAILED\n\n## Proposed follow-ups\n- role: r1 | task: x.\n`);
+    const res = await request(app).post(`/tasks/${TASK}/proposals`).send({});
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'APPROVAL_INVALID', field: 'status' });
   });
 });

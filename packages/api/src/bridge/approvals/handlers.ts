@@ -10,6 +10,8 @@ import { areApprovalsEnabled, getBridgeSettings } from '../config';
 import { getSafeErrorMetadata } from '../../utils/errors';
 import { buildRolesService } from '../roles/handlers';
 import { createApprovalsService } from './service';
+import { createBridgeStore } from '../store';
+import { isTaskId } from '../protocol';
 
 export type ApprovalsServiceDeps = Omit<RolesServiceDeps, 'methods'> & {
   methods: RolesServiceDeps['methods'] & ApprovalMethods;
@@ -43,6 +45,7 @@ export interface ApprovalsHandlers {
   overview: Handler;
   create: Handler;
   decide: Handler;
+  importResult: Handler;
   audit: Handler;
 }
 
@@ -87,6 +90,8 @@ export function createApprovalsHandlers(deps: ApprovalsServiceDeps): ApprovalsHa
         methods: deps.methods,
         getSettings: () => settings,
         handOver: (by, roleId, request) => roles.assign(by, roleId, request),
+        readResult: (taskId) =>
+          (deps.createStore ?? createBridgeStore)(settings).readResult(taskId),
       });
       try {
         await run({ who, service }, req, res);
@@ -124,6 +129,17 @@ export function createApprovalsHandlers(deps: ApprovalsServiceDeps): ApprovalsHa
         return reject(res, result.error);
       }
       res.json(result.value);
+    }),
+    importResult: guard(async ({ who, service }, req, res) => {
+      const taskId = paramId(req);
+      if (!isTaskId(taskId)) {
+        return invalid(res, 'id');
+      }
+      const result = await service.importFromResult(who, taskId);
+      if (!result.ok) {
+        return reject(res, result.error);
+      }
+      res.status(result.value.added > 0 ? 201 : 200).json(result.value);
     }),
     audit: guard(async ({ who, service }, req, res) => {
       const raw = (req.query as Record<string, unknown> | undefined)?.proposalId;

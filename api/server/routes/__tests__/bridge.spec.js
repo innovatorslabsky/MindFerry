@@ -66,6 +66,7 @@ describe('/api/bridge', () => {
       'get /approvals',
       'post /approvals',
       'post /approvals/:id/decide',
+      'post /tasks/:id/proposals',
       'get /audit',
     ]);
   });
@@ -78,6 +79,7 @@ describe('/api/bridge', () => {
       ['get', '/api/bridge/approvals'],
       ['post', '/api/bridge/approvals'],
       ['post', '/api/bridge/approvals/abc/decide'],
+      ['post', `/api/bridge/tasks/${ID}/proposals`],
       ['get', '/api/bridge/audit'],
     ])('answers 401 to %s %s and reveals nothing', async (method, url) => {
       const res = await request(app)[method](url).send(body);
@@ -102,6 +104,7 @@ describe('/api/bridge', () => {
       ['get', '/api/bridge/approvals'],
       ['post', '/api/bridge/approvals'],
       ['post', '/api/bridge/approvals/abc/decide'],
+      ['post', `/api/bridge/tasks/${ID}/proposals`],
       ['get', '/api/bridge/audit'],
     ])('answers 403 to %s %s', async (method, url) => {
       const res = await request(app)[method](url).set(as('USER')).send(body);

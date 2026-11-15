@@ -91,7 +91,7 @@ const NEGATION =
   /\b(?:do not|don['’]t|never|avoid|without|unless|must not|should not|shouldn['’]t|excluded|not claim)\b|(?<![\p{L}\p{N}])(?:không (?:được|nên|dùng|viết|khẳng định|hứa|nói|đưa)|đừng|tránh|trừ khi|cấm|chưa được)(?![\p{L}\p{N}])/iu;
 
 const KNOWN_HEADING =
-  /^\s{0,3}(?:#{1,6}\s*)?(?:\*\*)?\s*(?:\d+[.)]\s*)?(?:summary|key findings|actions|drafts?|sources|open questions|next steps|tóm tắt|hành động|bản nháp|nguồn|câu hỏi mở|bước tiếp theo)(?![\p{L}\p{N}])/iu;
+  /^\s{0,3}(?:#{1,6}\s*)?(?:\*\*)?\s*(?:\d+[.)]\s*)?(?:summary|key findings|actions|drafts?|sources|open questions|proposed follow-ups|next steps|tóm tắt|hành động|bản nháp|nguồn|câu hỏi mở|bước tiếp theo)(?![\p{L}\p{N}])/iu;
 const DRAFTS_HEADING =
   /^\s{0,3}(?:#{1,6}\s*)?(?:\*\*)?\s*(?:\d+[.)]\s*)?(?:drafts?|bản nháp)(?![\p{L}\p{N}])/iu;
 const OWNER_NOTES = /^\W*(?:notes?\s+(?:for|to)\s+(?:the\s+)?owner|ghi chú (?:cho|gửi) chủ)/iu;
@@ -122,6 +122,16 @@ const HIDDEN: ReadonlyArray<readonly [number, number]> = [
 ];
 
 const isHidden = (cp: number): boolean => HIDDEN.some(([first, last]) => cp >= first && cp <= last);
+
+/** True when the text holds a character a reader cannot see but a model can act on. */
+export function hasHiddenChars(text: string): boolean {
+  for (const char of text) {
+    if (isHidden(char.codePointAt(0) as number)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 class Collector {
   readonly items: TBridgeResultWarning[] = [];

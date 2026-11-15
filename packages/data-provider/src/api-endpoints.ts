@@ -253,6 +253,8 @@ export const bridgeRole = (id: string) => `${BASE_URL}/api/bridge/roles/${encode
 export const bridgeRoleAssign = (id: string) =>
   `${BASE_URL}/api/bridge/roles/${encodeURIComponent(id)}/assign`;
 
+export const bridgeTaskProposals = (id: string) =>
+  `${BASE_URL}/api/bridge/tasks/${encodeURIComponent(id)}/proposals`;
 export const bridgeApprovals = () => `${BASE_URL}/api/bridge/approvals`;
 export const bridgeApprovalDecide = (id: string) =>
   `${BASE_URL}/api/bridge/approvals/${encodeURIComponent(id)}/decide`;

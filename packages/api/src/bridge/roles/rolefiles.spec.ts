@@ -1,5 +1,6 @@
 import path from 'path';
 import { promises as fs } from 'fs';
+import { parseFollowUps } from '../approvals/followups';
 import { looksLikeSecret } from '../secrets';
 import { scanResult } from '../scan/result';
 
@@ -8,12 +9,14 @@ const read = (name: string) => fs.readFile(path.join(ROLES, name), 'utf8');
 
 const SEO_ROLES = ['seo-strategist-sbuddy.md', 'seo-strategist-petvee.md'];
 const ALL = [...SEO_ROLES, 'chief-of-staff.md'];
+/** What an agent reads whole. The PetVee file is longer: it carries the veterinary rules. */
+const SIZE_LIMIT: Record<string, number> = { 'seo-strategist-petvee.md': 12_000 };
 
 describe.each(ALL)('role file %s', (name) => {
   it('starts as a role, stays a size an agent reads whole, and holds no secret', async () => {
     const text = await read(name);
     expect(text).toMatch(/^(?:ROLE|VAI TRÒ):/);
-    expect(text.length).toBeLessThan(10_000);
+    expect(text.length).toBeLessThan(SIZE_LIMIT[name] ?? 10_000);
     expect(looksLikeSecret(text)).toBe(false);
     expect(text.endsWith('\n')).toBe(true);
   });
@@ -34,6 +37,21 @@ describe.each(SEO_ROLES)('SEO role %s', (name) => {
     expect(text).toContain('[INSERT');
     expect(text).toMatch(/Drafts/);
     expect(text).toMatch(/Open questions/);
+  });
+});
+
+describe.each(SEO_ROLES)('SEO role %s and its follow-ups', (name) => {
+  it('teaches the exact line the importer reads, for its own role only', async () => {
+    const text = await read(name);
+    const slug = name.replace(/\.md$/, '');
+    expect(text).toContain('## Proposed follow-ups');
+    const example = text.match(/`(- role: [a-z0-9-]+ \| task: <[^`]*>)`/)?.[1];
+    expect(example).toBeDefined();
+    const found = parseFollowUps(`## Proposed follow-ups\n${example}`);
+    expect(found.items).toHaveLength(1);
+    expect(found.items[0].role).toBe(slug);
+    expect(text).toMatch(/\b(?:at most|tối đa) 5\b/);
+    expect(text).toMatch(/nothing runs until the owner approves|chủ duyệt thì mới chạy/);
   });
 });
 

@@ -1195,6 +1195,10 @@ export function decideBridgeProposal(
   return request.post(endpoints.bridgeApprovalDecide(id), body);
 }
 
+export function importBridgeFollowUps(taskId: string): Promise<t.TBridgeImportResponse> {
+  return request.post(endpoints.bridgeTaskProposals(taskId), {});
+}
+
 export function getBridgeAudit(proposalId?: string): Promise<{ lines: t.TBridgeAuditLine[] }> {
   return request.get(endpoints.bridgeAudit(proposalId));
 }

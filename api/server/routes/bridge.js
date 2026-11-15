@@ -52,6 +52,7 @@ router.post('/roles/:id/assign', roles.assign);
 router.get('/approvals', approvals.overview);
 router.post('/approvals', approvals.create);
 router.post('/approvals/:id/decide', approvals.decide);
+router.post('/tasks/:id/proposals', approvals.importResult);
 router.get('/audit', approvals.audit);
 
 module.exports = router;

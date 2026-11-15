@@ -158,6 +158,7 @@ export enum MutationKeys {
   assignBridgeRole = 'assignBridgeRole',
   createBridgeProposal = 'createBridgeProposal',
   decideBridgeProposal = 'decideBridgeProposal',
+  importBridgeFollowUps = 'importBridgeFollowUps',
   resetToolApprovalGrants = 'resetToolApprovalGrants',
   subagentControl = 'subagentControl',
   cancelBackgroundTasks = 'cancelBackgroundTasks',

@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 import type {
+  TBridgeImportResponse,
+  TBridgeImportSkipReason,
   TBridgeApprovalsErrorCode,
   TBridgeApprovalsOverview,
   TBridgeAssignResponse,
@@ -15,10 +17,13 @@ import type {
   BridgeAuditRecord,
   BridgeMethods,
   BridgeProposalRecord,
+  BridgeRoleRecord,
 } from '@librechat/data-schemas';
 import type { RolesActor, RolesFailure, RolesResult } from '../roles/service';
 import type { BridgeSettings } from '../config';
+import { hasHiddenChars } from '../scan/result';
 import { looksLikeSecret } from '../secrets';
+import { parseFollowUps } from './followups';
 import { toOneLine } from '../protocol';
 
 export type ApprovalsFailure = {
@@ -42,7 +47,7 @@ export type ApprovalMethods = Pick<
   | 'appendBridgeAudit'
   | 'listBridgeAudit'
 > &
-  Pick<BridgeMethods, 'getBridgeRole'>;
+  Pick<BridgeMethods, 'getBridgeRole' | 'listBridgeRoles'>;
 
 export interface ApprovalsDeps {
   methods: ApprovalMethods;
@@ -53,6 +58,8 @@ export interface ApprovalsDeps {
     roleId: string,
     request: { requestId: string; task: string },
   ) => Promise<RolesResult<TBridgeAssignResponse>>;
+  /** Reads an agent's result for a task, or null. Used to import its suggested follow-ups. */
+  readResult?: (taskId: string) => Promise<{ status: string; text: string } | null>;
   now?: () => Date;
 }
 
@@ -125,6 +132,11 @@ export interface ApprovalsService {
     id: string,
     body: { decision: 'approve' | 'deny'; hash?: string },
   ) => Promise<ApprovalsResult<TBridgeDecideResponse>>;
+  /** Turns the follow-ups at the end of a finished result into proposals waiting for a person. */
+  importFromResult: (
+    actor: RolesActor,
+    taskId: string,
+  ) => Promise<ApprovalsResult<TBridgeImportResponse>>;
   audit: (userId: string, proposalId?: string) => Promise<TBridgeAuditLine[]>;
 }
 
@@ -170,6 +182,53 @@ export function createApprovalsService(deps: ApprovalsDeps): ApprovalsService {
     };
   }
 
+  type Origin = { source: 'person' | 'result'; dedupeKey: string; originTaskId?: string };
+
+  /** Stores one proposal for a role the person owns, and writes its ledger line once. */
+  async function store(
+    actor: RolesActor,
+    role: BridgeRoleRecord,
+    task: string,
+    origin: Origin,
+  ): Promise<ApprovalsResult<{ proposal: BridgeProposalRecord; created: boolean }>> {
+    const settings = deps.getSettings();
+    const at = now();
+    const made = await methods.createBridgeProposal(
+      actor.id,
+      {
+        source: origin.source,
+        roleId: role.id,
+        roleSlug: role.slug,
+        runtime: role.runtime,
+        title: toOneLine(task).slice(0, TITLE_CHARS),
+        content: task,
+        hash: proposalHash(role.id, task),
+        dedupeKey: origin.dedupeKey,
+        ...(origin.originTaskId ? { originTaskId: origin.originTaskId } : {}),
+        expiresAt: new Date(at.getTime() + settings.approvals.expiryHours * HOUR_MS),
+      },
+      settings.approvals.maxPending,
+      at,
+    );
+    if (!made.ok) {
+      return fail('APPROVAL_LIMIT', { cap: made.cap });
+    }
+    if (made.created) {
+      await methods.appendBridgeAudit(actor.id, {
+        action: 'proposal_created',
+        proposalId: made.proposal.id,
+        actor: actorName(actor),
+        roleSlug: made.proposal.roleSlug,
+        hash: made.proposal.hash,
+        ...(origin.source === 'result' ? { detail: 'from_result' } : {}),
+      });
+    }
+    return ok({ proposal: made.proposal, created: made.created });
+  }
+
+  const usable = (role: BridgeRoleRecord): boolean =>
+    role.enabled && (role.runtime === 'app' || deps.getSettings().roles.fileRolesEnabled);
+
   async function create(
     actor: RolesActor,
     input: TBridgeProposalInput,
@@ -190,39 +249,70 @@ export function createApprovalsService(deps: ApprovalsDeps): ApprovalsService {
       return fail('APPROVAL_SECRET_DETECTED', { field: 'task' });
     }
     const role = await methods.getBridgeRole(actor.id, input.roleId);
-    if (!role || !role.enabled || (role.runtime !== 'app' && !settings.roles.fileRolesEnabled)) {
+    if (!role || !usable(role)) {
       return fail('APPROVAL_ROLE_UNAVAILABLE');
     }
-    const at = now();
-    const made = await methods.createBridgeProposal(
-      actor.id,
-      {
-        source: 'person',
-        roleId: role.id,
-        roleSlug: role.slug,
-        runtime: role.runtime,
-        title: toOneLine(task).slice(0, TITLE_CHARS),
-        content: task,
-        hash: proposalHash(role.id, task),
-        dedupeKey: `person:${input.requestId}`,
-        expiresAt: new Date(at.getTime() + settings.approvals.expiryHours * HOUR_MS),
-      },
-      settings.approvals.maxPending,
-      at,
-    );
-    if (!made.ok) {
-      return fail('APPROVAL_LIMIT', { cap: made.cap });
+    const stored = await store(actor, role, task, {
+      source: 'person',
+      dedupeKey: `person:${input.requestId}`,
+    });
+    return stored.ok ? ok(toProposal(stored.value.proposal)) : stored;
+  }
+
+  async function importFromResult(
+    actor: RolesActor,
+    taskId: string,
+  ): Promise<ApprovalsResult<TBridgeImportResponse>> {
+    const settings = deps.getSettings();
+    const result = deps.readResult ? await deps.readResult(taskId) : null;
+    if (!result) {
+      return fail('APPROVAL_NOT_FOUND');
     }
-    if (made.created) {
-      await methods.appendBridgeAudit(actor.id, {
-        action: 'proposal_created',
-        proposalId: made.proposal.id,
-        actor: actorName(actor),
-        roleSlug: made.proposal.roleSlug,
-        hash: made.proposal.hash,
-      });
+    if (result.status !== 'DONE') {
+      return fail('APPROVAL_INVALID', { field: 'status' });
     }
-    return ok(toProposal(made.proposal));
+    const found = parseFollowUps(result.text);
+    const roles = await methods.listBridgeRoles(actor.id);
+    const proposals: TBridgeProposal[] = [];
+    const skipped: TBridgeImportResponse['skipped'] = [];
+    let added = 0;
+    let stop = false;
+    for (const item of found.items) {
+      const skip = (reason: TBridgeImportSkipReason) =>
+        skipped.push({ index: item.index, role: item.role, reason });
+      if (stop) {
+        skip('limit');
+        continue;
+      }
+      const role = roles.find((candidate) => candidate.slug === item.role);
+      if (!role) {
+        skip('role_unknown');
+      } else if (!usable(role)) {
+        skip('role_unavailable');
+      } else if (item.task.length > settings.maxTaskChars) {
+        skip('too_long');
+      } else if (looksLikeSecret(item.task)) {
+        skip('secret');
+      } else if (hasHiddenChars(item.task)) {
+        skip('hidden');
+      } else {
+        const stored = await store(actor, role, item.task, {
+          source: 'result',
+          dedupeKey: `result:${taskId}:${item.index}`,
+          originTaskId: taskId,
+        });
+        if (!stored.ok) {
+          stop = true;
+          skip('limit');
+        } else {
+          proposals.push(toProposal(stored.value.proposal));
+          if (stored.value.created) {
+            added += 1;
+          }
+        }
+      }
+    }
+    return ok({ proposals, added, skipped, ignored: found.malformed + found.overflow });
   }
 
   async function handOver(
@@ -334,5 +424,5 @@ export function createApprovalsService(deps: ApprovalsDeps): ApprovalsService {
     return lines.map(toLine);
   }
 
-  return { overview, create, decide, audit };
+  return { overview, create, decide, importFromResult, audit };
 }

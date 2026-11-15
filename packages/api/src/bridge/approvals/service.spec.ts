@@ -68,6 +68,7 @@ function setup(
     settings?: Partial<BridgeSettings['approvals']>;
     fileRoles?: boolean;
     handOver?: ApprovalsDeps['handOver'];
+    results?: Record<string, { status: string; text: string }>;
     now?: Date;
   } = {},
 ) {
@@ -88,6 +89,7 @@ function setup(
         calls.push({ roleId, ...request });
         return okRun(roleId);
       }),
+    readResult: async (taskId) => over.results?.[taskId] ?? null,
     now: () => clock,
   });
   return {
@@ -430,5 +432,188 @@ describe('deny and overview', () => {
     expect(await service.audit(user)).toHaveLength(3);
     expect((await service.audit(user, b.id))[0].createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(await service.audit(other)).toEqual([]);
+  });
+});
+
+describe('importing follow-ups from a result', () => {
+  const TASK = '2026-11-14-0921-hermes-seo-strategist-petvee';
+  const result = (lines: string[], status = 'DONE') => ({
+    status,
+    text: `status: ${status}\n\n1. Summary\nok\n\n## Proposed follow-ups\n${lines.join('\n')}\n`,
+  });
+
+  it('turns each valid item into a pending proposal that remembers where it came from', async () => {
+    const { service } = setup({
+      results: {
+        [TASK]: result([
+          '- role: seo-petvee | task: Draft the Google Play short description.',
+          '- role: seo-petvee | task: List five keyword ideas.',
+        ]),
+      },
+    });
+    const roleId = await makeRole();
+    const done = await service.importFromResult(actor, TASK);
+    expect(done.ok).toBe(true);
+    if (done.ok) {
+      expect(done.value.added).toBe(2);
+      expect(done.value.skipped).toEqual([]);
+      expect(done.value.proposals.map((p) => p.content)).toEqual([
+        'Draft the Google Play short description.',
+        'List five keyword ideas.',
+      ]);
+      expect(
+        done.value.proposals.every((p) => p.source === 'result' && p.status === 'pending'),
+      ).toBe(true);
+      expect(
+        done.value.proposals.every((p) => p.originTaskId === TASK && p.roleId === roleId),
+      ).toBe(true);
+    }
+    const lines = await methods.listBridgeAudit(user, { limit: 10 });
+    expect(lines.map((line) => line.detail)).toEqual(['from_result', 'from_result']);
+  });
+
+  it('adds nothing the second time, and a changed result cannot change a proposal already made', async () => {
+    const results: Record<string, { status: string; text: string }> = {
+      [TASK]: result(['- role: seo-petvee | task: Original text.']),
+    };
+    const { service } = setup({ results });
+    await makeRole();
+    const first = await service.importFromResult(actor, TASK);
+    results[TASK] = result(['- role: seo-petvee | task: Rewritten after the fact.']);
+    const again = await service.importFromResult(actor, TASK);
+    expect(first.ok && first.value.added).toBe(1);
+    expect(again.ok && again.value.added).toBe(0);
+    expect(again.ok && again.value.proposals[0].content).toBe('Original text.');
+    expect((await service.overview(user)).proposals).toHaveLength(1);
+    expect(await actions()).toEqual(['proposal_created']);
+  });
+
+  it('skips an item with a reason and still imports the others', async () => {
+    const { service } = setup({
+      fileRoles: false,
+      results: {
+        [TASK]: result([
+          '- role: nobody | task: Unknown role.',
+          '- role: off | task: Disabled role.',
+          '- role: file-role | task: A host role while they are locked.',
+          '- role: app-role | task: Fine.',
+          `- role: app-role | task: ${'x'.repeat(2100)}`,
+        ]),
+      },
+    });
+    await makeRole({ runtime: 'app', slug: 'app-role' });
+    await makeRole({ enabled: false, runtime: 'app', slug: 'off' });
+    await makeRole({ runtime: 'hermes', slug: 'file-role' });
+    const done = await service.importFromResult(actor, TASK);
+    expect(done.ok && done.value.skipped).toEqual([
+      { index: 0, role: 'nobody', reason: 'role_unknown' },
+      { index: 1, role: 'off', reason: 'role_unavailable' },
+      { index: 2, role: 'file-role', reason: 'role_unavailable' },
+      { index: 4, role: 'app-role', reason: 'too_long' },
+    ]);
+    expect(done.ok && done.value.added).toBe(1);
+    expect(done.ok && done.value.proposals[0].content).toBe('Fine.');
+  });
+
+  it('skips a task that carries a secret', async () => {
+    const { service } = setup({
+      results: {
+        [TASK]: result([
+          '- role: seo-petvee | task: use key sk-ant-api03-FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE00',
+        ]),
+      },
+    });
+    await makeRole();
+    const done = await service.importFromResult(actor, TASK);
+    expect(done.ok && done.value.skipped).toEqual([
+      { index: 0, role: 'seo-petvee', reason: 'secret' },
+    ]);
+    expect(done.ok && done.value.added).toBe(0);
+  });
+
+  it('skips a task with a hidden character', async () => {
+    const { service } = setup({
+      results: { [TASK]: result(['- role: seo-petvee | task: Draft\u202Eit.']) },
+    });
+    await makeRole();
+    const done = await service.importFromResult(actor, TASK);
+    expect(done.ok && done.value.skipped).toEqual([
+      { index: 0, role: 'seo-petvee', reason: 'hidden' },
+    ]);
+    expect(done.ok && done.value.added).toBe(0);
+  });
+
+  it('stops at the pending limit and says which items it left', async () => {
+    const { service } = setup({
+      settings: { maxPending: 2 },
+      results: {
+        [TASK]: result([1, 2, 3, 4].map((n) => `- role: seo-petvee | task: Task ${n}.`)),
+      },
+    });
+    await makeRole();
+    const done = await service.importFromResult(actor, TASK);
+    expect(done.ok && done.value.added).toBe(2);
+    expect(done.ok && done.value.skipped.map((s) => [s.index, s.reason])).toEqual([
+      [2, 'limit'],
+      [3, 'limit'],
+    ]);
+  });
+
+  it('counts what it ignored: lines that are not items and items past five', async () => {
+    const { service } = setup({
+      results: {
+        [TASK]: result([
+          'chatter',
+          ...Array.from({ length: 7 }, (_, n) => `- role: seo-petvee | task: Task ${n}.`),
+        ]),
+      },
+    });
+    await makeRole();
+    const done = await service.importFromResult(actor, TASK);
+    expect(done.ok && done.value.added).toBe(5);
+    expect(done.ok && done.value.ignored).toBe(3);
+  });
+
+  it('refuses a result that is missing or not finished, and a result with no section is empty', async () => {
+    const { service } = setup({
+      results: {
+        failed: result(['- role: seo-petvee | task: x.'], 'FAILED'),
+        plain: { status: 'DONE', text: 'status: DONE\n\nno section here' },
+      },
+    });
+    await makeRole();
+    expect(await service.importFromResult(actor, 'missing')).toEqual({
+      ok: false,
+      error: { code: 'APPROVAL_NOT_FOUND' },
+    });
+    expect(await service.importFromResult(actor, 'failed')).toEqual({
+      ok: false,
+      error: { code: 'APPROVAL_INVALID', field: 'status' },
+    });
+    const plain = await service.importFromResult(actor, 'plain');
+    expect(plain.ok && plain.value).toEqual({ proposals: [], added: 0, skipped: [], ignored: 0 });
+  });
+
+  it('only matches roles the person owns', async () => {
+    const { service } = setup({
+      results: { [TASK]: result(['- role: seo-petvee | task: x.']) },
+    });
+    await makeRole({}, other);
+    const done = await service.importFromResult(actor, TASK);
+    expect(done.ok && done.value.skipped[0].reason).toBe('role_unknown');
+  });
+
+  it('hands over the exact snapshot when it is approved', async () => {
+    const { service, calls } = setup({
+      results: { [TASK]: result(['- role: seo-petvee | task: Draft the store listing.']) },
+    });
+    const roleId = await makeRole();
+    const done = await service.importFromResult(actor, TASK);
+    const proposal = done.ok ? done.value.proposals[0] : undefined;
+    expect(proposal).toBeDefined();
+    await service.decide(actor, proposal?.id ?? '', { decision: 'approve', hash: proposal?.hash });
+    expect(calls).toEqual([
+      { roleId, requestId: `approval:${proposal?.id}`, task: 'Draft the store listing.' },
+    ]);
   });
 });
