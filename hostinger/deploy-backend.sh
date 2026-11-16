@@ -81,7 +81,7 @@ if [ -n "${EXPECTED_FILE:-}" ]; then
   cp "$EXPECTED_FILE" "$TMP/expected.txt"
 else
   expected | sed "s#  #  $SRC_NAME/#" > "$TMP/expected.txt"
-  [ "$(wc -l < "$TMP/expected.txt")" = 15 ] || die "the hash list does not have 15 lines"
+  [ "$(wc -l < "$TMP/expected.txt")" = 16 ] || die "the hash list does not have 16 lines"
 fi
 sha256sum -c "$TMP/expected.txt" || die "the source does not match the hashes; $SRC_NAME was left for you to look at"
 

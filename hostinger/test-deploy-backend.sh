@@ -91,4 +91,9 @@ check "and is left alone" "$(cat "$T/work/compose.yaml")" 'services:\n  backend:
 
 reset; mkdir -p "$T/work/src-ap" && echo x > "$T/work/src-ap/old"; check "a source folder that already holds files stops it" "$(run)" 1
 check "and keeps them" "$(cat "$T/work/src-ap/old")" x
+# The real list inside the script has as many lines as the script insists on.
+listed=$(sed -n '/^expected() {/,/^EOF$/p' "$HERE/deploy-backend.sh" | grep -cE '^[0-9a-f]{64}  [^ ]+$')
+insisted=$(sed -n 's/.*does not have \([0-9]*\) lines.*/\1/p' "$HERE/deploy-backend.sh")
+check "the hash list has the number of lines the script insists on" "$listed" "$insisted"
+check "and the script's own list is in the real run's shape" "$(sed -n '/^expected() {/,/^EOF$/p' "$HERE/deploy-backend.sh" | grep -cE '^[0-9a-f]{64}  [A-Za-z]')" "$listed"
 [ "$fail" = 0 ] && echo "ALL OK" || { echo "FAILED"; exit 1; }
