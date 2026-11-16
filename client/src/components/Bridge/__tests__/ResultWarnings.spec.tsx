@@ -68,6 +68,12 @@ describe('ResultWarnings', () => {
     expect(screen.getByText('com_bridge_warn_more:7')).toBeInTheDocument();
   });
 
+  it('says one more finding in the singular', () => {
+    render(<ResultWarnings warnings={[w({})]} omitted={1} />);
+    expect(screen.getByText('com_bridge_warn_more_one')).toBeInTheDocument();
+    expect(screen.queryByText('com_bridge_warn_more:1')).toBeNull();
+  });
+
   it('is a labelled region a screen reader can find', () => {
     render(<ResultWarnings warnings={[w({})]} />);
     expect(screen.getByRole('region', { name: 'com_bridge_warn_title' })).toBeInTheDocument();

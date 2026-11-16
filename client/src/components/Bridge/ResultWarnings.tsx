@@ -62,7 +62,9 @@ export default function ResultWarnings({
       </ul>
       {omitted > 0 && (
         <p className="text-text-tertiary text-xs">
-          {localize('com_bridge_warn_more', { 0: omitted })}
+          {omitted === 1
+            ? localize('com_bridge_warn_more_one')
+            : localize('com_bridge_warn_more', { 0: omitted })}
         </p>
       )}
     </section>

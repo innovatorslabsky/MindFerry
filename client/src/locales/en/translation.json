@@ -3670,6 +3670,7 @@
   "com_bridge_warn_link_host": "A link points to a raw address or an encoded host name: {{0}}.",
   "com_bridge_warn_link_scheme": "A link starts with javascript:, data: or file:.",
   "com_bridge_warn_more": "{{0}} more findings are not listed.",
+  "com_bridge_warn_more_one": "1 more finding is not listed.",
   "com_bridge_warn_placeholder_example": "A placeholder contains an example that looks like a fact. Replace it with the real detail or remove it.",
   "com_bridge_warn_secret": "Something that looked like a secret was hidden.",
   "com_bridge_warn_title": "This result needs a careful read before you use it",
