@@ -66,3 +66,42 @@ export const useBridgeRolesQuery = (
     },
   );
 };
+
+/** What waits for a person's decision, and what was decided lately. A 404 means approvals are off. */
+export const useBridgeApprovalsQuery = (
+  config?: UseQueryOptions<t.TBridgeApprovalsOverview>,
+): QueryObserverResult<t.TBridgeApprovalsOverview> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+  return useQuery<t.TBridgeApprovalsOverview>(
+    [QueryKeys.bridgeApprovals],
+    () => dataService.getBridgeApprovals(),
+    {
+      refetchOnWindowFocus: true,
+      /** An off feature answers 404 every time: stop asking until the page is focused again. */
+      refetchInterval: (_data, query) => (query.state.error ? false : BRIDGE_REFRESH_MS),
+      refetchIntervalInBackground: false,
+      cacheTime: 0,
+      retry: false,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
+/** The ledger of what was proposed, decided and handed over; read when the person opens it. */
+export const useBridgeAuditQuery = (
+  config?: UseQueryOptions<{ lines: t.TBridgeAuditLine[] }>,
+): QueryObserverResult<{ lines: t.TBridgeAuditLine[] }> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+  return useQuery<{ lines: t.TBridgeAuditLine[] }>(
+    [QueryKeys.bridgeAudit],
+    () => dataService.getBridgeAudit(),
+    {
+      refetchOnWindowFocus: false,
+      cacheTime: 0,
+      retry: false,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};

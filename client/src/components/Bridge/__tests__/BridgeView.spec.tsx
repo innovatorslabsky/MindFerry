@@ -27,6 +27,16 @@ jest.mock('~/data-provider', () => ({
     refetch: jest.fn(),
   }),
   useCreateBridgeTaskMutation: () => ({ mutate: jest.fn(), isLoading: false }),
+  /** Approvals are off in these tests too. */
+  useBridgeApprovalsQuery: () => ({
+    data: undefined,
+    isError: true,
+    error: { response: { data: { error: 'BRIDGE_DISABLED' } } },
+    refetch: jest.fn(),
+  }),
+  useBridgeAuditQuery: () => ({ data: undefined, isLoading: false, isError: false }),
+  useDecideBridgeProposalMutation: () => ({ mutate: jest.fn(), isLoading: false }),
+  useImportBridgeFollowUpsMutation: () => ({ mutate: jest.fn(), isLoading: false }),
 }));
 jest.mock('@librechat/client', () => mockBridgeClient);
 

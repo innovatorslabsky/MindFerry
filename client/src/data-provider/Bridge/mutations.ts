@@ -77,3 +77,44 @@ export const useAssignBridgeRoleMutation = (
       dataService.assignBridgeRole(id, body),
     options,
   );
+
+/** Runs an approvals mutation, then refreshes the queue and the roles' runs, worked or refused. */
+function useApprovalsMutation<TData, TVars>(
+  key: MutationKeys,
+  run: (vars: TVars) => Promise<TData>,
+  options?: t.MutationOptions<TData, TVars>,
+): UseMutationResult<TData, unknown, TVars, unknown> {
+  const queryClient = useQueryClient();
+  return useMutation(run, {
+    mutationKey: [key],
+    ...options,
+    onSettled: (data, error, variables, context) => {
+      queryClient.invalidateQueries([QueryKeys.bridgeApprovals]);
+      queryClient.invalidateQueries([QueryKeys.bridgeAudit]);
+      queryClient.invalidateQueries([QueryKeys.bridgeRoles]);
+      queryClient.invalidateQueries([QueryKeys.bridgeOverview]);
+      options?.onSettled?.(data, error, variables, context);
+    },
+  });
+}
+
+/** Approves or denies one proposal. An approval names the hash of the text the person was shown. */
+export const useDecideBridgeProposalMutation = (
+  options?: t.MutationOptions<t.TBridgeDecideResponse, { id: string; body: t.TBridgeDecision }>,
+) =>
+  useApprovalsMutation(
+    MutationKeys.decideBridgeProposal,
+    ({ id, body }: { id: string; body: t.TBridgeDecision }) =>
+      dataService.decideBridgeProposal(id, body),
+    options,
+  );
+
+/** Reads the follow-ups an agent suggested at the end of a result into proposals waiting for a decision. */
+export const useImportBridgeFollowUpsMutation = (
+  options?: t.MutationOptions<t.TBridgeImportResponse, string>,
+) =>
+  useApprovalsMutation(
+    MutationKeys.importBridgeFollowUps,
+    (taskId: string) => dataService.importBridgeFollowUps(taskId),
+    options,
+  );

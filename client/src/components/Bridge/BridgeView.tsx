@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button, Spinner } from '@librechat/client';
 import { useBridgeOverviewQuery } from '~/data-provider';
 import DashboardsPanel from './DashboardsPanel';
+import ApprovalsPanel from './ApprovalsPanel';
 import ResultDialog from './ResultDialog';
 import { bridgeErrorKey } from './errors';
 import NewTaskForm from './NewTaskForm';
@@ -55,6 +56,7 @@ export default function BridgeView() {
       {data && (
         <>
           <AgentCards status={data.status} />
+          <ApprovalsPanel onOpenResult={setOpenId} />
           <RolesPanel maxTaskChars={data.limits.maxTaskChars} onOpenResult={setOpenId} />
           <NewTaskForm
             maxTaskChars={data.limits.maxTaskChars}
